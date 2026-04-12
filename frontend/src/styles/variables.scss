@@ -1,0 +1,51 @@
+// src/styles/variables.scss
+
+$theme-dark: (
+  primary: #2C3E50,
+  secondary: #BDC3C7,
+  neutral: #ECF0F1,
+  accent: #3498DB,
+  text: #2C3E50,
+  primary-hover: darken(#2C3E50, 10%),
+  accent-hover: darken(#3498DB, 10%),
+);
+
+$theme-light: (
+  primary: #3498DB,
+  secondary: #ECF0F1,
+  neutral: #BDC3C7,
+  accent: #2C3E50,
+  text: #2C3E50,
+);
+
+$theme-red: (
+  primary: #C0392B,
+  secondary: #E74C3C,
+  neutral: #FDEDEC,
+  accent: #E67E22,
+  text: #C0392B,
+);
+
+$theme-green: (
+  primary: #27AE60,
+  secondary: #2ECC71,
+  neutral: #E8F6F3,
+  accent: #16A085,
+  text: #27AE60,
+);
+
+$theme-blue: (
+  primary: #2980B9,
+  secondary: #3498DB,
+  neutral: #EAF2F8,
+  accent: #1ABC9C,
+  text: #2980B9,
+);
+
+$theme-colors: (
+  dark: $theme-dark,
+  light: $theme-light,
+  red: $theme-red,
+  green: $theme-green,
+  blue: $theme-blue,
+);

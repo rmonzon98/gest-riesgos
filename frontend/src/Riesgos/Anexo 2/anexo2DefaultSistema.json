@@ -1,0 +1,270 @@
+[
+    {
+        "titulo": "Fuentes de Casos de Corrupción",
+        "columnas": {
+            "headers": [
+                "Fuentes de eventos",
+                "Evento",
+                "Riesgo",
+                "Indicadores claves de riesgo",
+                "Aplica (Sí/No)",
+                "Comentario"
+            ]
+        },
+        "filas": [
+            [
+                "Conflicto de interés",
+                "Preferencia intencional sobre proveedores y\ndireccionamiento de compras.",
+                "La acción de preferencia por adquirir un determinado bien o servicio que no es relevante impacta en falta de soluciones a verdaderas necesidades detectadas para la población y los usuarios.\n\nAdquirir bienes o servicios a proveedores sin el perfil o la capacidad técnica impacta en la falta de capacidad de abastecer a tiempo con lo requerido.",
+                "•\tAumento mensual de casos por adquisición de bienes o servicios sin justificación o fuera del giro habitual de la entidad, y\n•\tAumento mensual de casos de adquisición en licitación o compra directa con bases manipuladas para requerir aspectos técnicos con opacidad, para favorecer a un determinado proveedor.",
+                "",
+                ""
+            ],
+            [
+                "Conflicto de interés",
+                "Otorgamiento de negocios a contratistas o proveedores con conflicto de interés (amistades o familiares).",
+                "La práctica de negocio de compras dirigidas, para beneficiar a contratistas\no proveedores que presentan conflicto de interés (familiares\no amistades), provoca que la entidad invierta sus recursos financieros en el otorgamiento de eventos que no cumplan con principios de calidad del gasto, con pérdidas asociadas para la entidad.",
+                "•\tAumento de casos de eventos de cotización o licitación dirigidas a un mismo proveedor,\n•\tLos términos de referencia se ajustan o están dirigidas exactamente a la presentación de ofertas de un proveedor,\n•\tAumento de compras con las características siguientes:\n•\tSe concentran en un mismo proveedor,\n•\tIdentificación de proveedores únicos,\n•\tProveedores con señalamientos o casos legales de corrupción, y\n•\tProveedores no calificados (recién formalizados legalmente, sin capacidad de servicio o recursos financieros).",
+                "",
+                ""
+            ],
+            [
+                "Conflicto de interés",
+                "Requerimiento de pagos no autorizados a cambios de adjudicación de eventos de contratación y compra de productos.",
+                "La entidad se expone a riesgos reputacionales o denuncias derivado de que los Servidores Públicos requieren un pago no autorizado (dadiva), para\nla entrega de productos o servicios de la entidad.",
+                "•\tAumento de casos de productos recibidos en almacén que no cumplen con Términos de Referencia o especificaciones técnicas requeridas,\n•\tIncremento en precios de bienes y servicios (de acuerdo al índice de precios del INE o de mercado) incluidos en cotizaciones o presentación de ofertas de proveedores, y\n•\tCambios, mejoras o comportamientos en el nivel de vida de los Servidores Públicos involucrados en el proceso de adquisiciones.",
+                "",
+                ""
+            ],
+            [
+                "Soborno",
+                "El Servidor Público recibe comisiones o dadivas a cambio de agilización de trámites de pagos a proveedores.",
+                "La entidad se expone a pérdida reputacional por denuncias de coacción o colusión entre proveedores y Servidores Públicos.",
+                "•\tCambios, mejoras o comportamientos en el nivel de vida de los Servidores Públicos involucrados en el proceso de adquisiciones,\n•\tIdentificación de relaciones entre proveedores y personal asociado a las adquisiciones y contrataciones, y\n•\tActitud prepotente e imperativa de los proveedores ante los Servidores Públicos.",
+                "",
+                ""
+            ],
+            [
+                "Soborno",
+                "Atrasos intencionales en el procesamiento de\nadquisiciones y contrataciones.",
+                "El Servidor Público al provocar atrasos\nintencionales o creación de requerimientos discrecionales en adquisiciones y contrataciones, podría exponer a los proveedores a ofrecimiento de dadivas,\npara agilizar los procesos de pago, lo cual impactará en riesgos reputacionales y la ineficiencia en la prestación de servicios.",
+                "•\tAumento mensual de casos de retrasos de pagos a los proveedores por criterios arbitrarios para liquidación o avance, y\n•\tAumento mensual de casos de pérdida de papelería en el expediente del proveedor para retener pago.",
+                "",
+                ""
+            ],
+            [
+                "Gratificaciones ilegales",
+                "Los Servidores Públicos reciben gratificaciones irregulares (dadivas), para la continuidad de negocios con proveedores.",
+                "Las gratificaciones ilegales de parte del proveedor condicionan al Servidor Público, para la continuidad y otorgamiento de negocios, impactando en posible incumplimiento de la calidad del gasto público.",
+                "•\tCambios, mejoras o comportamientos en el nivel de vida de los Servidores Públicos involucrados en el proceso de adquisiciones,\n•\tIdentificación de relaciones entre proveedores y personal asociado a las adquisiciones y contrataciones,\n•\tIncremento en precios de bienes y servicios (de acuerdo al índice de precios del INE o de mercado) incluidos en cotizaciones o presentación de ofertas de proveedores,\n•\tActitud prepotente e imperativa de los proveedores ante los servidores públicos,\n•\tAumento de casos de bienes o servicios defectuosos en los cuales no se activó la fianza de garantía para no afectar al proveedor, y\n•\tDadivas recibidas de proveedores y no reportadas al área de Recursos Humanos de la entidad.",
+                "",
+                ""
+            ],
+            [
+                "Extorsión económica",
+                "A los Servidores Públicos se les pide un apoyo económico a cambio del mantenimiento de su relación laboral o privilegios.",
+                "La extorsión económica a los Servidores Públicos\nprovoca que la prestación de sus servicios y funciones las desarrollen de manera ineficiente\ny con baja calidad, lo cual también impacta en posibles denuncias o inconformidades de la ciudadanía.",
+                "•\tAumento de casos de denuncias de Servidores Públicos por acoso financiero o requerimiento de apoyo económico, y\n•\tAumento mensual de casos de Servidores Públicos que no se presentan a laborar con regularidad a su área de trabajo.",
+                "",
+                ""
+            ]
+        ]
+    },
+    {
+        "titulo": "Fuentes de Casos de Efectivo y Equivalentes",
+        "columnas": {
+            "headers": [
+                "Fuentes de eventos",
+                "Evento",
+                "Riesgo",
+                "Indicadores claves de riesgo",
+                "Aplica (Sí/No)",
+                "Comentario"
+            ]
+        },
+        "filas": [
+            [
+                "Hurto",
+                "Faltantes de efectivo en fondo rotativo, caja chica y receptorías (cuando aplicare).",
+                "Los faltantes de efectivo en fondo rotativo, caja chica y receptorías impactan en gastos asociados a procesos legales de recuperación y deducción de responsabilidades e investigaciones.",
+                "•\tFalta de efectivo para cubrir gastos emergentes,\n•\tPresentación de documentación irregular para soportar gastos, y\n•\tConstantes faltantes en arqueos realizados.",
+                "",
+                ""
+            ],
+            [
+                "Hurto",
+                "Reporte tardío de depósitos por ingresos propios.",
+                "La falta de procesos formales y documentados, para el manejo eficiente de depósito del efectivo provoca en la entidad que los servidores a cargo de los procesos estén expuestos o realicen prácticas de jineteo de fondos.",
+                "•\tAumento de casos por falta de integridad en los reportes diarios de efectivo,\n•\tIncongruencias entre liquidación diaria de fondos y depósitos realizados, y\n•\tPartidas en conciliación que presentan atrasos en su registro.",
+                "",
+                ""
+            ],
+            [
+                "Desembolsos fraudulentos",
+                "Facturas Irregulares.",
+                "La entidad podría recibir facturas irregulares o falsas derivado de:\n•\tEmpresas inexistentes\n•\tAlteración por parte del proveedor\n•\tCorresponden a gastos personales\nLo anterior provoca erogaciones innecesarias e ilegales, que afectan los flujos de efectivo y disponibilidad presupuestaria de la entidad.",
+                "•\tAdquisiciones recurrentes de bienes, suministros y servicios a empresas no constituidas legalmente y empresas inexistentes,\n•\tAumento de casos para adquisición de bienes y servicios no incluidos en el Plan Anual de Compras,\n•\tRechazo de liquidaciones de las unidades administrativas por no coincidir información de la factura contra requisición u orden de compra, y\n•\tExisten gastos frecuentes que no corresponden a la naturaleza de la entidad.",
+                "",
+                ""
+            ],
+            [
+                "Desembolsos fraudulentos",
+                "Irregularidades en Nómina.",
+                "Erogaciones por pago de nóminas que pudieran estar expuestas a riesgos de:\n•\tPersonal Inexistente,\n•\tPersonal con incompatibilidad de horarios, y\n•\tCompensaciones y horas extras no soportadas",
+                "•\tIncremento en los reportes de inasistencia del personal,\n•\tOtorgamiento frecuente de licencias y permisos,\n•\tDuplicación de funciones en varios puestos,\n•\tAtrasos en el marcaje o inicio de labores relacionado a problemas de traslados,\n•\tAbandono de puestos de trabajo, e\n•\tIncrementos no justificados de pagos de horas extras o compensaciones.",
+                "",
+                ""
+            ],
+            [
+                "Desembolsos fraudulentos",
+                "Reembolsos de Gastos.",
+                "Erogaciones innecesarias o no autorizadas que impacten en la disponibilidad de efectivo y presupuesto, relacionadas a:\n•\tGastos inexistentes, y\n•\tGastos sobrevaluados\nPagos concentrados en un proveedor.",
+                "•\tFrecuente liquidación de facturas o documentos por gastos repetitivos,\n•\tFrecuente liquidación de gastos valuados con precios que no corresponden al valor de mercado, y\n•\tMúltiples reembolsos a un mismo proveedor",
+                "",
+                ""
+            ],
+            [
+                "Desembolsos fraudulentos",
+                "Adulteración de Cheques.",
+                "Presentación de reclamos o rechazos asociados a la emisión y cobro de cheques o recepción de transferencias, que provoquen reprocesos o pagos duplicados de un mismo servicio o adquisición.",
+                "•\tIdentificación de firmas falsificadas,\n•\tAdulteración del beneficiario,\n•\tIncremento de reclamos asociados a cheques ya cobrados o transferencias electrónicas,\n•\tTrasferencias no regularizadas en conciliaciones,\n•\tCheques retenidos en Tesorería, y\n•\tConcentración de un solo firmante autorizado.",
+                "",
+                ""
+            ],
+            [
+                "Retención Indebida",
+                "Apropiación irregular de ingresos Propios.",
+                "Flujos de efectivo no disponibles para la ejecución presupuestaria y cumplimiento de objetivos por\napropiaciones irregulares de ingresos propios.",
+                "•\tFrecuentes diferencias entre formularios de ingresos y depósitos bancarios,\n•\tPartidas de ingresos no regularizadas en conciliaciones bancarias,\n•\tIncremento en faltantes de liquidaciones de ingresos, y\n•\tDisminución inusual de nivel de ingresos en relación con cobros programados.",
+                "",
+                ""
+            ],
+            [
+                "Retención Indebida",
+                "Irregularidades en cobro y recepción de ingresos.",
+                "Disminución de ingresos propios derivados de acciones o apropiación indebida de fondos asociados a cobradores y receptores.",
+                "•\tAtrasos en la liquidación de ingresos,\n•\tDescuadre frecuente en la cuenta corriente,\n•\tDescuentos no autorizados, y\n•\tCasos de jineteo de fondos.",
+                "",
+                ""
+            ]
+        ]
+    },
+    {
+        "titulo": "Fuentes de Casos de Inventarios y Almacenes",
+        "columnas": {
+            "headers": [
+                "Fuentes de eventos",
+                "Evento",
+                "Riesgo",
+                "Indicadores claves de riesgo",
+                "Aplica (Sí/No)",
+                "Comentario"
+            ]
+        },
+        "filas": [
+            [
+                "Uso Indebido",
+                "El Servidor Público utiliza los recursos de la entidad para obtener un beneficio o ventaja personal.",
+                "Malversación de recursos de la entidad por usos no autorizados que impacta en:\n•\tMantenimiento o gastos innecesarios relacionados a reparaciones de bienes,\n•\tIncurrir en gastos para reposición de recursos de almacenes por pérdidas, extravíos o hurtos, e\n•\tIneficiencia en la prestación de servicios al no contar con la disponibilidad de los recursos.",
+                "•\tIncremento en gastos de mantenimiento a bienes,\n•\tIncremento de adquisiciones para almacén, e\n•\tIncremento en reclamos o denuncias por ineficiente servicio a la ciudadanía.",
+                "",
+                ""
+            ],
+            [
+                "Hurto de Inventario",
+                "Apropiación de existencias de inventario.",
+                "Falta de control de seguridad física en el almacén.",
+                "•\tFrecuentes reportes inexistencias o pérdidas de inventarios dentro de almacén.",
+                "",
+                ""
+            ],
+            [
+                "Hurto de Inventario",
+                "Recepción y envíos con irregularidades.",
+                "Exposición a riesgo de falsificación de documentación de los procesos de recepción y envíos de inventarios a distintas áreas de la entidad.",
+                "•\tReportes de bienes asignados en tarjetas de responsabilidad del personal de la entidad, que no han recibido y desconocen de su traslado o ubicación.",
+                "",
+                ""
+            ],
+            [
+                "Hurto de Inventario",
+                "Compras no recibidas en almacén.",
+                "Compras realizadas con fines distintos al propósito de la entidad, con el fin de obtener un beneficio personal o en conjunto, apropiándose de bienes del Estado.",
+                "•\tDiferencias entre los registros en el sistema y existencias del inventario físico.",
+                "",
+                ""
+            ],
+            [
+                "Hurto de Inventario",
+                "Apropiación irregular de bienes.",
+                "El personal de la Entidad se apropia de los bienes asignados o de alguien más, causando un perjuicio al patrimonio.",
+                "•\tAumento de casos de denuncias sobre robos o pérdidas de bienes, los cuales se mantienen inconclusos.",
+                "",
+                ""
+            ]
+        ]
+    },
+    {
+        "titulo": "Fuentes de Casos de Información Fraudulenta",
+        "columnas": {
+            "headers": [
+                "Fuentes de eventos",
+                "Evento",
+                "Riesgo",
+                "Indicadores claves de riesgo",
+                "Aplica (Sí/No)",
+                "Comentario"
+            ]
+        },
+        "filas": [
+            [
+                "Financiera / Sobrevaloración de Bienes",
+                "Diferencias entre integraciones, libros auxiliares y registros en sistemas del Estado.",
+                "Exposición a riesgos de apropiación indebida de recursos o bienes del Estado, derivado de un registro no integro o con diferencias entre integraciones, libros auxiliares y registros en sistemas del Estado.",
+                "•\tDiferencias no investigadas o aclaradas oportunamente entre integraciones, libros auxiliares y registros en sistemas del Estado.",
+                "",
+                ""
+            ],
+            [
+                "Financiera / Sobrevaloración de Bienes",
+                "Gastos y Obligaciones no registradas.",
+                "Gastos y Obligaciones no registradas que impactan en posibles denuncias o demandas por parte de proveedores y acreedores.",
+                "•\tIncremento de casos legales asociados a demandas de pago por parte de proveedores y acreedores, los cuales no cuentan con registros de obligación de pago en los Sistemas del Estado.",
+                "",
+                ""
+            ],
+            [
+                "Financiera / Sobrevaloración de Bienes",
+                "Revelaciones inapropiadas de políticas de registro financiero.",
+                "Representación errónea u omisión intencional en los Estados Financieros de hechos, transacciones u otra información importante por parte de la entidad.",
+                "•\tDiferencias entre información de registros de la entidad y los Sistemas de Información del Estado.",
+                "",
+                ""
+            ],
+            [
+                "No Financiera / Operativa",
+                "Alteración de información de alcance de metas.",
+                "La entidad revela información no confiable con relación a la consecución de objetivos, lo cual expone a la Máxima Autoridad a toma de decisiones inadecuadas y pérdida reputacional ante la ciudadanía.",
+                "•\tInformes de alcances de metas presentan diferencias respecto a informes de ejecución presupuestaria y de las entidades rectoras de Planificación y de Finanzas del Estado.",
+                "",
+                ""
+            ],
+            [
+                "No Financiera / Operativa",
+                "Ocultación de informes de reclamos por prestación de servicios.",
+                "Se omite o destruye documentación relacionada a denuncias o inconformidades por parte de la ciudadanía, impactando negativamente en la rendición de cuentas y trasparencia de la entidad.",
+                "•\tDenuncias o inconformidades sobre la falta de atención a reclamos de la\nciudadanía por prestación de servicios.\n",
+                "",
+                ""
+            ],
+            [
+                "Recursos Humanos, Antecedentes del empleado",
+                "Inconsistencias en conformación de expedientes laborales.",
+                "La información del expediente laboral del trabajador presenta inconsistencias respecto a la veracidad que podría afectar:\n•\tEficiencia en el cumplimiento de sus funciones,\n•\tIncompetencia al no cumplir con el perfil del puesto,\n•\tGenerar incertidumbre ante la entidad por falta de competencia, idoneidad y capacidad,\n•\tConflicto de interés, y\n•\tAccidentes laborales",
+                "•\tInformes frecuentes sobre el incumplimiento de funciones del Servidor Público,\n•\tReprocesos ante servicios prestados a la ciudadanía,\n•\tReclamos recurrentes de la ciudadanía por incumplimiento o deficiencias en la prestación de servicios,\n•\tIncremento en procesos legales relacionados a denuncias por incumplimiento de prestación de servicios o funciones de los Servidores Públicos,\n•\tSe identifica personal que presente una relación de afinidad, prestando el mismo servicio, e\n•\tIncremento de accidentes laborales por incompetencia del Servidor Público.",
+                "",
+                ""
+            ]
+        ]
+    }
+]

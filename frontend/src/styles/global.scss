@@ -1,0 +1,171 @@
+// src/styles/global.scss
+
+@import './variables';
+
+@mixin theme-colors($theme) {
+  --color-primary: #{map-get($theme, primary)};
+  --color-secondary: #{map-get($theme, secondary)};
+  --color-neutral: #{map-get($theme, neutral)};
+  --color-accent: #{map-get($theme, accent)};
+  --color-text: #{map-get($theme, text)};
+  --color-primary-hover: #{if(map-has-key($theme, primary-hover), map-get($theme, primary-hover), map-get($theme, primary))};
+  --color-accent-hover: #{if(map-has-key($theme, accent-hover), map-get($theme, accent-hover), map-get($theme, accent))};
+}
+
+body[data-theme='dark'] {
+  @include theme-colors(map-get($theme-colors, dark));
+}
+
+body[data-theme='light'] {
+  @include theme-colors(map-get($theme-colors, light));
+}
+
+body[data-theme='red'] {
+  @include theme-colors(map-get($theme-colors, red));
+}
+
+body[data-theme='green'] {
+  @include theme-colors(map-get($theme-colors, green));
+}
+
+body[data-theme='blue'] {
+  @include theme-colors(map-get($theme-colors, blue));
+}
+
+body {
+  background-color: var(--color-neutral);
+  color: var(--color-text);
+  font-family: Arial, sans-serif;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  color: var(--color-primary);
+}
+
+a {
+  color: var(--color-accent);
+}
+
+button {
+  background-color: var(--color-primary);
+  color: var(--color-neutral);
+
+  &:hover {
+    background-color: var(--color-primary-hover);
+  }
+}
+
+input, .form-control, .MuiTextField-root {
+  background-color: var(--color-neutral);
+  border: 1px solid var(--color-secondary);
+  color: var(--color-text);
+}
+
+textarea {
+  background-color: var(--color-neutral);
+  border: 1px solid var(--color-secondary);
+  color: var(--color-text);
+}
+
+.modal-content {
+  background-color: var(--color-neutral);
+  color: var(--color-text);
+}
+
+.table {
+  background-color: var(--color-neutral);
+  color: var(--color-text);
+
+  th, td {
+    border: 1px solid var(--color-secondary);
+  }
+}
+
+.container-dependencias {
+  padding: 20px;
+}
+
+.nueva-dependencia {
+  background-color: var(--color-accent);
+  border: none;
+  color: white;
+
+  &:hover {
+    background-color: var(--color-accent-hover);
+  }
+}
+
+/* Estilos específicos para ObjetivoModal */
+.modal-box {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 80%;
+  max-height: 80vh;
+  overflow-y: auto;
+  background-color: var(--color-neutral);
+  box-shadow: 24px;
+  padding: 4rem;
+}
+
+.modal-header, .modal-title, .modal-body, .modal-footer {
+  background-color: var(--color-neutral);
+  color: var(--color-text);
+}
+
+.card {
+  background-color: var(--color-secondary);
+  margin-bottom: 1rem;
+}
+
+.card-content {
+  background-color: var(--color-secondary);
+  color: var(--color-text);
+}
+
+.grid-item {
+  margin-bottom: 1rem;
+}
+
+button {
+  background-color: var(--color-primary);
+  color: var(--color-neutral);
+  border: none;
+  padding: 0.5rem 1rem;
+
+  &:hover {
+    background-color: var(--color-primary-hover);
+  }
+}
+
+input, .form-control, .MuiTextField-root {
+  background-color: var(--color-neutral);
+  border: 1px solid var(--color-secondary);
+  color: var(--color-text);
+}
+
+textarea {
+  background-color: var(--color-neutral);
+  border: 1px solid var(--color-secondary);
+  color: var(--color-text);
+}
+
+/* Estilos para el menú de hamburguesa */
+.navbar-toggler {
+  font-size: 2.5rem; /* Aumentar el tamaño del menú de hamburguesa */
+}
+
+.theme-indicator {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.theme-dot {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+}
+
+
