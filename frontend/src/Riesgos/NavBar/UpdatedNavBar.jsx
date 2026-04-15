@@ -179,18 +179,21 @@ const UpdatedNavBar = () => {
             'Consolidado de documentos de evaluación y gestión de riesgos',
             'Entrada de evaluación y gestión de riesgos',
             'Revisión de evaluación y gestión de riesgos',
+            'Revisión de supuerior de evaluación y gestión de riesgos',
             'Consolidado de riesgos'
         ],
         'Módulo de Mapa de Riesgos': [
             'Consolidado de documentos de mapa de riesgos',
             'Entrada de mapa de Riesgos',
             'Revisión de mapa de riesgos',
+            'Revisión de supuerior de mapa de riesgos',
             'Consolidado de riesgos'
         ],
         'Módulo de Continuidad y Monitoreo': [
             'Consolidado de documentos de continuidad y monitoreo',
             'Entrada de continuidad y monitoreo',
             'Revision de continuidad y monitoreo',
+            'Revisión de supuerior de continuidad y monitoreo',
             'Consolidado de riesgos'
         ],
         'Módulo de Informe Anual': ['Informe Anual'],

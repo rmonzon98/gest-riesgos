@@ -47,7 +47,9 @@ router.put("/restablecer", controller.restablecerRiesgo);
 router.get('/unidad-periodo', controller.obtenerRiesgosUnidadPeriodo)
 router.put('/revision', controller.comentarRiesgo)
 
-
+//REVISION SUPERIOR
+router.get('/unidad-periodo-superior', controller.obtenerRiesgosUnidadPeriodoSuperior)
+router.put('/revision-superior', controller.comentarRiesgoSuperior)
 
 // Monitoreo del comportamiento
 router.get('/obtener-lista-riesgos-detalle', controller.obtenerDetalleRiesgos)

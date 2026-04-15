@@ -1,17 +1,3 @@
-/**
- * @fileoverview 
- * Tabla básica de riesgos con filtros y acciones de mantenimiento.
- *
- * Permite:
- * - Listar riesgos registrados con sus campos principales.
- * - Filtrar por referencia, descripción, estado y comentario del supervisor.
- * - Ejecutar acciones de edición, eliminación lógica y restauración.
- *
- * @module Riesgos/Evaluacion riesgos F/Ingreso/TablaRiesgosBasica.jsx
- * @version 1.0
- * @author Equipo de Desarrollo
- */
-
 import { useMemo, useState } from "react";
 import {
     Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
@@ -25,37 +11,14 @@ import RestoreRounded from "@mui/icons-material/RestoreRounded";
 const normalize = (str = "") =>
     str.toString().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
 
-
-/**
- * TablaRiesgosBasica
- *
- * Muestra en una tabla los riesgos básicos de evaluación, con filtros rápidos
- * y acciones de mantenimiento (editar, eliminar, restaurar).
- *
- * - Recibe un arreglo de riesgos (`rows`) desde el componente padre.
- * - Mantiene un estado local de filtros por referencia, descripción, comentario y estado.
- * - Aplica los filtros de forma memoizada para no recalcular innecesariamente.
- * - Renderiza la tabla con:
- *   - Fila de encabezados.
- *   - Fila de filtros (inputs y combo de estado).
- *   - Fila por riesgo con:
- *       - Botón de edición (`onEdit`).
- *       - Botón de eliminación lógica (`onDelete`) o restauración (`onRestore`) según `ELIMINADO`.
- * - Muestra un mensaje cuando no hay resultados para los filtros actuales.
- *
- * @component
- * @param {Array<Object>} props.rows Lista de riesgos a mostrar.
- * @param {Function} [props.onEdit] Handler de edición de riesgo.
- * @param {Function} [props.onDelete] Handler de eliminación lógica de riesgo.
- * @param {Function} [props.onRestore] Handler de restauración de riesgo eliminado.
- * @returns {JSX.Element}
- */
 export default function TablaRiesgosBasica({ rows = [], onEdit, onDelete, onRestore }) {
     const [filters, setFilters] = useState({
         ref: "",
         descripcion: "",
         comentario: "",
-        estado: ""
+        estado: "",
+        estadoSuperior: "",
+        comentarioSuperior: ""
     });
 
     const filtered = useMemo(() => {
@@ -63,18 +26,32 @@ export default function TablaRiesgosBasica({ rows = [], onEdit, onDelete, onRest
         const fDesc = normalize(filters.descripcion);
         const fCom = normalize(filters.comentario);
         const fEstado = filters.estado;
+        const fEstadoSuperior = filters.estadoSuperior;
+        const fComentarioSuperior = normalize(filters.comentarioSuperior);
 
         return (Array.isArray(rows) ? rows : []).filter((r) => {
             const ref = normalize(r.REF ?? "");
             const desc = normalize(r.DESCRIPCION ?? "");
             const com = normalize(r.COMENTARIO_SUPERVISOR ?? "");
+            const comSuperior = normalize(r.COMENTARIO_SUPERIOR ?? "");
 
             const okRef = !fRef || ref.includes(fRef);
             const okDesc = !fDesc || desc.includes(fDesc);
             const okCom = !fCom || com.includes(fCom);
             const okEstado = fEstado === "" || Number(r.ESTADO) === Number(fEstado);
+            const okEstadoSuperior =
+                fEstadoSuperior === "" || Number(r.ESTADO_SUPERIOR) === Number(fEstadoSuperior);
+            const okComentarioSuperior =
+                !fComentarioSuperior || comSuperior.includes(fComentarioSuperior);
 
-            return okRef && okDesc && okCom && okEstado;
+            return (
+                okRef &&
+                okDesc &&
+                okCom &&
+                okEstado &&
+                okEstadoSuperior &&
+                okComentarioSuperior
+            );
         });
     }, [rows, filters]);
 
@@ -87,29 +64,37 @@ export default function TablaRiesgosBasica({ rows = [], onEdit, onDelete, onRest
                             <TableCell sx={{ width: 140 }}>Acciones</TableCell>
                             <TableCell sx={{ minWidth: 140 }}>Referencia</TableCell>
                             <TableCell sx={{ minWidth: 360 }}>Descripción</TableCell>
-                            <TableCell sx={{ minWidth: 150 }}>Estado</TableCell>
+                            <TableCell sx={{ minWidth: 150 }}>Estado supervisor</TableCell>
                             <TableCell sx={{ minWidth: 240 }}>Comentario supervisor</TableCell>
+                            <TableCell sx={{ minWidth: 240 }}>Estado superior</TableCell>
+                            <TableCell sx={{ minWidth: 240 }}>Comentario superior</TableCell>
                         </TableRow>
 
                         <TableRow>
                             <TableCell />
                             <TableCell>
                                 <TextField
-                                    fullWidth size="small" placeholder="Filtrar referencia"
+                                    fullWidth
+                                    size="small"
+                                    placeholder="Filtrar referencia"
                                     value={filters.ref}
                                     onChange={(e) => setFilters((s) => ({ ...s, ref: e.target.value }))}
                                 />
                             </TableCell>
                             <TableCell>
                                 <TextField
-                                    fullWidth size="small" placeholder="Filtrar descripción"
+                                    fullWidth
+                                    size="small"
+                                    placeholder="Filtrar descripción"
                                     value={filters.descripcion}
                                     onChange={(e) => setFilters((s) => ({ ...s, descripcion: e.target.value }))}
                                 />
                             </TableCell>
                             <TableCell>
                                 <Select
-                                    fullWidth size="small" displayEmpty
+                                    fullWidth
+                                    size="small"
+                                    displayEmpty
                                     value={filters.estado}
                                     onChange={(e) => setFilters((s) => ({ ...s, estado: e.target.value }))}
                                 >
@@ -121,9 +106,34 @@ export default function TablaRiesgosBasica({ rows = [], onEdit, onDelete, onRest
                             </TableCell>
                             <TableCell>
                                 <TextField
-                                    fullWidth size="small" placeholder="Filtrar comentario"
+                                    fullWidth
+                                    size="small"
+                                    placeholder="Filtrar comentario"
                                     value={filters.comentario}
                                     onChange={(e) => setFilters((s) => ({ ...s, comentario: e.target.value }))}
+                                />
+                            </TableCell>
+                            <TableCell>
+                                <Select
+                                    fullWidth
+                                    size="small"
+                                    displayEmpty
+                                    value={filters.estadoSuperior}
+                                    onChange={(e) => setFilters((s) => ({ ...s, estadoSuperior: e.target.value }))}
+                                >
+                                    <MenuItem value=""><em>Todos</em></MenuItem>
+                                    <MenuItem value={0}>Pendiente revisión</MenuItem>
+                                    <MenuItem value={1}>Aprobado</MenuItem>
+                                    <MenuItem value={2}>Rechazado</MenuItem>
+                                </Select>
+                            </TableCell>
+                            <TableCell>
+                                <TextField
+                                    fullWidth
+                                    size="small"
+                                    placeholder="Filtrar comentario superior"
+                                    value={filters.comentarioSuperior}
+                                    onChange={(e) => setFilters((s) => ({ ...s, comentarioSuperior: e.target.value }))}
                                 />
                             </TableCell>
                         </TableRow>
@@ -138,7 +148,9 @@ export default function TablaRiesgosBasica({ rows = [], onEdit, onDelete, onRest
                                     sx={{
                                         cursor: "pointer",
                                         bgcolor: r.ELIMINADO ? "error.lighter" : "inherit",
-                                        "&:nth-of-type(odd)": { bgcolor: r.ELIMINADO ? "error.lighter" : "action.hover" }
+                                        "&:nth-of-type(odd)": {
+                                            bgcolor: r.ELIMINADO ? "error.lighter" : "action.hover"
+                                        }
                                     }}
                                 >
                                     <TableCell>
@@ -148,6 +160,7 @@ export default function TablaRiesgosBasica({ rows = [], onEdit, onDelete, onRest
                                                     <EditRounded fontSize="small" />
                                                 </IconButton>
                                             </Tooltip>
+
                                             {!r.ELIMINADO ? (
                                                 <Tooltip title="Eliminar riesgo">
                                                     <IconButton
@@ -171,18 +184,50 @@ export default function TablaRiesgosBasica({ rows = [], onEdit, onDelete, onRest
                                             )}
                                         </Stack>
                                     </TableCell>
+
                                     <TableCell>{r.REF}</TableCell>
                                     <TableCell>{r.DESCRIPCION}</TableCell>
+
                                     <TableCell>
-                                        <Chip size="small" color={r.ESTADO === 1 ? 'success' : r.ESTADO === 0 ? 'info' : 'error'}
-                                            label={r.ESTADO === 0 ? "Pendiente revisión" : r.ESTADO === 1 ? "Aprobado" : "Rechazado"} />
+                                        <Chip
+                                            size="small"
+                                            color={
+                                                r.ESTADO === 1 ? "success" :
+                                                    r.ESTADO === 0 ? "info" :
+                                                        "error"
+                                            }
+                                            label={
+                                                r.ESTADO === 0 ? "Pendiente revisión" :
+                                                    r.ESTADO === 1 ? "Aprobado" :
+                                                        "Rechazado"
+                                            }
+                                        />
                                     </TableCell>
+
                                     <TableCell>{r.COMENTARIO_SUPERVISOR}</TableCell>
+
+                                    <TableCell>
+                                        <Chip
+                                            size="small"
+                                            color={
+                                                r.ESTADO_SUPERIOR === 1 ? "success" :
+                                                    r.ESTADO_SUPERIOR === 0 ? "info" :
+                                                        "error"
+                                            }
+                                            label={
+                                                r.ESTADO_SUPERIOR === 0 ? "Pendiente revisión" :
+                                                    r.ESTADO_SUPERIOR === 1 ? "Aprobado" :
+                                                        "Rechazado"
+                                            }
+                                        />
+                                    </TableCell>
+
+                                    <TableCell>{r.COMENTARIO_SUPERIOR}</TableCell>
                                 </TableRow>
                             ))
                         ) : (
                             <TableRow>
-                                <TableCell colSpan={5} align="center">
+                                <TableCell colSpan={7} align="center">
                                     <Box py={2}>
                                         <Typography variant="body2" color="text.secondary">
                                             No hay resultados con los filtros actuales.

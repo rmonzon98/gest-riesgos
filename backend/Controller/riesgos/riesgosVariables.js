@@ -912,6 +912,8 @@ exports.obtenerRiesgos = async (req, res) => {
             rr.REF,
             rr.COMENTARIO_SUPERVISOR_${tipo} AS COMENTARIO_SUPERVISOR,
             rr.ESTADO_${tipo} AS ESTADO,
+            rr.ESTADO_${tipo}_SUPERIOR AS ESTADO_SUPERIOR,
+            rr.COMENTARIO_SUPERIOR_${tipo} AS COMENTARIO_SUPERIOR,
             ELIMINADO
         FROM 
             gestion_riesgos.riesgos_riesgo_extendido rr
@@ -1466,7 +1468,7 @@ exports.actualizarRiesgoMe = async (req, res) => {
         SEVERIDAD_AJUSTADA   = ?, RIESGO_INHERENTE     = ?, RIESGO_RESIDUAL      = ?, EVENTO               = ?,
         CONTROL              = ?, MONITOREO            = ?, CODIGO_FRECUENCIA    = ?, RESPONSABLE          = ?,
         SEVERIDAD_NARRACION  = ?, EXTRAS_${tipo}               = ?, USUARIO_MODIFICACION = ?, FECHA_MODIFICACION   = CURRENT_TIMESTAMP,
-        ESTADO_${tipo} = 0,       VICEMINISTERIO       = ?,         ORGANO = ?
+        ESTADO_${tipo} = 0,       VICEMINISTERIO       = ?,         ORGANO = ?, ESTADO_${tipo}_SUPERIOR = 0
       WHERE
         CODIGO_CIA     = ? AND CODIGO_ENTIDAD = ? AND CODIGO_PERIODO = ? AND CODIGO_RIESGO  = ?
       LIMIT 1
@@ -1622,6 +1624,7 @@ exports.restablecerRiesgo = async (req, res) => {
         try { conn?.release(); } catch { }
     }
 };
+
 /**
  * obtenerRiesgosUnidadPeriodo
  *
@@ -1635,7 +1638,7 @@ exports.restablecerRiesgo = async (req, res) => {
  */
 exports.obtenerRiesgosUnidadPeriodo = async (req, res) => {
     const cia = Number(req.codigo_cia ?? req.user?.CODIGO_CIA);
-    const { periodo, codigo_entidad, tipo } = req.query;
+    const { periodo, codigo_entidad = req.codigo_entidad, tipo } = req.query;
 
     if (!Number.isFinite(cia) || !periodo || !codigo_entidad) {
         return res.status(400).json({ ok: false, msg: 'Faltan parámetros: periodo y codigo_entidad.' });
@@ -1753,6 +1756,136 @@ exports.obtenerRiesgosUnidadPeriodo = async (req, res) => {
 };
 
 /**
+ * obtenerRiesgosUnidadPeriodoSuperior
+ *
+ * Función del controlador encargada de procesar la operación obtenerRiesgosUnidadPeriodo.
+ *
+ * - Ejecuta la lógica correspondiente del módulo.
+ * - Interactúa con la base de datos según sea necesario.
+ *
+ * @route GET /unidad-periodo-superior
+ * @returns {200|400|404|500} Respuesta del servicio.
+ */
+exports.obtenerRiesgosUnidadPeriodoSuperior = async (req, res) => {
+    const cia = Number(req.codigo_cia ?? req.user?.CODIGO_CIA);
+    const { periodo, codigo_entidad = req.codigo_entidad, tipo } = req.query;
+
+    if (!Number.isFinite(cia) || !periodo || !codigo_entidad) {
+        return res.status(400).json({ ok: false, msg: 'Faltan parámetros: periodo y codigo_entidad.' });
+    }
+
+    const entidad = Number(codigo_entidad);
+    const periodoNum = Number(periodo);
+
+    try {
+        const sqlPropiedades = `
+        SELECT PROPIEDADES_${tipo} AS PROPIEDADES
+        FROM gestion_riesgos.riesgos_reportes_propiedades
+        WHERE codigo_cia = ? AND defecto = 'S' AND codigo_periodo = ?
+        `;
+        const [propRows] = await pool.execute(sqlPropiedades, [req.codigo_cia, periodoNum]);
+        let propiedades = propRows.flatMap(r => {
+            try {
+                const arr = typeof r.PROPIEDADES === 'string'
+                    ? JSON.parse(r.PROPIEDADES)
+                    : r.PROPIEDADES;
+                return Array.isArray(arr) ? arr : [];
+            } catch {
+                return [];
+            }
+        });
+        propiedades = propiedades.map((prop) => { return ({ "key": prop.key, "label": prop.label, "source": prop.source }) })
+
+
+
+        let sql = `
+        SELECT
+            rrx.CODIGO_ENTIDAD,
+            rrx.CODIGO_RIESGO, 
+            -- tipo objetivos
+            rto.DESCRIPCION                              AS 'Tipo de objetivo',
+            -- objetivo
+            ro.DESCRIPCION                               AS 'Objetivo',
+            -- área
+            ra.DESCRIPCION                               AS 'Área evaluada',
+            -- probabilidad
+            concat(rprob.codigo_probabilidad, ' - ', rprob.DESCRIPCION) AS 'Probabilidad',
+            -- severidad
+            concat(rsev.codigo_severidad, ' - ', rsev.DESCRIPCION)      AS 'Severidad',
+            -- tolerancia
+            rtol.DESCRIPCION                             AS 'Tolerancia',
+            -- mitigacion
+            concat(rm.codigo_mitigacion - 1, ' - ', rm.DESCRIPCION)         AS 'Eficiencia del mitigador',
+            -- descripción riesgo
+            rrx.DESCRIPCION                              AS 'Descripción del riesgo',    
+            rrx.OBSERVACIONES                            AS 'Observaciones',
+            rrx.VARIABLE_MITIGACION                      AS 'A mitigar',
+            rrx.REF                                      AS 'Ref.',
+            rrx.SEVERIDAD_NARRACION                      AS 'Severidad (narración)',
+            rrx.PROBABILIDAD_AJUSTADA                    AS 'Probabilidad ajustada',
+            rrx.SEVERIDAD_AJUSTADA                       AS 'Severidad ajustada',
+            rrx.RIESGO_RESIDUAL                          AS 'Riesgo residual',
+            rrx.RIESGO_INHERENTE                         AS 'Riesgo Inherente',
+            rrx.EVENTO                                   AS 'Evento',
+            rrx.CONTROL                                  AS 'Control interno para mitigar',
+            rrx.MONITOREO                                AS 'Método de monitoreo',
+            rf.DESCRIPCION                               AS 'Frecuencia',
+            rrx.RESPONSABLE                              AS 'Responsable',
+            CASE 
+                WHEN JSON_VALID(rrx.EXTRAS_${tipo}) THEN JSON_EXTRACT(rrx.EXTRAS_${tipo}, '$')
+                ELSE JSON_OBJECT('EXTRAS_${tipo}', JSON_ARRAY())
+            END AS EXTRAS,
+            rrx.ESTADO_${tipo}_SUPERIOR AS ESTADO
+        FROM gestion_riesgos.riesgos_riesgo_extendido rrx
+        -- Área del riesgo
+        LEFT JOIN gestion_riesgos.riesgos_area ra
+            ON ra.CODIGO_CIA = rrx.CODIGO_CIA AND ra.CODIGO_AREA = rrx.CODIGO_AREA
+        -- Dirección del riesgo
+        LEFT JOIN seguridad.seguridad_entidad se
+            ON se.CODIGO_CIA = rrx.CODIGO_CIA AND se.CODIGO_ENTIDAD = rrx.CODIGO_ENTIDAD
+        -- Período del riesgo
+        LEFT JOIN gestion_riesgos.riesgos_periodo rp
+            ON rp.CODIGO_CIA = rrx.CODIGO_CIA AND rp.CODIGO_PERIODO = rrx.CODIGO_PERIODO
+        -- Tipo de objetivo del riesgo
+        LEFT JOIN gestion_riesgos.riesgos_tipo_objetivo rto
+            ON rto.CODIGO_CIA = rrx.CODIGO_CIA AND rto.CODIGO_TIPO_OBJETIVO = rrx.CODIGO_TIPO_OBJETIVO
+        -- Objetivo del riesgo
+        LEFT JOIN gestion_riesgos.riesgos_objetivo ro
+            ON ro.CODIGO_CIA = rrx.CODIGO_CIA
+            AND ro.CODIGO_TIPO_OBJETIVO = rrx.CODIGO_TIPO_OBJETIVO
+            AND ro.CODIGO_OBJETIVO      = rrx.CODIGO_OBJETIVO
+        -- Probabilidad del riesgo
+        LEFT JOIN gestion_riesgos.riesgos_probabilidad rprob
+            ON rprob.CODIGO_PROBABILIDAD = rrx.CODIGO_PROBABILIDAD
+        -- Severidad del riesgo
+        LEFT JOIN gestion_riesgos.riesgos_severidad rsev
+            ON rsev.CODIGO_SEVERIDAD = rrx.CODIGO_SEVERIDAD
+        -- Tolerancia del riesgo
+        LEFT JOIN gestion_riesgos.riesgos_tolerancia rtol
+            ON rtol.CODIGO_TOLERANCIA = rrx.CODIGO_TOLERANCIA
+        -- Mitigación del riesgo
+        LEFT JOIN gestion_riesgos.riesgos_mitigacion rm
+            ON rm.CODIGO_MITIGACION = rrx.CODIGO_MITIGACION
+        -- Frecuencia del riesgo
+        LEFT JOIN gestion_riesgos.riesgos_frecuencia rf
+            ON rf.CODIGO_CIA = rrx.CODIGO_CIA AND rf.CODIGO_FRECUENCIA = rrx.CODIGO_FRECUENCIA
+        WHERE rrx.CODIGO_CIA = ?
+            AND rrx.CODIGO_ENTIDAD = ?
+            AND rrx.CODIGO_PERIODO = ?
+            AND rrx.eliminado != 1
+        ORDER BY rrx.ESTADO_${tipo}_SUPERIOR ASC, rrx.REF ASC
+    `;
+        const params = [cia, entidad, periodoNum];
+        const [rows] = await pool.execute(sql, params);
+
+        return res.status(200).json({ riesgos: rows, propiedades });
+    } catch (err) {
+        console.error('❌ obtenerRiesgosUnidadPeriodo:', err);
+        return res.status(500).json({ ok: false, msg: 'Error interno al obtener riesgos por unidad/período.' });
+    }
+};
+
+/**
  * comentarRiesgo
  *
  * Función del controlador encargada de procesar la operación comentarRiesgo.
@@ -1803,6 +1936,63 @@ exports.comentarRiesgo = async (req, res) => {
         }
 
         return res.status(200).json({ ok: true, msg: '✅ Comentario de supervisor actualizado.' });
+    } catch (err) {
+        console.error('❌ comentarRiesgo:', err);
+        return res.status(500).json({ ok: false, msg: 'Error interno al registrar el comentario.' });
+    }
+};
+
+/**
+ * comentarRiesgoSuperior
+ *
+ * Función del controlador encargada de procesar la operación comentarRiesgo.
+ *
+ * - Ejecuta la lógica correspondiente del módulo.
+ * - Interactúa con la base de datos según sea necesario.
+ *
+ * @route PUT /revision-superior
+ * @returns {200|400|404|500} Respuesta del servicio.
+ */
+exports.comentarRiesgoSuperior = async (req, res) => {
+
+    const { codigo_entidad = req.codigo_entidad, codigo_riesgo, comentario, estado, periodo, tipo } = req.body
+    const cia = req.codigo_cia;
+    const supervisor = req.userId;
+
+    if (!cia) {
+        return res.status(401).json({ ok: false, msg: 'Sesión inválida.' });
+    }
+    if (!periodo || !codigo_riesgo || !codigo_entidad || !estado) {
+        return res.status(400).json({
+            ok: false,
+            msg: 'Faltan datos: codigo_entidad, codigo_riesgo, estado y periodo son obligatorios.'
+        });
+    }
+
+    const comentarioClean = String(comentario).trim().slice(0, 499);
+
+    try {
+        const sql = `
+        UPDATE gestion_riesgos.riesgos_riesgo_extendido
+        SET 
+            COMENTARIO_SUPERIOR_${tipo}   = ?,
+            SUPERIOR_MODIFICACION_${tipo} = ?,
+            ESTADO_${tipo}_SUPERIOR = ?,
+            FECHA_SUPERIOR_${tipo} = CURRENT_TIMESTAMP
+        WHERE 
+            CODIGO_CIA = ?
+            AND CODIGO_ENTIDAD = ?
+            AND CODIGO_PERIODO = ?
+            AND CODIGO_RIESGO  = ?
+        `;
+
+        const [r] = await pool.execute(sql, [comentarioClean ? comentarioClean : null, supervisor, estado, cia, codigo_entidad, periodo, codigo_riesgo]);
+
+        if (r.affectedRows === 0) {
+            return res.status(404).json({ ok: false, msg: 'No se encontró el riesgo especificado.' });
+        }
+
+        return res.status(200).json({ ok: true, msg: '✅ Comentario de superior actualizado.' });
     } catch (err) {
         console.error('❌ comentarRiesgo:', err);
         return res.status(500).json({ ok: false, msg: 'Error interno al registrar el comentario.' });

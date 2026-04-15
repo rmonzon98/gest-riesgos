@@ -44,6 +44,7 @@ const Perfil = lazy(() => import("../Riesgos/Perfil/Perfil.jsx"))
 const ReportesMain = lazy(() => import("./../Riesgos/Reportes F/ReportesMain.jsx"));
 const RiesgoInstitucional = lazy(() => import("./../Riesgos/Evaluacion riesgos F/Institucion/RiesgosInstitucional.jsx"))
 const RiesgosRevision = lazy(() => import("./../Riesgos/Evaluacion riesgos F/Revision/RiesgosRevision.jsx"));
+const RiesgosRevisionSuperior = lazy(() => import("Riesgos/Evaluacion riesgos F/Revision/RiesgosRevisionSuperior.jsx"));
 const SeguimientoGeneral = lazy(() => import("./../Riesgos/Comportamiento/Seguimiento/SeguimientoGeneral.jsx"));
 const TipoObjetivoMain = lazy(() => import("../Riesgos/Tipo Objetivo/TipoObjetivoMain.jsx"));
 const VisualizacionArchivos = lazy(() => import("../Riesgos/Visualizacion Archivos/VisualizacionArchivos.jsx"));
@@ -96,17 +97,20 @@ export default function RiesgosRoutes() {
             <Route path="evaluacion-gestion-riesgos-consolidado" element={<ConsolidacionReporteModulos categoria={3} titulo={'Consolidación de evaluación y gestión de riesgos'} />} />
             <Route path="evaluacion-gestion-riesgos" element={<IngresoRiesgos tipo={'ME'} titulo={'Entrada de evaluación y gestión de riesgos'} />} />
             <Route path="evaluacion-gestion-riesgos-revision" element={<RiesgosRevision tipo={'ME'} titulo={'Revisión de evaluación y gestión de riesgos'} />} />
+            <Route path="evaluacion-gestion-riesgos-revision-superior" element={<RiesgosRevisionSuperior tipo={'ME'} titulo={'Revisión de superior de evaluación y gestión de riesgos'} />} />
             <Route path="riesgos-institucional" element={<RiesgoInstitucional />} />
 
 
             {/* Módulo de Continuidad y monitoreo */}
             <Route path="continuidad-monitoreo-consolidado" element={<ConsolidacionReporteModulos categoria={3} titulo={'Consolidación de continuidad y monitoreo'} />} />
             <Route path="continuidad-monitoreo-revision" element={<RiesgosRevision tipo={'MCE'} titulo={'Revisión de continuidad y monitoreo'} />} />
+            <Route path="continuidad-monitoreo-revision-superior" element={<RiesgosRevisionSuperior tipo={'MCE'} titulo={'Revisión de superior de continuidad y monitoreo'} />} />
             <Route path="continuidad-monitoreo" element={<IngresoRiesgos tipo={'MCE'} titulo={'Entrada de continuidad y monitoreo'} />} />
 
             {/* Módulo de Mapa de Riesgos */}
             <Route path="mapa-riesgos-consolidado" element={<ConsolidacionReporteModulos categoria={3} titulo={'Consolidación de mapa de riesgos'} />} />
             <Route path="mapa-riesgos-revision" element={<RiesgosRevision tipo={'MC'} titulo={'Revisión de mapa de riesgos'} />} />
+            <Route path="/mapa-riesgos-revision-superior" element={<RiesgosRevisionSuperior tipo={'MC'} titulo={'Revisión de superior de mapa de riesgos'} />} />
             <Route path="mapa-riesgos" element={<IngresoRiesgos tipo={'MC'} titulo={'Entrada de mapa de riesgos'} />} />
 
             {/* Módulo de Informe Anual */}
