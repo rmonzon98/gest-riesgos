@@ -346,16 +346,6 @@ function Anexo1Form() {
                 ...commonOpts
             });
         } else {
-            console.log({
-                matrices,
-                nombreArchivo: `Matrices_Anexo1_${periodo}.pdf`,
-                filter: printFilter,
-                indices: (printFilter === 'indices'
-                    ? printIndices.split(',').map(s => parseInt(s.trim(), 10)).filter(n => !Number.isNaN(n) && n > 0)
-                    : []),
-                includeEmpty: printIncludeEmpty,
-                ...commonOpts
-            })
             GenerarReporteAnexo1({
                 matrices,
                 nombreArchivo: `Matrices_Anexo1_${periodo}.pdf`,

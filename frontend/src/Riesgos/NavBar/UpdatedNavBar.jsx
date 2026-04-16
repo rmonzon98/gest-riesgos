@@ -646,7 +646,7 @@ const UpdatedNavBar = () => {
                                 '&:hover': { textDecoration: 'underline' }
                             }}
                         >
-                            -SIGERI-
+                            Gestión de riesgos
                         </Typography>
                     </Box>
 
@@ -674,7 +674,7 @@ const UpdatedNavBar = () => {
                                 '&:hover': { textDecoration: 'underline' }
                             }}
                         >
-                            Sistema de Gestión de Riesgos Institucionales -SIGERI-
+                            Sistema de Gestión de Riesgos MAGA
                         </Typography>
 
                         {/* Nivel 1: grupos */}

@@ -480,8 +480,6 @@ exports.eliminarDocumento = async (req, res) => {
     `;
         const params = [req.userId, codigo_cia, id, req.codigo_entidad];
 
-        console.log(codigo_cia, id, req.codigo_entidad, sql)
-
         const [result] = await pool.execute(sql, params);
         if (result.affectedRows === 0) {
             return res.status(404).json({ error: 'Error al eliminar documento' });

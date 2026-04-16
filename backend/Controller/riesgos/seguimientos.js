@@ -483,7 +483,6 @@ ORDER BY rrx.CODIGO_PERIODO ASC, rrx.CODIGO_RIESGO;
         const params = [
             codigo_cia, codigo_entidad, codigo_periodo
         ];
-        console.log(sql, params)
         const [rows] = await pool.execute(sql, params);
         return res.json({ ok: true, total: rows.length, datos: rows });
     } catch (err) {
