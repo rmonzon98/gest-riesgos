@@ -1,13 +1,15 @@
 // src/styles/variables.scss
 
+@use 'sass:color';
+
 $theme-dark: (
   primary: #2C3E50,
   secondary: #BDC3C7,
   neutral: #ECF0F1,
   accent: #3498DB,
   text: #2C3E50,
-  primary-hover: darken(#2C3E50, 10%),
-  accent-hover: darken(#3498DB, 10%),
+  primary-hover: color.adjust(#2C3E50, $lightness: -10%),
+  accent-hover: color.adjust(#3498DB, $lightness: -10%),
 );
 
 $theme-light: (

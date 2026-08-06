@@ -1,35 +1,47 @@
 // src/styles/global.scss
 
-@import './variables';
+@use 'sass:map';
+@use './variables' as vars;
 
 @mixin theme-colors($theme) {
-  --color-primary: #{map-get($theme, primary)};
-  --color-secondary: #{map-get($theme, secondary)};
-  --color-neutral: #{map-get($theme, neutral)};
-  --color-accent: #{map-get($theme, accent)};
-  --color-text: #{map-get($theme, text)};
-  --color-primary-hover: #{if(map-has-key($theme, primary-hover), map-get($theme, primary-hover), map-get($theme, primary))};
-  --color-accent-hover: #{if(map-has-key($theme, accent-hover), map-get($theme, accent-hover), map-get($theme, accent))};
+  $primary-hover: map.get($theme, primary);
+  $accent-hover: map.get($theme, accent);
+
+  @if map.has-key($theme, primary-hover) {
+    $primary-hover: map.get($theme, primary-hover);
+  }
+
+  @if map.has-key($theme, accent-hover) {
+    $accent-hover: map.get($theme, accent-hover);
+  }
+
+  --color-primary: #{map.get($theme, primary)};
+  --color-secondary: #{map.get($theme, secondary)};
+  --color-neutral: #{map.get($theme, neutral)};
+  --color-accent: #{map.get($theme, accent)};
+  --color-text: #{map.get($theme, text)};
+  --color-primary-hover: #{$primary-hover};
+  --color-accent-hover: #{$accent-hover};
 }
 
 body[data-theme='dark'] {
-  @include theme-colors(map-get($theme-colors, dark));
+  @include theme-colors(map.get(vars.$theme-colors, dark));
 }
 
 body[data-theme='light'] {
-  @include theme-colors(map-get($theme-colors, light));
+  @include theme-colors(map.get(vars.$theme-colors, light));
 }
 
 body[data-theme='red'] {
-  @include theme-colors(map-get($theme-colors, red));
+  @include theme-colors(map.get(vars.$theme-colors, red));
 }
 
 body[data-theme='green'] {
-  @include theme-colors(map-get($theme-colors, green));
+  @include theme-colors(map.get(vars.$theme-colors, green));
 }
 
 body[data-theme='blue'] {
-  @include theme-colors(map-get($theme-colors, blue));
+  @include theme-colors(map.get(vars.$theme-colors, blue));
 }
 
 html,
