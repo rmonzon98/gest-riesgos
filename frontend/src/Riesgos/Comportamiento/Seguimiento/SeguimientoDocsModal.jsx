@@ -27,7 +27,7 @@ import ChevronRightRounded from "@mui/icons-material/ChevronRightRounded";
 import CloseRounded from "@mui/icons-material/CloseRounded";
 import DeleteRounded from "@mui/icons-material/DeleteRounded";
 import { saveAs } from "file-saver";
-import * as XLSX from "xlsx";
+import { buildExcelHTMLsFromArrayBuffer } from "utils/excelPreview";
 
 function formatSize(bytes) {
     const n = Number(bytes) || 0;
@@ -296,16 +296,7 @@ export default function SeguimientoDocsModal({
         return resp.data;
     };
 
-    const buildExcelHTMLs = (ab) => {
-        const wb = XLSX.read(ab, { type: "array" });
-        const out = [];
-        for (const name of wb.SheetNames) {
-            const ws = wb.Sheets[name];
-            const html = XLSX.utils.sheet_to_html(ws, { editable: false, header: "", footer: "" });
-            out.push({ name, html });
-        }
-        return out;
-    };
+    const buildExcelHTMLs = buildExcelHTMLsFromArrayBuffer;
 
     const buildDocxHTML = async (ab) => {
         try {
@@ -339,7 +330,7 @@ export default function SeguimientoDocsModal({
         try {
             if (isExcelName(name)) {
                 const ab = await fetchBlob(doc, "arraybuffer");
-                const sheets = buildExcelHTMLs(ab);
+                const sheets = await buildExcelHTMLs(ab);
                 setExcelSheets(sheets);
                 setExcelIndex(0);
                 setPreviewLoading(false);

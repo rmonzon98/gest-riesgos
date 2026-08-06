@@ -14,7 +14,7 @@ import {
 } from '@mui/material';
 import GridOnRounded from '@mui/icons-material/GridOnRounded';
 import UploadFileRounded from '@mui/icons-material/UploadFileRounded';
-import * as XLSX from 'xlsx';
+import { readWorkbookFromArrayBuffer, worksheetToAoA } from 'utils/excelPreview';
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
 
@@ -256,7 +256,7 @@ export default function Anexo2ExcelIO({
     };
 
     const overlaySheetIntoMatrixStrict = (ws, m) => {
-        const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, blankrows: false, defval: '' });
+        const aoa = worksheetToAoA(ws);
         const issues = [];
         let changed = false;
 
@@ -329,8 +329,8 @@ export default function Anexo2ExcelIO({
             await nextFrame(); await sleep(20);
 
             const buf = await file.arrayBuffer();
-            const wb = XLSX.read(buf, { type: 'array' });
-            const sheetNames = wb.SheetNames || [];
+            const wb = await readWorkbookFromArrayBuffer(buf);
+            const sheetNames = wb.worksheets.map((ws) => ws.name);
             if (sheetNames.length === 0) { setAlerta?.('El archivo no contiene hojas.'); return; }
 
             const base = typeof structuredClone === 'function'
@@ -342,7 +342,7 @@ export default function Anexo2ExcelIO({
 
             sheetNames.forEach((sn, i) => {
                 if (sn === 'Instrucciones') return;
-                const ws = wb.Sheets[sn];
+                const ws = wb.getWorksheet(sn);
                 if (!ws) return;
 
                 const idx = findIndexBySheetName(sn, base);

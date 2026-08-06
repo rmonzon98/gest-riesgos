@@ -48,7 +48,7 @@ import VisibilityOutlined from '@mui/icons-material/VisibilityOutlined';
 import GridOnRounded from '@mui/icons-material/GridOnRounded';
 import DescriptionRounded from '@mui/icons-material/DescriptionRounded';
 import { ReporteSegundaMatrizInst } from '../Reportes F/Institucionales/ReporteSegundaMatrizInst';
-import htmlDocx from 'html-docx-js/dist/html-docx';
+import { asBlob } from 'html-docx-ts';
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
 
@@ -907,7 +907,7 @@ th { background: #eeeeee; }
         return html;
     };
 
-    const handleExportWordGeneral = () => {
+    const handleExportWordGeneral = async () => {
         if (!periodo || matrices.length === 0) return;
         const mats = matricesParaImprimir();
         if (!mats || mats.length === 0) {
@@ -921,7 +921,7 @@ th { background: #eeeeee; }
         const fileSuffix = periodo ? `P${periodo}` : 'sin_periodo';
         try {
             const html = buildHtmlForMatrices(mats);
-            const blob = htmlDocx.asBlob(html);
+            const blob = await asBlob(html);
             saveAs(blob, `Anexo2Institucional_${fileSuffix}_general.docx`);
         } catch (e) {
             console.error('[Anexo2Institucional] Error al exportar Word general:', e);
@@ -933,7 +933,7 @@ th { background: #eeeeee; }
         }
     };
 
-    const handleExportWordSingle = () => {
+    const handleExportWordSingle = async () => {
         if (!periodo || matrices.length === 0) return;
         const cur = matrices[active];
         if (!cur) return;
@@ -941,7 +941,7 @@ th { background: #eeeeee; }
         const fileSuffix = periodo ? `P${periodo}` : 'sin_periodo';
         try {
             const html = buildHtmlForMatrices([cur]);
-            const blob = htmlDocx.asBlob(html);
+            const blob = await asBlob(html);
             saveAs(blob, `Anexo2Institucional_${fileSuffix}_matriz_${num}.docx`);
         } catch (e) {
             console.error('[Anexo2Institucional] Error al exportar Word de tabla única:', e);

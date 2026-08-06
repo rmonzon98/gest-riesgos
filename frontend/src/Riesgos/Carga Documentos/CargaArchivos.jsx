@@ -18,7 +18,7 @@ import {
     DownloadRounded, CloseRounded, ChevronLeftRounded, ChevronRightRounded,
     DeleteOutlineRounded
 } from "@mui/icons-material";
-import * as XLSX from "xlsx";
+import { buildExcelHTMLsFromArrayBuffer } from "utils/excelPreview";
 
 /**
  * Módulo de carga y administración de archivos de seguimiento.
@@ -270,16 +270,7 @@ export default function CargaArchivos({
         return res.data;
     };
 
-    const buildExcelHTMLs = (ab) => {
-        const wb = XLSX.read(ab, { type: "array" });
-        const out = [];
-        for (const name of wb.SheetNames) {
-            const ws = wb.Sheets[name];
-            const html = XLSX.utils.sheet_to_html(ws, { editable: false, header: "", footer: "" });
-            out.push({ name, html });
-        }
-        return out;
-    };
+    const buildExcelHTMLs = buildExcelHTMLsFromArrayBuffer;
 
     const buildDocxHTML = async (ab) => {
         try {
@@ -313,7 +304,7 @@ export default function CargaArchivos({
             // Excel: genera TODAS las hojas
             if (isExcel(item.contentType) || /\.(xlsx|xls)$/i.test(item.filename || "")) {
                 const ab = await fetchBlobArrayBuffer(item);
-                const sheets = buildExcelHTMLs(ab);
+                const sheets = await buildExcelHTMLs(ab);
                 setExcelSheets(sheets);
                 setExcelIndex(0);
                 setPreviewLoading(false);

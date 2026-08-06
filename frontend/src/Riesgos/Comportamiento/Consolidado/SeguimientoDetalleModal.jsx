@@ -42,7 +42,7 @@ import VisibilityRounded from "@mui/icons-material/VisibilityRounded";
 import ChevronLeftRounded from "@mui/icons-material/ChevronLeftRounded";
 import ChevronRightRounded from "@mui/icons-material/ChevronRightRounded";
 import { saveAs } from "file-saver";
-import * as XLSX from "xlsx";
+import { buildExcelHTMLsFromArrayBuffer } from "utils/excelPreview";
 
 /* =============== Estilo de sección (como tu SeguimientoModal.jsx) =============== */
 const Section = ({ title, subtitle, children, disabled }) => (
@@ -298,16 +298,7 @@ export default function SeguimientoDetalleModal({
     return resp.data;
   };
 
-  const buildExcelHTMLs = (ab) => {
-    const wb = XLSX.read(ab, { type: "array" });
-    const out = [];
-    for (const name of wb.SheetNames) {
-      const ws = wb.Sheets[name];
-      const html = XLSX.utils.sheet_to_html(ws, { editable: false, header: "", footer: "" });
-      out.push({ name, html });
-    }
-    return out;
-  };
+  const buildExcelHTMLs = buildExcelHTMLsFromArrayBuffer;
 
   /**
    * Construye el HTML que se insertará en un documento Word generado.
@@ -342,7 +333,7 @@ export default function SeguimientoDetalleModal({
       // Excel
       if (isExcelName(name)) {
         const ab = await fetchBlob(doc, "arraybuffer");
-        const sheets = buildExcelHTMLs(ab);
+        const sheets = await buildExcelHTMLs(ab);
         setExcelSheets(sheets);
         setExcelIndex(0);
         setPreviewLoading(false);

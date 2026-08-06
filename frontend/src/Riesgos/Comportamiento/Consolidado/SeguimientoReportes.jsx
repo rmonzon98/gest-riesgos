@@ -26,8 +26,8 @@ import SaveRounded from "@mui/icons-material/SaveRounded";
 
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { saveAs } from "file-saver";
-import ReactQuill, { Quill } from "react-quill";
-import "react-quill/dist/quill.snow.css";
+import ReactQuill, { Quill } from "react-quill-new";
+import "react-quill-new/dist/quill.snow.css";
 
 import {
     Document, Packer, Paragraph, TextRun,

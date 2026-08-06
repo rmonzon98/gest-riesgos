@@ -11,7 +11,7 @@ import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import CloseRounded from "@mui/icons-material/CloseRounded";
 import ChevronLeftRounded from "@mui/icons-material/ChevronLeftRounded";
 import ChevronRightRounded from "@mui/icons-material/ChevronRightRounded";
-import * as XLSX from "xlsx";
+import { buildExcelHTMLsFromArrayBuffer } from "utils/excelPreview";
 import { fmt } from "funciones/Fechas";
 
 const FILE_BASE = process.env.REACT_APP_API_URL;
@@ -325,20 +325,7 @@ export default function VisualizacionArhivos() {
         return res.data;
     };
 
-    const buildExcelHTMLs = (ab) => {
-        const wb = XLSX.read(ab, { type: "array" });
-        const out = [];
-        for (const name of wb.SheetNames) {
-            const ws = wb.Sheets[name];
-            const html = XLSX.utils.sheet_to_html(ws, {
-                editable: false,
-                header: "",
-                footer: "",
-            });
-            out.push({ name, html });
-        }
-        return out;
-    };
+    const buildExcelHTMLs = buildExcelHTMLsFromArrayBuffer;
 
     const buildDocxHTML = async (ab) => {
         try {
@@ -373,7 +360,7 @@ export default function VisualizacionArhivos() {
             // Excel
             if (isExcelName(name)) {
                 const ab = await fetchAs(url, "arraybuffer");
-                const sheets = buildExcelHTMLs(ab);
+                const sheets = await buildExcelHTMLs(ab);
                 setExcelSheets(sheets);
                 setExcelIndex(0);
                 setPreviewLoading(false);

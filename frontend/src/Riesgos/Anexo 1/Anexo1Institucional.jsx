@@ -25,7 +25,7 @@ import DescriptionRounded from '@mui/icons-material/DescriptionRounded';
 import GridOnRounded from '@mui/icons-material/GridOnRounded';
 import { fmt } from 'funciones/Fechas';
 import { ReportePrimeraMatrizInst } from '../Reportes F/Institucionales/ReportePrimeraMatrizInst';
-import htmlDocx from 'html-docx-js/dist/html-docx';
+import { asBlob } from 'html-docx-ts';
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
 
@@ -551,18 +551,18 @@ function Anexo1Institucional() {
         return html;
     };
 
-    const handleExportWordGeneral = () => {
+    const handleExportWordGeneral = async () => {
         if (!periodo || matrices.length === 0) return;
         const mats = getMatricesFiltradasGeneral();
         if (!mats || mats.length === 0) return;
         const html = buildHtmlForMatrices(mats);
         if (!html) return;
         const fileSuffix = periodo ? `P${periodo}` : 'sin_periodo';
-        const blob = htmlDocx.asBlob(html);
+        const blob = await asBlob(html);
         saveAs(blob, `Anexo1Institucional_${fileSuffix}_general.docx`);
     };
 
-    const handleExportWordSingle = () => {
+    const handleExportWordSingle = async () => {
         if (!periodo || matrices.length === 0) return;
         const cur = matrices[active];
         if (!cur) return;
@@ -570,7 +570,7 @@ function Anexo1Institucional() {
         if (!html) return;
         const num = getMatProp(cur, 'matriz') || active + 1;
         const fileSuffix = periodo ? `P${periodo}` : 'sin_periodo';
-        const blob = htmlDocx.asBlob(html);
+        const blob = await asBlob(html);
         saveAs(blob, `Anexo1Institucional_${fileSuffix}_tabla_${num}.docx`);
     };
 

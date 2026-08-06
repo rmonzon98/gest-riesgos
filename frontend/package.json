@@ -19,7 +19,6 @@
     "fast-uri": "^3.1.2",
     "file-saver": "^2.0.5",
     "follow-redirects": "^1.16.0",
-    "html-docx-js": "^0.1.0",
     "html-docx-ts": "^0.0.5",
     "html-to-docx": "^1.8.0",
     "html2canvas": "^1.4.1",
@@ -31,22 +30,33 @@
     "pdfjs-dist": "^6.0.227",
     "pdfmake": "^0.2.10",
     "qs": "^6.15.2",
+    "quill": "2.0.2",
     "react": "^18.0.0",
     "react-dom": "^18.0.0",
-    "react-quill": "^2.0.0",
-    "react-router-dom": "^6.3.0",
+    "react-quill-new": "^3.7.0",
+    "react-router-dom": "^7.11.0",
     "react-scripts": "5.0.1",
     "recharts": "^3.4.1",
     "sass": "^1.99.0",
     "tar": "^7.5.16",
-    "tmp": "^0.2.7",
-    "xlsx": "^0.18.5"
+    "tmp": "^0.2.7"
   },
   "scripts": {
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
+  },
+  "overrides": {
+    "@tootallnate/once": "^2.0.1",
+    "quill": "$quill",
+    "nth-check": "^2.1.1",
+    "postcss": "^8.5.25",
+    "serialize-javascript": "^7.0.5",
+    "svgo": "^4.0.2",
+    "underscore": "^1.13.8",
+    "uuid": "^11.1.1",
+    "webpack-dev-server": "5.2.6"
   },
   "eslintConfig": {
     "extends": [
