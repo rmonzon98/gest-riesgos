@@ -63,7 +63,7 @@ exports.actualizarContrasena = async (req, res) => {
 
 
         const sql = `
-        UPDATE seguridad.seguridad_persona
+        UPDATE gestion_riesgos.seguridad_persona
         SET CONTRASENA = ?, FECHA_MODIFICACION = NOW()
         WHERE CORREO_ELECTRONICO = ?
         `;
@@ -139,7 +139,7 @@ exports.obtenerSuperior = async (req, res) => {
  * Devuelve información de la unidad/entidad del colaborador actual.
  *
  * - Valida `codigo_cia` y `codigo_entidad` (req, query o params).
- * - Ejecuta `SELECT NOMBRE,SIGLAS FROM seguridad.seguridad_entidad WHERE ...`.
+ * - Ejecuta `SELECT NOMBRE,SIGLAS FROM gestion_riesgos.seguridad_entidad WHERE ...`.
  *
  * @Route GET /obtener-mi-unidad
  * @param {import('express').Request} req
@@ -159,7 +159,7 @@ exports.miUnidad = async (req, res) => {
         SELECT 
             NOMBRE, SIGLAS
         FROM 
-            seguridad.seguridad_entidad
+            gestion_riesgos.seguridad_entidad
         WHERE 
             CODIGO_CIA = ? AND CODIGO_ENTIDAD = ?
         LIMIT 1
@@ -206,9 +206,9 @@ exports.obtenerPersonasPorEmpresa = async (req, res) => {
             sp.activo,
             sp.vigente
         FROM 
-            seguridad.seguridad_persona sp
+            gestion_riesgos.seguridad_persona sp
         LEFT JOIN 
-            seguridad.seguridad_entidad se
+            gestion_riesgos.seguridad_entidad se
         ON  
             sp.CODIGO_CIA    = se.CODIGO_CIA
             AND sp.CODIGO_ENTIDAD = se.CODIGO_ENTIDAD
@@ -271,7 +271,7 @@ exports.obtenerResponsableUnico = async (req, res) => {
                 a.TERCER_APELLIDO, a.CORREO_ELECTRONICO, 
                 a.CODIGO_ENTIDAD, b.NOMBRE_SUPERIOR,
                 b.PUESTO_SUPERIOR
-            FROM seguridad.seguridad_persona a
+            FROM gestion_riesgos.seguridad_persona a
             LEFT JOIN gestion_riesgos.riesgos_colaborador_superior b
             ON a.codigo_cia = b.codigo_cia AND a.codigo_colaborador = b.codigo_colaborador
             WHERE a.CODIGO_CIA = ? AND a.CODIGO_COLABORADOR = ?
@@ -308,7 +308,7 @@ exports.cambiarVigente = async (req, res) => {
 
     try {
         const sql = `
-        UPDATE seguridad.seguridad_persona
+        UPDATE gestion_riesgos.seguridad_persona
         SET 
             vigente               = ?,
             USUARIO_MODIFICACION  = ?,
@@ -353,7 +353,7 @@ exports.cambiarActivo = async (req, res) => {
 
     try {
         const sql = `
-        UPDATE seguridad.seguridad_persona
+        UPDATE gestion_riesgos.seguridad_persona
         SET 
             activo                = ?,
             USUARIO_MODIFICACION  = ?,
@@ -399,7 +399,7 @@ exports.actualizarContrasenaAdmin = async (req, res) => {
 
 
         const sql = `
-        UPDATE seguridad.seguridad_persona
+        UPDATE gestion_riesgos.seguridad_persona
         SET CONTRASENA = ?, FECHA_MODIFICACION = NOW()
         WHERE CORREO_ELECTRONICO = ?
         `;
@@ -468,9 +468,9 @@ exports.obtenerPersonasPorEmpresaDireccion = async (req, res) => {
             sp.activo,
             sp.vigente
         FROM 
-            seguridad.seguridad_persona sp
+            gestion_riesgos.seguridad_persona sp
         LEFT JOIN 
-            seguridad.seguridad_entidad se
+            gestion_riesgos.seguridad_entidad se
         ON  
             sp.CODIGO_CIA    = se.CODIGO_CIA
             AND sp.CODIGO_ENTIDAD = se.CODIGO_ENTIDAD
@@ -549,7 +549,7 @@ exports.crearResponsableDireccion = async (req, res) => {
 
         const [dups] = await conn.execute(
             `SELECT 1
-         FROM seguridad.seguridad_persona
+         FROM gestion_riesgos.seguridad_persona
         WHERE CODIGO_CIA = ? AND LOWER(CORREO_ELECTRONICO) = ?
         LIMIT 1`,
             [codigo_cia, email]
@@ -561,7 +561,7 @@ exports.crearResponsableDireccion = async (req, res) => {
 
         const [[row]] = await conn.execute(
             `SELECT COALESCE(MAX(CODIGO_COLABORADOR), 0) + 1 AS NUEVO
-         FROM seguridad.seguridad_persona
+         FROM gestion_riesgos.seguridad_persona
         WHERE CODIGO_CIA = ?
         FOR UPDATE`,
             [codigo_cia]
@@ -571,7 +571,7 @@ exports.crearResponsableDireccion = async (req, res) => {
         const { contrasena, visible } = obtenerContrasenaCorreo(email);
 
         await conn.execute(
-            `INSERT INTO seguridad.seguridad_persona (
+            `INSERT INTO gestion_riesgos.seguridad_persona (
          CODIGO_CIA, CODIGO_COLABORADOR,
          PRIMER_NOMBRE, SEGUNDO_NOMBRE, TERCER_NOMBRE,
          PRIMER_APELLIDO, SEGUNDO_APELLIDO, TERCER_APELLIDO,
@@ -668,7 +668,7 @@ exports.actualizarResponsableDireccion = async (req, res) => {
         conn = await pool.getConnection();
         await conn.beginTransaction();
         const sql = `
-        UPDATE seguridad.seguridad_persona
+        UPDATE gestion_riesgos.seguridad_persona
         SET 
             PRIMER_NOMBRE        = ?,
             SEGUNDO_NOMBRE       = ?,
@@ -752,9 +752,9 @@ exports.obtenerPersonasPorEmpresaAdministracion = async (req, res) => {
             sp.activo,
             sp.vigente
         FROM 
-            seguridad.seguridad_persona sp
+            gestion_riesgos.seguridad_persona sp
         LEFT JOIN 
-            seguridad.seguridad_entidad se
+            gestion_riesgos.seguridad_entidad se
         ON  
             sp.CODIGO_CIA    = se.CODIGO_CIA
             AND sp.CODIGO_ENTIDAD = se.CODIGO_ENTIDAD
@@ -830,7 +830,7 @@ exports.crearResponsable = async (req, res) => {
         const [dups] = await conn.execute(
             `
         SELECT 1
-        FROM seguridad.seguridad_persona
+        FROM gestion_riesgos.seguridad_persona
         WHERE CODIGO_CIA = ? AND LOWER(CORREO_ELECTRONICO) = ?
         LIMIT 1`,
             [codigo_cia, email]
@@ -843,7 +843,7 @@ exports.crearResponsable = async (req, res) => {
         const [[row]] = await conn.execute(
             `
         SELECT COALESCE(MAX(CODIGO_COLABORADOR), 0) + 1 AS NUEVO
-        FROM seguridad.seguridad_persona
+        FROM gestion_riesgos.seguridad_persona
         WHERE CODIGO_CIA = ?
         FOR UPDATE`,
             [codigo_cia]
@@ -854,7 +854,7 @@ exports.crearResponsable = async (req, res) => {
 
         await conn.execute(
             `
-        INSERT INTO seguridad.seguridad_persona (
+        INSERT INTO gestion_riesgos.seguridad_persona (
             CODIGO_CIA, CODIGO_COLABORADOR,
             PRIMER_NOMBRE, SEGUNDO_NOMBRE, TERCER_NOMBRE,
             PRIMER_APELLIDO, SEGUNDO_APELLIDO, TERCER_APELLIDO,
@@ -948,7 +948,7 @@ exports.actualizarResponsable = async (req, res) => {
         conn = await pool.getConnection();
         await conn.beginTransaction();
         const sql = `
-        UPDATE seguridad.seguridad_persona
+        UPDATE gestion_riesgos.seguridad_persona
         SET 
             PRIMER_NOMBRE        = ?,
             SEGUNDO_NOMBRE       = ?,
@@ -1028,7 +1028,7 @@ exports.actualizarContrasenaPerfil = async (req, res) => {
     try {
         const sqlVerificar = `
             SELECT CONTRASENA 
-            FROM seguridad.seguridad_persona
+            FROM gestion_riesgos.seguridad_persona
             WHERE CODIGO_CIA = ? AND CODIGO_COLABORADOR = ? AND VIGENTE = '1'
         `;
         const [rows] = await pool.execute(sqlVerificar, [req.codigo_cia, req.userId]);
@@ -1048,7 +1048,7 @@ exports.actualizarContrasenaPerfil = async (req, res) => {
             });
         }
         const sqlActualizar = `
-            UPDATE seguridad.seguridad_persona
+            UPDATE gestion_riesgos.seguridad_persona
             SET CONTRASENA = ?, USUARIO_MODIFICACION = ?, FECHA_MODIFICACION = NOW()
             WHERE CODIGO_CIA = ? AND CODIGO_COLABORADOR = ? AND VIGENTE = '1'
         `;
@@ -1094,7 +1094,7 @@ exports.obtenerSuperiorPerfil = async (req, res) => {
             cs.NOMBRE_SUPERIOR,
             cs.PUESTO_SUPERIOR
         FROM
-            seguridad.seguridad_persona sp
+            gestion_riesgos.seguridad_persona sp
         LEFT JOIN
             gestion_riesgos.riesgos_colaborador_superior cs
         ON

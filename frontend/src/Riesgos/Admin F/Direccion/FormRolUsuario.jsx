@@ -18,7 +18,7 @@ import {
     Dialog, DialogTitle, DialogContent, DialogActions,
     Button, Grid, Autocomplete, TextField, Chip
 } from "@mui/material";
-import axios from "axios";
+import apiClient from "api/apiClient";
 
 /**
  * Formulario modal para asignar o editar roles de un colaborador.
@@ -43,9 +43,8 @@ function FormRolUsuario({ showModal, id, onClose, onSuccess, onError, roles = []
 
     useEffect(() => {
         if (id) {
-            axios.get('/api/roles-actualizados/obtener-personas-con-roles-unico', {
-                params: { codigo_colaborador: id },
-                headers: { "x-access-token": localStorage.getItem("token") }
+            apiClient.get('/api/roles-actualizados/obtener-personas-con-roles-unico', {
+                params: { codigo_colaborador: id }
             }).then(res => {
                 const rolesAsignados = res.data.data?.map(r =>
                     roles.find(role => role.codigo_rol === r.CODIGO_ROL)
@@ -92,12 +91,10 @@ function FormRolUsuario({ showModal, id, onClose, onSuccess, onError, roles = []
             ? "/api/roles-actualizados/actualizar-personas-con-roles"
             : "/api/roles-actualizados/crear-personas-con-roles";
 
-        const method = id ? axios.put : axios.post;
+        const method = id ? apiClient.put : apiClient.post;
 
         try {
-            await method(endpoint, payload, {
-                headers: { "x-access-token": localStorage.getItem("token") }
-            });
+            await method(endpoint, payload);
             onSuccess();
         } catch (err) {
             console.error(err);

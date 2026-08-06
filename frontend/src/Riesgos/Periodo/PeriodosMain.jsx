@@ -4,7 +4,7 @@ import {
     TableCell, TableBody, Paper, TextField, IconButton,
     Tooltip, TableContainer
 } from "@mui/material";
-import axios from "axios";
+import apiClient from "api/apiClient";
 import FormPeriodo from "./FormPeriodo";
 import AddIcon from "@mui/icons-material/Add";
 import EditIcon from "@mui/icons-material/Edit";
@@ -29,9 +29,7 @@ function PeriodosMain() {
 
     const obtenerPeriodos = async () => {
         try {
-            const res = await axios.get("/api/periodos-actualizados", {
-                headers: { "x-access-token": localStorage.getItem("token") }
-            });
+            const res = await apiClient.get("/api/periodos-actualizados");
             setData(res.data.result || []);
         } catch (err) {
             console.error(err);

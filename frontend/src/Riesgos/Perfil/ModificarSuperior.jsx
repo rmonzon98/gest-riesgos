@@ -10,31 +10,40 @@ import {
     Alert,
     Divider,
 } from "@mui/material";
+
 import EditRounded from "@mui/icons-material/EditRounded";
 import SaveRounded from "@mui/icons-material/SaveRounded";
 import CloseRounded from "@mui/icons-material/CloseRounded";
-import axios from "axios";
+
+import apiClient from "api/apiClient";
 
 export default function ModificarSuperior({
     nombreSuperior = "",
     puestoSuperior = "",
-    recargar
+    recargar,
 }) {
     const [editando, setEditando] = useState(false);
     const [nombre, setNombre] = useState(nombreSuperior || "");
     const [puesto, setPuesto] = useState(puestoSuperior || "");
     const [saving, setSaving] = useState(false);
+
     const [snack, setSnack] = useState({
         open: false,
         tipo: "info",
         mensaje: "",
     });
 
-    // Si cambian las props desde el padre (ej. después de un refetch), actualizamos el formulario
     useEffect(() => {
         setNombre(nombreSuperior || "");
         setPuesto(puestoSuperior || "");
     }, [nombreSuperior, puestoSuperior]);
+
+    const cerrarSnack = () => {
+        setSnack((prev) => ({
+            ...prev,
+            open: false,
+        }));
+    };
 
     const handleCancelar = () => {
         setEditando(false);
@@ -43,7 +52,10 @@ export default function ModificarSuperior({
     };
 
     const handleGuardar = async () => {
-        if (!nombre.trim() || !puesto.trim()) {
+        const nombreLimpio = nombre.trim();
+        const puestoLimpio = puesto.trim();
+
+        if (!nombreLimpio || !puestoLimpio) {
             setSnack({
                 open: true,
                 tipo: "error",
@@ -54,17 +66,13 @@ export default function ModificarSuperior({
 
         try {
             setSaving(true);
-            const headers = {
-                "x-access-token": localStorage.getItem("token"),
-            };
 
-            const { data } = await axios.put(
+            const { data } = await apiClient.put(
                 "/api/responsables-actualizados/actualizar-superior",
                 {
-                    nombre_superior: nombre.trim(),
-                    puesto_superior: puesto.trim(),
-                },
-                { headers }
+                    nombre_superior: nombreLimpio,
+                    puesto_superior: puestoLimpio,
+                }
             );
 
             if (data?.ok) {
@@ -75,22 +83,33 @@ export default function ModificarSuperior({
                         data.msg ||
                         "Información del superior actualizada correctamente.",
                 });
+
                 setEditando(false);
-                recargar()
-            } else {
-                setSnack({
-                    open: true,
-                    tipo: "error",
-                    mensaje:
-                        data?.msg ||
-                        "No se pudo actualizar la información del superior.",
-                });
+
+                if (typeof recargar === "function") {
+                    await recargar();
+                }
+
+                return;
             }
+
+            setSnack({
+                open: true,
+                tipo: "error",
+                mensaje:
+                    data?.msg ||
+                    "No se pudo actualizar la información del superior.",
+            });
         } catch (err) {
             const msg =
                 err.response?.data?.msg ||
                 "Error al actualizar la información del superior.";
-            setSnack({ open: true, tipo: "error", mensaje: msg });
+
+            setSnack({
+                open: true,
+                tipo: "error",
+                mensaje: msg,
+            });
         } finally {
             setSaving(false);
         }
@@ -108,20 +127,16 @@ export default function ModificarSuperior({
 
             <Divider sx={{ mb: 1.5 }} />
 
-            {/* Info del superior */}
             {!editando ? (
                 <Stack spacing={0.6}>
                     <Typography variant="body2">
                         <strong>Superior actual:</strong>{" "}
-                        {nombreSuperior
-                            ? nombreSuperior
-                            : "No registrado"}
+                        {nombreSuperior || "No registrado"}
                     </Typography>
+
                     <Typography variant="body2">
                         <strong>Puesto:</strong>{" "}
-                        {puestoSuperior
-                            ? puestoSuperior
-                            : "No registrado"}
+                        {puestoSuperior || "No registrado"}
                     </Typography>
 
                     <Box sx={{ mt: 1 }}>
@@ -140,45 +155,37 @@ export default function ModificarSuperior({
                     <TextField
                         label="Nombre del superior"
                         value={nombre}
-                        onChange={(e) =>
-                            setNombre(e.target.value)
-                        }
+                        onChange={(e) => setNombre(e.target.value)}
                         size="small"
                         fullWidth
+                        disabled={saving}
                     />
+
                     <TextField
                         label="Puesto del superior"
                         value={puesto}
-                        onChange={(e) =>
-                            setPuesto(e.target.value)
-                        }
+                        onChange={(e) => setPuesto(e.target.value)}
                         size="small"
                         fullWidth
+                        disabled={saving}
                     />
-                    <Stack
-                        direction="row"
-                        spacing={1}
-                        sx={{ mt: 0.5 }}
-                    >
+
+                    <Stack direction="row" spacing={1} sx={{ mt: 0.5 }}>
                         <Button
                             variant="contained"
                             color="primary"
                             size="small"
-                            startIcon={
-                                !saving && <SaveRounded />
-                            }
+                            startIcon={!saving ? <SaveRounded /> : null}
                             onClick={handleGuardar}
                             disabled={saving}
                         >
                             {saving ? (
-                                <CircularProgress
-                                    size={18}
-                                    color="inherit"
-                                />
+                                <CircularProgress size={18} color="inherit" />
                             ) : (
                                 "Guardar"
                             )}
                         </Button>
+
                         <Button
                             variant="text"
                             color="inherit"
@@ -196,18 +203,14 @@ export default function ModificarSuperior({
             <Snackbar
                 open={snack.open}
                 autoHideDuration={3000}
-                onClose={() =>
-                    setSnack((s) => ({ ...s, open: false }))
-                }
+                onClose={cerrarSnack}
                 anchorOrigin={{
                     vertical: "top",
                     horizontal: "right",
                 }}
             >
                 <Alert
-                    onClose={() =>
-                        setSnack((s) => ({ ...s, open: false }))
-                    }
+                    onClose={cerrarSnack}
                     severity={snack.tipo}
                     sx={{ width: "100%" }}
                 >

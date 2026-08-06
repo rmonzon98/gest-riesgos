@@ -1,6 +1,6 @@
 // src/RIESGOS/VisualizacionArhivos.jsx
 import React, { useEffect, useState, useCallback } from "react";
-import axios from "axios";
+import apiClient from "api/apiClient";
 import {
     Box, Card, CardHeader, CardContent, Grid, MenuItem, Select, FormControl, InputLabel, Typography, Stack,
     Paper, Button, Tooltip, Dialog, DialogTitle, DialogContent, DialogActions, Snackbar, Alert, IconButton, LinearProgress,
@@ -86,16 +86,13 @@ const normalizeItem = (r, idx) => ({
 });
 
 // ================== API ==================
-const headersAuth = () => ({ "x-access-token": localStorage.getItem("token") });
-
 const api = {
     unidades: () =>
-        axios.get("/api/direcciones-actualizados", { headers: headersAuth() }),
+        apiClient.get("/api/direcciones-actualizados"),
     periodos: () =>
-        axios.get("/api/periodos-actualizados", { headers: headersAuth() }),
+        apiClient.get("/api/periodos-actualizados"),
     listarArchivosDireccionPeriodo: ({ codigo_entidad, codigo_periodo }) =>
-        axios.get("/api/carga-archivos/listar-archivos-direccion-periodo", {
-            headers: headersAuth(),
+        apiClient.get("/api/carga-archivos/listar-archivos-direccion-periodo", {
             params: { codigo_entidad, codigo_periodo },
         }),
 };
@@ -279,7 +276,7 @@ export default function VisualizacionArhivos() {
         if (!doc?.ruta) return;
         try {
             const url = buildFileUrl(doc.ruta);
-            const res = await axios.get(url, { responseType: "blob" });
+            const res = await apiClient.get(url, { responseType: "blob" });
 
             // Nombre de archivo preferente: backend ya manda nombre real
             let filename = doc.nombre || url.split("/").pop() || "archivo";
@@ -324,7 +321,7 @@ export default function VisualizacionArhivos() {
     };
 
     const fetchAs = async (url, type) => {
-        const res = await axios.get(url, { responseType: type });
+        const res = await apiClient.get(url, { responseType: type });
         return res.data;
     };
 

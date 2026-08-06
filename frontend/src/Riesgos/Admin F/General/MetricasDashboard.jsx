@@ -1,6 +1,6 @@
 // src/Administracion/MetricasDashboard.jsx
 import React, { useEffect, useMemo, useState } from "react";
-import axios from "axios";
+import apiClient from "api/apiClient";
 import {
     Box,
     Typography,
@@ -83,22 +83,9 @@ function MetricasDashboard() {
         const cargarDatos = async () => {
             setLoading(true);
             try {
-                const token = localStorage.getItem("token") || "";
-
                 const [metricasRes, direccionesRes] = await Promise.all([
-                    axios.get(
-                        "/api/administracion-actualizados/obtener-metricas",
-                        {
-                            headers: {
-                                "x-access-token": token,
-                            },
-                        }
-                    ),
-                    axios.get("/api/direcciones-actualizados", {
-                        headers: {
-                            "x-access-token": token,
-                        },
-                    }),
+                    apiClient.get("/api/administracion-actualizados/obtener-metricas"),
+                    apiClient.get("/api/direcciones-actualizados"),
                 ]);
 
                 const m = metricasRes.data || {};
@@ -485,7 +472,7 @@ function MetricasDashboard() {
                                     variant="subtitle2"
                                     color="text.secondary"
                                 >
-                                    Direcciones con 1ra matriz
+                                    Direcciones con matriz de control interno y gobernanza (1ra matriz)
                                 </Typography>
                                 <Typography
                                     variant="h6"
@@ -522,7 +509,7 @@ function MetricasDashboard() {
                                     variant="subtitle2"
                                     color="text.secondary"
                                 >
-                                    Direcciones con 2da matriz
+                                    Direcciones con matriz de evaluación de riesgos asociados al fraude y corrupción (2da matriz)
                                 </Typography>
                                 <Typography
                                     variant="h6"
@@ -592,7 +579,7 @@ function MetricasDashboard() {
                     </Grid>
 
                     {/* Gráfico por tipo de objetivo */}
-                    <Grid container spacing={2} sx={{ mb: 3 }}>
+                    <Grid container spacing={2} sx={{ mb: 3 }} justifyContent="center">
                         <Grid item xs={12} md={6}>
                             <Paper
                                 sx={{
@@ -703,14 +690,14 @@ function MetricasDashboard() {
                                         <TableCell>
                                             <strong>Dirección</strong>
                                         </TableCell>
-                                        <TableCell align="right">
+                                        <TableCell align="center">
                                             <strong>Cantidad de riesgos</strong>
                                         </TableCell>
                                         <TableCell align="center">
-                                            <strong>1ra matriz</strong>
+                                            <strong>Matriz CI/Gob.</strong>
                                         </TableCell>
                                         <TableCell align="center">
-                                            <strong>2da matriz</strong>
+                                            <strong>Matriz Riesgos (F/C)</strong>
                                         </TableCell>
                                         <TableCell align="center">
                                             <strong>

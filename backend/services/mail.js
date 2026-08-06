@@ -92,7 +92,7 @@ const transporter = nodemailer.createTransport({
     greetingTimeout: 20_000,
     socketTimeout: 30_000,
     tls: {
-        rejectUnauthorized: true,
+        rejectUnauthorized: SMTP_SECURE,
     },
 });
 

@@ -8,9 +8,8 @@ import {
     TextField,
     Box,
 } from "@mui/material";
-import axios from "axios";
+import apiClient from "api/apiClient";
 
-const headers = () => ({ "x-access-token": localStorage.getItem("token") });
 
 /**
  * FormOrgano
@@ -34,9 +33,8 @@ export default function FormOrgano({
     // Cargar datos en edición
     useEffect(() => {
         if (showModal && codigoOrgano) {
-            axios
+            apiClient
                 .get("/api/organos/obtener-organo", {
-                    headers: headers(),
                     params: { codigo_organo: Number(codigoOrgano) },
                 })
                 .then(({ data }) => {
@@ -63,17 +61,15 @@ export default function FormOrgano({
 
             if (codigoOrgano) {
                 // Update
-                await axios.put(
+                await apiClient.put(
                     "/api/organos",
-                    { codigo_organo: Number(codigoOrgano), nombre: nombre.trim() },
-                    { headers: headers() }
+                    { codigo_organo: Number(codigoOrgano), nombre: nombre.trim() }
                 );
             } else {
                 // Create
-                await axios.post(
+                await apiClient.post(
                     "/api/organos",
-                    { nombre: nombre.trim() },
-                    { headers: headers() }
+                    { nombre: nombre.trim() }
                 );
             }
 

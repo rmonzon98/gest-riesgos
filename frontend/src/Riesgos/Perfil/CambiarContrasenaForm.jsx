@@ -1,7 +1,18 @@
 import React, { useState } from "react";
-import { Box, TextField, Button, Stack, CircularProgress, Snackbar, Alert, Typography, Divider } from "@mui/material";
+import {
+    Box,
+    TextField,
+    Button,
+    Stack,
+    CircularProgress,
+    Snackbar,
+    Alert,
+    Typography,
+    Divider,
+} from "@mui/material";
+
 import LockRounded from "@mui/icons-material/LockRounded";
-import axios from "axios";
+import apiClient from "api/apiClient";
 
 export default function CambiarContrasenaForm() {
     const [form, setForm] = useState({
@@ -9,7 +20,9 @@ export default function CambiarContrasenaForm() {
         nueva: "",
         repetir: "",
     });
+
     const [loading, setLoading] = useState(false);
+
     const [snackbar, setSnackbar] = useState({
         open: false,
         tipo: "success",
@@ -17,62 +30,83 @@ export default function CambiarContrasenaForm() {
     });
 
     const handleChange = (e) => {
-        setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+        setForm((prev) => ({
+            ...prev,
+            [e.target.name]: e.target.value,
+        }));
     };
 
     const validar = () => {
-        if (!form.actual || !form.nueva || !form.repetir)
+        if (!form.actual || !form.nueva || !form.repetir) {
             return "Por favor completa todos los campos.";
-        if (form.nueva.length < 6)
+        }
+
+        if (form.nueva.length < 6) {
             return "La nueva contraseña debe tener al menos 6 caracteres.";
-        if (form.nueva !== form.repetir)
+        }
+
+        if (form.nueva !== form.repetir) {
             return "Las contraseñas nuevas no coinciden.";
+        }
+
         return null;
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+
         const error = validar();
+
         if (error) {
-            setSnackbar({ open: true, tipo: "error", mensaje: error });
+            setSnackbar({
+                open: true,
+                tipo: "error",
+                mensaje: error,
+            });
             return;
         }
 
         try {
             setLoading(true);
-            const headers = { "x-access-token": localStorage.getItem("token") };
 
-            const { data } = await axios.put(
+            const { data } = await apiClient.put(
                 "/api/responsables-actualizados/actualizar-contrasena-perfil",
                 {
                     vieja: form.actual,
                     nueva: form.nueva,
-                },
-                { headers }
+                }
             );
 
             if (data.ok) {
                 setSnackbar({
                     open: true,
                     tipo: "success",
-                    mensaje:
-                        data.msg || "Contraseña actualizada correctamente.",
+                    mensaje: data.msg || "Contraseña actualizada correctamente.",
                 });
-                setForm({ actual: "", nueva: "", repetir: "" });
+
+                setForm({
+                    actual: "",
+                    nueva: "",
+                    repetir: "",
+                });
             } else {
                 setSnackbar({
                     open: true,
                     tipo: "error",
-                    mensaje:
-                        data.msg ||
-                        "No se pudo actualizar la contraseña.",
+                    mensaje: data.msg || "No se pudo actualizar la contraseña.",
                 });
             }
         } catch (err) {
             const msg =
                 err.response?.data?.msg ||
+                err.response?.data?.message ||
                 "Error al actualizar la contraseña. Intenta de nuevo.";
-            setSnackbar({ open: true, tipo: "error", mensaje: msg });
+
+            setSnackbar({
+                open: true,
+                tipo: "error",
+                mensaje: msg,
+            });
         } finally {
             setLoading(false);
         }
@@ -85,11 +119,11 @@ export default function CambiarContrasenaForm() {
                 color="text.secondary"
                 sx={{ mb: 1 }}
             >
-                Desde aquí puedes actualizar la
-                contraseña de tu cuenta.
+                Desde aquí puedes actualizar la contraseña de tu cuenta.
             </Typography>
 
             <Divider sx={{ mb: 2 }} />
+
             <Box component="form" onSubmit={handleSubmit}>
                 <Stack spacing={2}>
                     <TextField
@@ -101,6 +135,7 @@ export default function CambiarContrasenaForm() {
                         fullWidth
                         required
                     />
+
                     <TextField
                         type="password"
                         label="Nueva contraseña"
@@ -110,6 +145,7 @@ export default function CambiarContrasenaForm() {
                         fullWidth
                         required
                     />
+
                     <TextField
                         type="password"
                         label="Repetir nueva contraseña"
@@ -118,10 +154,7 @@ export default function CambiarContrasenaForm() {
                         onChange={handleChange}
                         fullWidth
                         required
-                        error={
-                            Boolean(form.repetir) &&
-                            form.nueva !== form.repetir
-                        }
+                        error={Boolean(form.repetir) && form.nueva !== form.repetir}
                         helperText={
                             form.repetir && form.nueva !== form.repetir
                                 ? "Las contraseñas no coinciden."
@@ -149,7 +182,10 @@ export default function CambiarContrasenaForm() {
                 open={snackbar.open}
                 autoHideDuration={4000}
                 onClose={() =>
-                    setSnackbar((s) => ({ ...s, open: false }))
+                    setSnackbar((s) => ({
+                        ...s,
+                        open: false,
+                    }))
                 }
                 anchorOrigin={{
                     vertical: "top",
@@ -158,7 +194,10 @@ export default function CambiarContrasenaForm() {
             >
                 <Alert
                     onClose={() =>
-                        setSnackbar((s) => ({ ...s, open: false }))
+                        setSnackbar((s) => ({
+                            ...s,
+                            open: false,
+                        }))
                     }
                     severity={snackbar.tipo}
                     sx={{ width: "100%" }}
@@ -166,13 +205,13 @@ export default function CambiarContrasenaForm() {
                     {snackbar.mensaje}
                 </Alert>
             </Snackbar>
+
             <Typography
                 variant="body2"
                 color="text.secondary"
                 sx={{ mt: 2, textAlign: "center" }}
             >
-                Por seguridad, usa una contraseña
-                única y difícil de adivinar.
+                Por seguridad, usa una contraseña única y difícil de adivinar.
             </Typography>
         </>
     );

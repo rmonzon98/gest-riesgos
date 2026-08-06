@@ -22,7 +22,7 @@ const toNum = (v) => (v === undefined || v === null || v === '' ? null : Number(
  * Lista las dependencias de una entidad dada.
  *
  * - Valida `codigo_cia` y `codigo_entidad`.
- * - Ejecuta `SELECT ... FROM seguridad.seguridad_dependencia WHERE codigo_cia = ? AND codigo_entidad = ?`.
+ * - Ejecuta `SELECT ... FROM gestion_riesgos.seguridad_dependencia WHERE codigo_cia = ? AND codigo_entidad = ?`.
  * - Responde `{ data: rows }`.
  *
  * @route GET /
@@ -40,7 +40,7 @@ exports.obtenerDependencias = async (req, res) => {
     try {
         const sql = `
       SELECT codigo_dependencia, nombre, siglas, estado
-      FROM seguridad.seguridad_dependencia
+      FROM gestion_riesgos.seguridad_dependencia
       WHERE codigo_cia = ? AND codigo_entidad = ?
       ORDER BY nombre ASC
     `;
@@ -85,14 +85,14 @@ exports.crearDependencia = async (req, res) => {
 
         const [nextRows] = await conn.execute(
             `SELECT IFNULL(MAX(codigo_dependencia), 0) + 1 AS next
-         FROM seguridad.seguridad_dependencia
+         FROM gestion_riesgos.seguridad_dependencia
         WHERE codigo_cia = ? AND codigo_entidad = ?`,
             [cia, codigo_entidad]
         );
         const codigo_dependencia = Number(nextRows?.[0]?.next || 1);
 
         const insertSQL = `
-      INSERT INTO seguridad.seguridad_dependencia
+      INSERT INTO gestion_riesgos.seguridad_dependencia
         (codigo_dependencia, codigo_entidad, codigo_cia,
          nombre, siglas, descripcion, estado,
          usuario_creacion, fecha_creacion)
@@ -146,7 +146,7 @@ exports.actualizarDependencia = async (req, res) => {
 
     try {
         const updateSQL = `
-      UPDATE seguridad.seguridad_dependencia
+      UPDATE gestion_riesgos.seguridad_dependencia
          SET nombre = ?, siglas = ?,
              usuario_modificacion = ?, fecha_modificacion = NOW()
        WHERE codigo_cia = ? AND codigo_entidad = ? AND codigo_dependencia = ?
@@ -194,7 +194,7 @@ exports.cambiarEstadoDependencia = async (req, res) => {
 
     try {
         const toggleSQL = `
-      UPDATE seguridad.seguridad_dependencia
+      UPDATE gestion_riesgos.seguridad_dependencia
          SET estado = CASE WHEN estado = 1 THEN 0 ELSE 1 END,
              usuario_modificacion = ?, fecha_modificacion = NOW()
        WHERE codigo_cia = ? AND codigo_entidad = ? AND codigo_dependencia = ?
@@ -204,7 +204,7 @@ exports.cambiarEstadoDependencia = async (req, res) => {
 
         const [rows] = await pool.execute(
             `SELECT codigo_dependencia, nombre, siglas, estado
-         FROM seguridad.seguridad_dependencia
+         FROM gestion_riesgos.seguridad_dependencia
         WHERE codigo_cia = ? AND codigo_entidad = ? AND codigo_dependencia = ?`,
             [cia, codigo_entidad, codigo_dependencia]
         );

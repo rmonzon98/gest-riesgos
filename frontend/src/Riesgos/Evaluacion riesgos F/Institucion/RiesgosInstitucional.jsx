@@ -14,7 +14,7 @@
  */
 
 import React, { useEffect, useState, useCallback } from 'react';
-import axios from 'axios';
+import apiClient from 'api/apiClient';
 import {
     Box, Card, CardHeader, CardContent, Typography, FormControl, InputLabel, Select, MenuItem, Stack, Alert,
     Table, TableHead, TableRow, TableCell, TableBody, Divider, IconButton, Tooltip,
@@ -24,12 +24,11 @@ import ExpandMoreRounded from '@mui/icons-material/ExpandMoreRounded';
 import ExpandLessRounded from '@mui/icons-material/ExpandLessRounded';
 import { fmt } from 'funciones/Fechas';
 
-const headers = { 'x-access-token': localStorage.getItem('token') };
 
 /* ======= Helpers ======= */
 const statusInfo = (estadoNum) => {
     const v = Number(estadoNum);
-    if (v === 1) return { label: 'Aprobado', color: 'success' };
+    if (v === 1) return { label: 'Recibido', color: 'success' };
     if (v === 2) return { label: 'Rechazado', color: 'error' };
     return { label: 'Revisión pendiente', color: 'warning' };
 };
@@ -82,7 +81,7 @@ const ExtrasSection = ({ title, extrasObj, estado }) => {
                 {estado != null && (
                     <Chip
                         size="small"
-                        label={`Estado: ${estado === 0 ? 'Pendiente revisión' : estado === 1 ? 'Aprobado' : 'Rechazado'}`}
+                        label={`Estado: ${estado === 0 ? 'Pendiente revisión' : estado === 1 ? 'Recibido' : 'Rechazado'}`}
                         color={Number(estado) === 1 ? 'success' : Number(estado) === 2 ? 'error' : 'default'}
                         variant="outlined"
                     />
@@ -160,7 +159,7 @@ export default function RiesgosInstitucional() {
     useEffect(() => {
         (async () => {
             try {
-                const { data } = await axios.get('/api/periodos-actualizados', { headers });
+                const { data } = await apiClient.get('/api/periodos-actualizados');
                 const arr = Array.isArray(data?.result) ? data.result : (data ?? []);
                 setPeriodos(arr);
             } catch {
@@ -176,9 +175,9 @@ export default function RiesgosInstitucional() {
         setCargando(true);
         setAlerta(null);
         try {
-            const { data } = await axios.get(
+            const { data } = await apiClient.get(
                 '/api/riesgos-variables-actualizados/obtener-riesgos-periodo',
-                { headers, params: { periodo } }
+                { params: { periodo } }
             );
             const arr = Array.isArray(data?.rows) ? data.rows : (Array.isArray(data?.data) ? data.data : (data?.result ?? []));
             setRows(arr);
@@ -213,13 +212,13 @@ export default function RiesgosInstitucional() {
     useEffect(() => { fetchRiesgosPeriodo(); }, [fetchRiesgosPeriodo]);
 
     const persistirMostrarGeneral = async ({ r, nextSN }) => {
-        await axios.put('/api/riesgos-variables-actualizados/mostrar-general', {
+        await apiClient.put('/api/riesgos-variables-actualizados/mostrar-general', {
             codigo_riesgo: Number(r.CODIGO_RIESGO),
             codigo_area: Number(r.CODIGO_AREA),
             codigo_entidad: Number(r.CODIGO_ENTIDAD),
             codigo_periodo: Number(periodo),
             mostrar_general: nextSN
-        }, { headers });
+        });
     };
 
     const handleToggleMostrarGeneral = async (checked, idx, r) => {

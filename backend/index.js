@@ -11,20 +11,26 @@ require('dotenv').config();
 
 const HOURS = 3;
 const timeToken = 1000 * 60 * 60 * HOURS;
-const port = process.env.SERVER_PORT || 8080;
-const clientBuildPath = path.resolve(__dirname, '../frontend/build');
+const port = process.env.SERVER_PORT || process.env.PORT || 8080;
 
 const { DOCS_DIR } = require('./services/paths');
+
+const corsOrigin = process.env.CORS_URL || process.env.CORS_ORIGIN || 'http://localhost:3000';
 
 // Si estás detrás de proxy (Nginx/ALB), habilita esto
 // app.set('trust proxy', 1);
 
 // CORS
 app.use(cors({
-  origin: process.env.CORS_URL || 'http://localhost:3000',
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-access-token'],
-  credentials: false
+  origin: corsOrigin,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'x-access-token',
+    'X-CSRF-Token'
+  ],
+  credentials: true
 }));
 
 // Body parsing
@@ -37,12 +43,13 @@ app.use(session({
   secret: process.env.SECRET_KEY || 'change_me',
   resave: false,
   saveUninitialized: false,
-  cookie: { maxAge: timeToken }
+  cookie: {
+    maxAge: timeToken
+  }
   // store: new RedisStore({ client }), // recomendado en prod
 }));
 
-// Estáticos
-app.use(express.static(clientBuildPath));
+// Estáticos DEL BACKEND (NO del frontend)
 app.use('/Pictures', express.static(path.join(__dirname, 'Pictures')));
 app.use('/docs', express.static(DOCS_DIR));
 
@@ -56,7 +63,7 @@ app.use('/api/responsables-actualizados', require('./Routes/general/responsables
 app.use('/api/dependencias-actualizados', require('./Routes/general/dependencias.js'));
 
 // Rutas Riesgos
-app.use('/api/carga-archivos', require('./Routes/riesgos/cargaArchivos.js'))
+app.use('/api/carga-archivos', require('./Routes/riesgos/cargaArchivos.js'));
 app.use('/api/areas-actualizados', require('./Routes/riesgos/areas.js'));
 app.use('/api/entidades-actualizados', require('./Routes/riesgos/entidades.js'));
 app.use('/api/institucion-actualizados', require('./Routes/riesgos/institucion.js'));
@@ -71,19 +78,33 @@ app.use('/api/seguimientos-actualizados', require('./Routes/riesgos/seguimientos
 app.use('/api/segunda-matriz-actualizados', require('./Routes/riesgos/segunda-matriz.js'));
 app.use('/api/tipo-objetivo-actualizados', require('./Routes/riesgos/tipo-objetivo.js'));
 app.use('/api/viceministerios', require('./Routes/riesgos/viceministerio.js'));
-app.use('/descargar', require('./Routes/riesgos/descarga-archivos.js')); // logo
+app.use('/descargar', require('./Routes/riesgos/descarga-archivos.js'));
 
 // Ruta Login
 app.use('/api/login-actualizados', require('./Routes/login.js'));
 
 // Rutas Menu aplicaciones
-app.use('/api/general', require('./Routes/menu/general.js'))
+app.use('/api/general', require('./Routes/menu/general.js'));
 
 // React fallback (SPA)
-app.get('*', (req, res) => {
-  res.sendFile(path.join(clientBuildPath, 'index.html'));
-});
+if (process.env.NODE_ENV !== 'production') {
+  const clientBuildPath = path.resolve(__dirname, '../frontend/build');
+
+  app.use(express.static(clientBuildPath));
+
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(clientBuildPath, 'index.html'));
+  });
+} else {
+  const clientBuildPath = path.resolve(__dirname, '../frontend/build');
+
+  app.use(express.static(clientBuildPath));
+
+  app.use((req, res) => {
+    res.sendFile(path.join(clientBuildPath, 'index.html'));
+  });
+}
 
 app.listen(port, () => {
-  console.log(`running on port ${port} (CORS: ${process.env.CORS_ORIGIN || 'http://localhost:3000'})`);
+  console.log(`running on port ${port} (CORS: ${corsOrigin})`);
 });

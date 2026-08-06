@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import axios from "axios";
+import apiClient from "api/apiClient";
 
 import {
     Box,
@@ -15,34 +15,36 @@ import {
     Paper,
     InputAdornment
 } from "@mui/material";
-import AlertaMensaje from "../Alerta F/AlertaMensaje"
+import AlertaMensaje from "../Alerta F/AlertaMensaje";
 import AddIcon from "@mui/icons-material/Add";
 import EditIcon from "@mui/icons-material/Edit";
 import SearchIcon from "@mui/icons-material/Search";
 import FormDireccion from "./FormDireccion";
 
 function DireccionesMain() {
-
     const [alerta, setAlerta] = useState({
         open: false,
-        tipo: 'success',
-        mensaje: ''
+        tipo: "success",
+        mensaje: ""
     });
     const [listaDirecciones, setListaDirecciones] = useState([]);
     const [listaFiltrada, setListaFiltrada] = useState([]);
-    const [filtroDescripcion, setFiltroDescripcion] = useState('');
-    const [filtroAbreviatura, setFiltroAbreviatura] = useState('');
+    const [filtroDescripcion, setFiltroDescripcion] = useState("");
+    const [filtroAbreviatura, setFiltroAbreviatura] = useState("");
     const [showModal, setShowModal] = useState(false);
-    const [id, setId] = useState('');
+    const [id, setId] = useState("");
 
     const obtenerDirecciones = async () => {
         try {
-            const response = await axios.get('/api/direcciones-actualizados', {
-                headers: { "x-access-token": localStorage.getItem('token') }
-            });
-            setListaDirecciones(response.data.result);
+            const response = await apiClient.get("/api/direcciones-actualizados");
+            setListaDirecciones(response.data?.result || []);
         } catch (error) {
-            console.error('Error al obtener direcciones:', error);
+            console.error("Error al obtener direcciones:", error);
+            setAlerta({
+                open: true,
+                tipo: "error",
+                mensaje: "Error al obtener direcciones"
+            });
         }
     };
 
@@ -52,20 +54,20 @@ function DireccionesMain() {
 
     useEffect(() => {
         const filtrado = listaDirecciones.filter((unidad) =>
-            (unidad.NOMBRE || '').toLowerCase().includes(filtroDescripcion.toLowerCase()) &&
-            (unidad.SIGLAS || '').toLowerCase().includes(filtroAbreviatura.toLowerCase())
+            (unidad.NOMBRE || "").toLowerCase().includes(filtroDescripcion.toLowerCase()) &&
+            (unidad.SIGLAS || "").toLowerCase().includes(filtroAbreviatura.toLowerCase())
         );
         setListaFiltrada(filtrado);
     }, [listaDirecciones, filtroDescripcion, filtroAbreviatura]);
 
     const onClose = () => {
-        setId('');
+        setId("");
         setShowModal(false);
     };
 
     const onError = () => {
-        setAlerta({ open: true, tipo: 'error', mensaje: 'Error al realizar la acción' });
-    }
+        setAlerta({ open: true, tipo: "error", mensaje: "Error al realizar la acción" });
+    };
 
     const mostrarAlerta = (tipo, mensaje) => {
         setAlerta({ open: true, tipo, mensaje });
@@ -164,15 +166,16 @@ function DireccionesMain() {
                 onSuccess={() => {
                     obtenerDirecciones();
                     onClose();
-                    mostrarAlerta('success', 'Guardado exitosamente')
+                    mostrarAlerta("success", "Guardado exitosamente");
                 }}
                 onError={onError}
             />
+
             <AlertaMensaje
                 open={alerta.open}
                 tipo={alerta.tipo}
                 mensaje={alerta.mensaje}
-                setOpen={() => setAlerta(prev => ({ ...prev, open: false }))}
+                setOpen={() => setAlerta((prev) => ({ ...prev, open: false }))}
             />
         </Box>
     );

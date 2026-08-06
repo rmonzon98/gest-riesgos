@@ -1,18 +1,17 @@
 import { useState, useEffect } from "react";
-import axios from "axios";
+import apiClient from "api/apiClient";
 import { Box, Typography, Button, Table, TableHead, TableRow, TableCell, TableBody, TextField, Paper, InputAdornment } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import EditIcon from "@mui/icons-material/Edit";
 import SearchIcon from "@mui/icons-material/Search";
 import FormTipoObjetivo from "./FormTipoObjetivo";
-import AlertaMensaje from "../Alerta F/AlertaMensaje"
+import AlertaMensaje from "../Alerta F/AlertaMensaje";
 
 function TipoObjetivoMain() {
-
     const [alerta, setAlerta] = useState({
         open: false,
-        tipo: 'success',
-        mensaje: ''
+        tipo: "success",
+        mensaje: "",
     });
     const [lista, setLista] = useState([]);
     const [listaFiltrada, setListaFiltrada] = useState([]);
@@ -23,9 +22,7 @@ function TipoObjetivoMain() {
 
     const obtenerDatos = async () => {
         try {
-            const res = await axios.get("/api/tipo-objetivo-actualizados", {
-                headers: { "x-access-token": localStorage.getItem("token") }
-            });
+            const res = await apiClient.get("/api/tipo-objetivo-actualizados");
             setLista(res.data.result || []);
         } catch (err) {
             console.error("Error:", err);
@@ -43,13 +40,13 @@ function TipoObjetivoMain() {
     }, [lista, filtroCodigo, filtroDescripcion]);
 
     const onClose = () => {
-        setId('');
+        setId("");
         setShowModal(false);
     };
 
     const onError = () => {
-        setAlerta({ open: true, tipo: 'error', mensaje: 'Error al realizar la acción' });
-    }
+        setAlerta({ open: true, tipo: "error", mensaje: "Error al realizar la acción" });
+    };
 
     const mostrarAlerta = (tipo, mensaje) => {
         setAlerta({ open: true, tipo, mensaje });
@@ -133,7 +130,7 @@ function TipoObjetivoMain() {
                 onSuccess={() => {
                     obtenerDatos();
                     onClose();
-                    mostrarAlerta('success', 'Guardado exitosamente');
+                    mostrarAlerta("success", "Guardado exitosamente");
                 }}
                 onError={onError}
             />

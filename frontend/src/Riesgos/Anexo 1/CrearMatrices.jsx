@@ -8,7 +8,7 @@
  */
 
 import React, { useMemo, useState, useEffect } from 'react';
-import axios from 'axios';
+import apiClient from 'api/apiClient';
 import {
     Stepper, Step, StepLabel, Button, TextField, Stack, Box, Typography,
     IconButton, useMediaQuery, MobileStepper, Table, TableHead, TableRow, TableCell, TableBody, Divider, Tooltip,
@@ -68,8 +68,7 @@ export default function CrearMatrices({
             try {
                 setLoadingDirs(true);
                 setErrorDirs('');
-                const authH = { headers: { 'x-access-token': localStorage.getItem('token') } };
-                const { data } = await axios.get('/api/direcciones-actualizados', authH);
+                const { data } = await apiClient.get('/api/direcciones-actualizados');
                 const list = Array.isArray(data?.result) ? data.result : [];
                 const cat = list.map(d => ({
                     id: Number(d.CODIGO_ENTIDAD),
@@ -229,19 +228,16 @@ export default function CrearMatrices({
                 direcciones: Array.isArray(t.direcciones) ? t.direcciones : []
             }));
 
-            const authH = { headers: { 'x-access-token': localStorage.getItem('token') } };
 
             if (isEditVersion) {
-                await axios.put(
+                await apiClient.put(
                     '/api/primera-matriz-actualizados/editar-version',
-                    { periodo, version, matrices },
-                    authH
+                    { periodo, version, matrices }
                 );
             } else {
-                await axios.post(
+                await apiClient.post(
                     '/api/primera-matriz-actualizados',
-                    { periodo, matrices },
-                    authH
+                    { periodo, matrices }
                 );
             }
 

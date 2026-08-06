@@ -1,21 +1,29 @@
 /**
- * @fileoverview 
+ * @fileoverview
  * Composición principal del frontend y enrutamiento de alto nivel.
- * Define rutas públicas (login, recuperación), rutas protegidas y el contenedor de Riesgos.
+ * Define rutas públicas, rutas protegidas y el contenedor principal de Riesgos.
  *
  * @module /App
- * @version 1.0
+ * @version 1.1
  * @author Equipo de Desarrollo
  */
 
 import React, { Suspense, lazy } from "react";
-import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
+import {
+  BrowserRouter as Router,
+  Routes,
+  Route,
+  Navigate,
+} from "react-router-dom";
 
 // Rutas hijas
 import RiesgosRoutes from "Routes/RiesgosRoutes";
 
 // Guards
 import RequirePermission from "funciones/RequirePermission.jsx";
+
+// Contexto de autenticación
+import { useAuth } from "./context/AuthContext";
 
 // Layouts y componentes
 const HomeContainer = lazy(() => import("Riesgos/Home/HomeContainer.jsx"));
@@ -24,43 +32,101 @@ const PasswordRecovery = lazy(() => import("./RecuperarContra/PasswordRecovery")
 const PageNotFound = lazy(() => import("PageNotFound/PageNotFound.jsx"));
 
 /**
- * Determina si existe sesión activa (token JWT presente).
- * @returns {boolean}
- */
-const isLoggedIn = () => localStorage.getItem("token") !== null;
-
-/**
- * Wrapper para rutas que requieren estar autenticado.
- * Si no hay sesión, redirige al login.
- * @component
- */
-const RequireAuth = ({ children }) =>
-  isLoggedIn() ? children : <Navigate to="/" replace />;
-
-/**
- * Wrapper para rutas solo para anónimos (login, recuperación).
- * Si ya hay sesión, redirige al dominio de riesgos.
- * @component
- */
-const RequireAnon = ({ children }) =>
-  isLoggedIn() ? <Navigate to="/riesgos" replace /> : children;
-
-/**
- * App: Componente raíz de enrutamiento.
+ * Pantalla de carga global.
  *
- * - Orquesta el router y la carga diferida (lazy) de páginas.
- * - Define rutas públicas y protegidas por permiso específico (`RequirePermission`).
- * - Maneja pantalla 404 como catch-all.
+ * Se muestra mientras:
+ * - Se carga una ruta lazy.
+ * - Se valida la sesión actual.
+ *
+ * @component
+ * @returns {JSX.Element}
+ */
+function LoadingScreen() {
+  return (
+    <div
+      style={{
+        minHeight: "100vh",
+        display: "grid",
+        placeItems: "center",
+        fontFamily: "Inter, Noto Sans, sans-serif",
+        color: "#4a5568",
+      }}
+    >
+      Cargando…
+    </div>
+  );
+}
+
+/**
+ * Wrapper para rutas protegidas.
+ *
+ * Si la autenticación aún se está validando, muestra pantalla de carga.
+ * Si no hay sesión activa, redirige al login.
+ *
+ * @component
+ * @param {object} props
+ * @param {React.ReactNode} props.children Contenido protegido.
+ * @returns {JSX.Element}
+ */
+function RequireAuth({ children }) {
+  const { autenticado, authLoading } = useAuth();
+
+  if (authLoading) return <LoadingScreen />;
+
+  if (!autenticado) {
+    return <Navigate to="/" replace />;
+  }
+
+  return children;
+}
+
+/**
+ * Wrapper para rutas públicas exclusivas de usuarios anónimos.
+ *
+ * Si el usuario ya está autenticado, lo redirige al módulo de Riesgos.
+ *
+ * @component
+ * @param {object} props
+ * @param {React.ReactNode} props.children Contenido público.
+ * @returns {JSX.Element}
+ */
+function RequireAnon({ children }) {
+  const { autenticado, authLoading } = useAuth();
+
+  if (authLoading) return <LoadingScreen />;
+
+  if (autenticado) {
+    return <Navigate to="/riesgos" replace />;
+  }
+
+  return children;
+}
+
+/**
+ * App
+ *
+ * Componente raíz del frontend.
+ *
+ * Define:
+ * - Login.
+ * - Recuperación de contraseña.
+ * - Rutas protegidas de Riesgos.
+ * - Validación de permisos por aplicación.
+ * - Página 404.
  *
  * @component
  * @returns {JSX.Element}
  */
 export default function App() {
   return (
-    <Router>
-      <Suspense fallback={<div>Cargando…</div>}>
+    <Router
+      future={{
+        v7_startTransition: true,
+        v7_relativeSplatPath: true,
+      }}
+    >
+      <Suspense fallback={<LoadingScreen />}>
         <Routes>
-          {/* Raíz pública: Login */}
           <Route
             path="/"
             element={
@@ -70,7 +136,15 @@ export default function App() {
             }
           />
 
-          {/* Recuperación de contraseña (solo anónimos) */}
+          <Route
+            path="/recuperar"
+            element={
+              <RequireAnon>
+                <PasswordRecovery />
+              </RequireAnon>
+            }
+          />
+
           <Route
             path="/recuperar-contraseña"
             element={
@@ -80,20 +154,19 @@ export default function App() {
             }
           />
 
-          {/* Dominio RIESGOS (requiere permiso "riesgos") */}
           <Route
             path="/riesgos/*"
             element={
-              <RequirePermission app="riesgos">
-                <HomeContainer />
-              </RequirePermission>
+              <RequireAuth>
+                <RequirePermission app="riesgos">
+                  <HomeContainer />
+                </RequirePermission>
+              </RequireAuth>
             }
           >
-            {/* Las rutas hijas viven dentro de HomeContainer (Outlet) */}
             <Route path="*" element={<RiesgosRoutes />} />
           </Route>
 
-          {/* 404 */}
           <Route path="*" element={<PageNotFound />} />
         </Routes>
       </Suspense>

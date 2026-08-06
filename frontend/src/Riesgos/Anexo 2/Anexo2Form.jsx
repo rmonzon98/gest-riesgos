@@ -8,7 +8,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react';
-import axios from 'axios';
+import apiClient from 'api/apiClient';
 import {
     Box, Card, CardHeader, CardContent, Typography, FormControl, InputLabel, Select, MenuItem,
     Table, TableHead, TableRow, TableCell, TableBody, TableContainer, Stepper, Step, StepButton,
@@ -83,7 +83,6 @@ function Anexo2Form() {
 
     const theme = useTheme();
     const isMobile = useMediaQuery(`(max-width:${theme.breakpoints.values.md}px)`);
-    const headersAuth = { 'x-access-token': localStorage.getItem('token') };
 
     const mat = matrices[active] || null;
     const headers = Array.isArray(mat?.columnas?.headers) ? mat.columnas.headers : [];
@@ -93,7 +92,7 @@ function Anexo2Form() {
 
     const obtenerUnidad = async () => {
         try {
-            const res = await axios.get('/api/responsables-actualizados/obtener-mi-unidad', { headers: headersAuth });
+            const res = await apiClient.get('/api/responsables-actualizados/obtener-mi-unidad');
             const u = res.data?.data;
             setUnidad(u ? (u.NOMBRE + (u.SIGLAS ? ` (${u.SIGLAS})` : '')) : '');
         } catch { setUnidad(''); }
@@ -101,14 +100,14 @@ function Anexo2Form() {
 
     const obtenerPeriodos = async () => {
         try {
-            const { data } = await axios.get('/api/periodos-actualizados', { headers: headersAuth });
+            const { data } = await apiClient.get('/api/periodos-actualizados');
             setPeriodos(data.result ?? data ?? []);
         } catch { setPeriodos([]); }
     };
 
     const obtenerLogo = async () => {
         try {
-            const { data } = await axios.get('/api/reportes-actualizados/obtener-logo', { headers: headersAuth });
+            const { data } = await apiClient.get('/api/reportes-actualizados/obtener-logo');
             setLogo('data:image/png;base64,' + (data.logo ?? ''));
         } catch (e) {
             console.error('Error cargando logo', e);
@@ -121,8 +120,7 @@ function Anexo2Form() {
         if (!periodo) return;
         try {
             setCargandoDefecto(true);
-            const { data } = await axios.get('/api/segunda-matriz-actualizados/matriz-defecto', {
-                headers: headersAuth,
+            const { data } = await apiClient.get('/api/segunda-matriz-actualizados/matriz-defecto', {
                 params: { periodo }
             });
             const arr = Array.isArray(data?.matrices) ? normalizeMatrices(data.matrices) : [];
@@ -146,8 +144,7 @@ function Anexo2Form() {
         setPage(0);
 
         try {
-            const { data } = await axios.get('/api/segunda-matriz-actualizados/estado-historial', {
-                headers: headersAuth,
+            const { data } = await apiClient.get('/api/segunda-matriz-actualizados/estado-historial', {
                 params: { periodo }
             });
 
@@ -289,7 +286,7 @@ function Anexo2Form() {
 
         try {
             setGuardando(true);
-            await axios.post('/api/segunda-matriz-actualizados/guardar-respuesta', payload, { headers: headersAuth });
+            await apiClient.post('/api/segunda-matriz-actualizados/guardar-respuesta', payload);
             setSnack({ open: true, msg: 'Guardado exitoso', sev: 'success' });
             obtenerHistorial();
         } catch (e) {
@@ -315,8 +312,7 @@ function Anexo2Form() {
         setPdfLoadingData(true);
 
         try {
-            const { data } = await axios.get('/api/reportes-actualizados/obtener-superior', {
-                headers: headersAuth,
+            const { data } = await apiClient.get('/api/reportes-actualizados/obtener-superior', {
                 params: { periodo }
             });
             const sup = data?.data ?? data ?? {};
@@ -380,6 +376,15 @@ function Anexo2Form() {
         const meta = map[v] || { label: v || '—', color: 'default' };
         return <Chip label={meta.label} color={meta.color} size="small" />;
     };
+
+    const chipEstadoFormConsolidador = (v) => {
+            const map = {
+                R: { label: 'Se necesita revisión', color: 'error' }, A: { label: 'Recibido', color: 'success' },
+                M: { label: 'Modificado', color: 'info' }, I: { label: 'Ingresado', color: 'default' }
+            };
+            const meta = map[v] || { label: v || '—', color: 'default' };
+            return <Chip label={meta.label} color={meta.color} size="small" />;
+        };
 
     const totalHistorial = Array.isArray(historial) ? historial.length : 0;
     const pagedHistorial = useMemo(() => {
@@ -458,10 +463,10 @@ function Anexo2Form() {
                                     <TableRow>
                                         <TableCell colSpan={2}></TableCell>
                                         <TableCell align="center" colSpan={3} style={{ fontWeight: 700, backgroundColor: "#f5f5f5" }}>
-                                            Encargado de supervisar
+                                            Superior
                                         </TableCell>
                                         <TableCell align="center" colSpan={3} style={{ fontWeight: 700, backgroundColor: "#f5f5f5" }}>
-                                            Superior
+                                            Encargado de supervisar
                                         </TableCell>
                                     </TableRow>
 
@@ -469,10 +474,10 @@ function Anexo2Form() {
                                         <TableCell style={{ fontWeight: 700 }}>Usuario que ingresó información</TableCell>
                                         <TableCell style={{ fontWeight: 700 }}>Fecha</TableCell>
                                         <TableCell style={{ fontWeight: 700 }}>Estado</TableCell>
-                                        <TableCell style={{ fontWeight: 700 }}>Colaborador</TableCell>
+                                        <TableCell style={{ fontWeight: 700 }}>Nombre Superior</TableCell>
                                         <TableCell style={{ fontWeight: 700 }}>Comentario</TableCell>
                                         <TableCell style={{ fontWeight: 700 }}>Estado</TableCell>
-                                        <TableCell style={{ fontWeight: 700 }}>Colaborador</TableCell>
+                                        <TableCell style={{ fontWeight: 700 }}>Nombre Supervisor</TableCell>
                                         <TableCell style={{ fontWeight: 700 }}>Comentario</TableCell>
                                     </TableRow>
                                 </TableHead>
@@ -490,20 +495,20 @@ function Anexo2Form() {
                                                     sx={{ cursor: 'default' }}
                                                 >
                                                     <TableCell>{h.NOMBRE_USUARIO_CREACION}</TableCell>
-                                                    <TableCell>{h.FECHA_CREACION ? new Date(h.FECHA_CREACION).toLocaleString() : '—'}</TableCell>
-                                                    <TableCell>{
-                                                        (i === 0 && page === 0) ? chipEstadoForm(h.ESTADO) :
-                                                            ((i + 1) + rowsPerPage * page === totalHistorial) ? chipEstadoForm('I') :
-                                                                '-'
-                                                    }</TableCell>
-                                                    <TableCell>{h.NOMBRE_USUARIO_MODIFICACION ?? '—'}</TableCell>
-                                                    <TableCell>{h.COMENTARIO_SUPERVISOR ?? '—'}</TableCell>
+                                                    <TableCell>{h.FECHA_CREACION ? new Date(h.FECHA_CREACION).toLocaleString() : '—'}</TableCell>                                                   
                                                     <TableCell>{(i === 0 && page === 0) ? chipEstadoForm(h.ESTADO_SUPERIOR) :
                                                         ((i + 1) + rowsPerPage * page === totalHistorial) ? chipEstadoForm('I') :
                                                             '-'
                                                     }</TableCell>
                                                     <TableCell>{h.NOMBRE_USUARIO_SUPERIOR ?? '—'}</TableCell>
                                                     <TableCell>{h.COMENTARIO_SUPERIOR ?? '—'}</TableCell>
+                                                    <TableCell>{
+                                                        (i === 0 && page === 0) ? chipEstadoFormConsolidador(h.ESTADO) :
+                                                            ((i + 1) + rowsPerPage * page === totalHistorial) ? chipEstadoFormConsolidador('I') :
+                                                                '-'
+                                                    }</TableCell>
+                                                    <TableCell>{h.NOMBRE_USUARIO_MODIFICACION ?? '—'}</TableCell>
+                                                    <TableCell>{h.COMENTARIO_SUPERVISOR ?? '—'}</TableCell>
                                                 </TableRow>
                                             );
                                         })

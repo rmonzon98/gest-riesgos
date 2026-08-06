@@ -8,7 +8,7 @@
  */
 
 import React, { useEffect, useMemo, useState, useCallback } from "react";
-import axios from "axios";
+import apiClient from "api/apiClient";
 import {
     Box,
     Card,
@@ -35,7 +35,9 @@ import {
     AccordionDetails,
     Collapse,
     IconButton,
+    Tooltip
 } from "@mui/material";
+import AttachFileRounded from "@mui/icons-material/AttachFileRounded";
 import ExpandMore from "@mui/icons-material/ExpandMore";
 import ExpandLessRounded from "@mui/icons-material/ExpandLessRounded";
 import ExpandMoreRounded from "@mui/icons-material/ExpandMoreRounded";
@@ -45,8 +47,8 @@ import * as ExcelJS from "exceljs";
 import SeguimientoDetalleModal from "./SeguimientoDetalleModal";
 import SeguimientoReportes from "./SeguimientoReportes";
 import CargaArchivos from "Riesgos/Carga Documentos/CargaArchivos";
+import SeguimientoDocsModal from "../Seguimiento/SeguimientoDocsModal";
 
-const headers = () => ({ "x-access-token": localStorage.getItem("token") });
 
 // ======== Meses ========
 const MESES = [
@@ -126,12 +128,26 @@ export default function VisualizacionSeguimientos() {
     const openSnack = (message, severity = "success") => setSnack({ open: true, message, severity });
     const closeSnack = () => setSnack((s) => ({ ...s, open: false }));
 
+    //Documentos
+    const [openDocs, setOpenDocs] = useState(false);
+    const [entidadNombre, setEntidadNombre] = useState("");
+    const [docsMes, setDocsMes] = useState("");
+    const [entidadId, setEntidadId] = useState(null);
+
+    // Abrir gestor de documentos 
+    const abrirDocs = (mes, entidad, id) => {
+        setDocsMes(mes);
+        setOpenDocs(true);
+        setEntidadNombre(entidad);
+        setEntidadId(id);
+    };
+
     // --- Carga lista de períodos ---
     useEffect(() => {
         const cargarPeriodos = async () => {
             setError("");
             try {
-                const r = await axios.get("/api/periodos-actualizados", { headers: headers() });
+                const r = await apiClient.get("/api/periodos-actualizados");
                 const lista = (r.data?.result ?? []).map((p) => ({
                     value: Number(p.CODIGO_PERIODO),
                     label: String(p.CODIGO_PERIODO),
@@ -151,7 +167,7 @@ export default function VisualizacionSeguimientos() {
         const cargarDirecciones = async () => {
             setError("");
             try {
-                const r = await axios.get("/api/direcciones-actualizados", { headers: headers() });
+                const r = await apiClient.get("/api/direcciones-actualizados");
                 const lista = (r.data?.result ?? []).map((d) => ({
                     value: Number(d.CODIGO_ENTIDAD),
                     label: String(d.NOMBRE || "").trim(),
@@ -223,8 +239,7 @@ export default function VisualizacionSeguimientos() {
         setRows([]);
 
         try {
-            const r = await axios.get("/api/seguimientos-actualizados/listar-direcciones", {
-                headers: headers(),
+            const r = await apiClient.get("/api/seguimientos-actualizados/listar-direcciones", {
                 params: buildParams(),
             });
             const data = r.data?.data ?? [];
@@ -281,6 +296,7 @@ export default function VisualizacionSeguimientos() {
             setRowLabels({ direccionLabel, siglasLabel });
             setRowSel(r);
             setOpen(true);
+            console.log("Abrir modal seguimiento:", r);
         },
         [direcciones]
     );
@@ -328,36 +344,229 @@ export default function VisualizacionSeguimientos() {
 
     const safe = (v) => (v === null || v === undefined ? "" : String(v));
 
-    // S2 más reciente por riesgo dentro del registro mensual r
-    const latestS2ByRisk = (r) => {
-        const s2 = Array.isArray(r?.seccion2) ? r.seccion2 : [];
-        const map = new Map();
-        for (const x of s2) {
-            const k = Number(x?.codigo_riesgo);
-            if (!k) continue;
-            const prev = map.get(k);
-            if (!prev || Number(x?.periodo ?? 0) > Number(prev?.periodo ?? 0)) map.set(k, x);
-        }
-        return map;
+    const numberOrNull = (value) => {
+        if (value === null || value === undefined || value === "") return null;
+        const n = Number(value);
+        return Number.isFinite(n) ? n : null;
     };
 
-    // Responsable desde S3 (del mismo registro mensual r)
-    const findResponsableInS3 = (r, codigo_riesgo) => {
-        const bloques = Array.isArray(r?.seccion3) ? r.seccion3 : [];
-        let best = { periodo: -1, resp: "" };
-        for (const b of bloques) {
-            const per = Number(b?.periodo ?? 0);
-            const resultados = Array.isArray(b?.resultados) ? b.resultados : [];
-            const match = resultados.find((z) => Number(z?.codigo_riesgo) === Number(codigo_riesgo));
-            if (match && per >= best.periodo) {
-                best = { periodo: per, resp: safe(match?.responsable) };
+    const firstValue = (obj, keys = [], fallback = null) => {
+        for (const key of keys) {
+            const value = obj?.[key];
+            if (value !== undefined && value !== null && value !== "") return value;
+        }
+        return fallback;
+    };
+
+    const getPeriodoRaizFila = (row, fallback = null) =>
+        numberOrNull(
+            firstValue(
+                row,
+                ["periodo_raiz", "Periodo raíz", "PERIODO_RAIZ", "periodo", "Periodo", "CODIGO_PERIODO"],
+                fallback
+            )
+        );
+
+    const getPeriodoInfoFila = (row, fallback = null) =>
+        numberOrNull(
+            firstValue(
+                row,
+                ["periodo_informacion", "Periodo información", "PERIODO_INFORMACION", "periodo", "Periodo", "CODIGO_PERIODO"],
+                fallback
+            )
+        );
+
+    const getCodigoRiesgoPrincipal = (row, fallback = null) =>
+        numberOrNull(
+            firstValue(
+                row,
+                ["codigo_riesgo_seleccionado", "Riesgo seleccionado", "CODIGO_RIESGO_SELECCIONADO", "codigo_riesgo", "CODIGO_RIESGO"],
+                fallback
+            )
+        );
+
+    const getCodigoRiesgoInfo = (row, fallback = null) =>
+        numberOrNull(
+            firstValue(
+                row,
+                ["codigo_riesgo_informacion", "Riesgo información", "CODIGO_RIESGO_INFORMACION", "codigo_riesgo", "CODIGO_RIESGO"],
+                fallback
+            )
+        );
+
+    const getDescripcionFila = (row) =>
+        safe(
+            firstValue(
+                row,
+                ["descripcion", "Descripción del riesgo", "DESCRIPCION", "Descripcion"],
+                ""
+            )
+        ).trim();
+
+    const getRefFila = (row) =>
+        safe(firstValue(row, ["ref", "Ref.", "REF", "Ref"], "")).trim();
+
+    const getRiesgoRaizFila = (row, fallback = null) =>
+        numberOrNull(
+            firstValue(
+                row,
+                ["riesgo_raiz", "Riesgo raíz", "RIESGO_RAIZ", "codigo_riesgo_seleccionado", "codigo_riesgo", "CODIGO_RIESGO"],
+                fallback
+            )
+        );
+
+    const getRiskStrictKeys = (row) => {
+        const ref = getRefFila(row);
+        const desc = getDescripcionFila(row);
+        const codPrincipal = getCodigoRiesgoPrincipal(row);
+        const codInfo = getCodigoRiesgoInfo(row);
+        const periodoRaiz = getPeriodoRaizFila(row);
+        const periodoInfo = getPeriodoInfoFila(row);
+        const riesgoRaiz = getRiesgoRaizFila(row, codPrincipal ?? codInfo);
+
+        return Array.from(new Set([
+            periodoRaiz && codPrincipal ? `SEL:${periodoRaiz}:${codPrincipal}` : "",
+            periodoInfo && codInfo ? `INFO:${periodoInfo}:${codInfo}` : "",
+            periodoRaiz && riesgoRaiz ? `ROOT:${periodoRaiz}:${riesgoRaiz}` : "",
+            periodoRaiz && ref ? `REF:${periodoRaiz}:${ref}` : "",
+            periodoInfo && ref ? `REFINFO:${periodoInfo}:${ref}` : "",
+            periodoRaiz && ref && desc ? `REFDESC:${periodoRaiz}:${ref}::${desc}` : "",
+            periodoInfo && ref && desc ? `REFDESCINFO:${periodoInfo}:${ref}::${desc}` : "",
+        ].filter(Boolean)));
+    };
+
+    const getRiskLooseKeys = (row) => {
+        const ref = getRefFila(row);
+        const desc = getDescripcionFila(row);
+        const codPrincipal = getCodigoRiesgoPrincipal(row);
+        const codInfo = getCodigoRiesgoInfo(row);
+
+        return Array.from(new Set([
+            ref && desc ? `REFDESC:${ref}::${desc}` : "",
+            ref ? `REF:${ref}` : "",
+            codPrincipal ? `COD:${codPrincipal}` : "",
+            codInfo ? `COD:${codInfo}` : "",
+        ].filter(Boolean)));
+    };
+
+    const getRiskAliases = (row) => ([
+        ...getRiskStrictKeys(row),
+        ...getRiskLooseKeys(row),
+    ]);
+
+    const matchScoreRiesgo = (base, candidato) => {
+        if (!base || !candidato) return 0;
+
+        const baseStrict = new Set(getRiskStrictKeys(base));
+        const candStrict = getRiskStrictKeys(candidato);
+
+        if (candStrict.some((key) => baseStrict.has(key))) {
+            return 100;
+        }
+
+        const baseLoose = new Set(getRiskLooseKeys(base));
+        const candLoose = getRiskLooseKeys(candidato);
+        const periodoBase = getPeriodoRaizFila(base, getPeriodoInfoFila(base));
+        const periodoCand = getPeriodoRaizFila(candidato, getPeriodoInfoFila(candidato));
+
+        const mismoPeriodo = periodoBase && periodoCand && Number(periodoBase) === Number(periodoCand);
+        const mismoRef = getRefFila(base) && getRefFila(base) === getRefFila(candidato);
+        const mismaDesc = getDescripcionFila(base) && getDescripcionFila(base) === getDescripcionFila(candidato);
+        const mismoCodigoPrincipal =
+            getCodigoRiesgoPrincipal(base) &&
+            getCodigoRiesgoPrincipal(candidato) &&
+            Number(getCodigoRiesgoPrincipal(base)) === Number(getCodigoRiesgoPrincipal(candidato));
+
+        if (mismoPeriodo && mismoRef && mismaDesc) return 90;
+        if (mismoPeriodo && mismoRef) return 80;
+        if (mismoPeriodo && mismoCodigoPrincipal) return 70;
+
+        if (candLoose.some((key) => baseLoose.has(key))) {
+            if (mismoPeriodo) return 55;
+            if (mismoRef && mismaDesc) return 45;
+            if (mismoRef) return 35;
+            return 15;
+        }
+
+        return 0;
+    };
+
+    const buscarMejorPorRiesgo = (items = [], itemBase) => {
+        let mejor = null;
+        let mejorScore = 0;
+
+        for (const candidato of items) {
+            const score = matchScoreRiesgo(itemBase, candidato);
+
+            if (score > mejorScore) {
+                mejor = candidato;
+                mejorScore = score;
             }
         }
-        return best.resp || "";
+
+        return mejorScore > 0 ? mejor : null;
     };
 
-    const latestEstatus = (r) => {
+    // S2 compatible por riesgo dentro del registro mensual.
+    // Soporta formato nuevo, formato anterior y meses mezclados.
+    const latestS2ByRisk = (r) => {
+        return Array.isArray(r?.seccion2) ? r.seccion2 : [];
+    };
+
+    const buscarPorRiesgo = (items, item) => {
+        return buscarMejorPorRiesgo(Array.isArray(items) ? items : [], item);
+    };
+
+    const buscarResultadoEnS3 = (r, item) => {
         const bloques = Array.isArray(r?.seccion3) ? r.seccion3 : [];
+
+        let best = null;
+        let bestScore = 0;
+
+        for (const b of bloques) {
+            const periodoBloque = numberOrNull(b?.periodo_raiz ?? b?.periodo);
+            const resultados = Array.isArray(b?.resultados) ? b.resultados : [];
+
+            for (const resultado of resultados) {
+                const candidatoNormalizado = {
+                    ...resultado,
+                    periodo: resultado?.periodo ?? periodoBloque,
+                    periodo_raiz: resultado?.periodo_raiz ?? periodoBloque,
+                    periodo_informacion: resultado?.periodo_informacion ?? resultado?.periodo ?? periodoBloque,
+                };
+
+                const score = matchScoreRiesgo(item, candidatoNormalizado);
+
+                if (score > bestScore) {
+                    best = { bloque: b, resultado: candidatoNormalizado };
+                    bestScore = score;
+                }
+            }
+        }
+
+        return bestScore > 0 ? best : null;
+    };
+
+    // Responsable desde S3 si no viene en S1.
+    const findResponsableInS3 = (r, item) => {
+        const encontrado = buscarResultadoEnS3(r, item);
+        return safe(encontrado?.resultado?.responsable);
+    };
+
+    // Estatus correspondiente al riesgo / período raíz.
+    const findEstatusInS3 = (r, item) => {
+        const encontrado = buscarResultadoEnS3(r, item);
+        if (encontrado?.bloque?.estatus) return safe(encontrado.bloque.estatus);
+
+        const periodoRaiz = getPeriodoRaizFila(item, getPeriodoInfoFila(item));
+        const bloques = Array.isArray(r?.seccion3) ? r.seccion3 : [];
+
+        const porPeriodo = bloques.find((b) =>
+            Number(b?.periodo_raiz ?? b?.periodo) === Number(periodoRaiz)
+        );
+
+        if (porPeriodo?.estatus) return safe(porPeriodo.estatus);
+
         return safe(
             bloques.reduce(
                 (acc, x) => ((!acc || Number(x?.periodo ?? 0) > Number(acc?.periodo ?? 0)) ? x : acc),
@@ -504,12 +713,11 @@ export default function VisualizacionSeguimientos() {
                     const siglas = safe(siglasDireccion(r?.codigo_entidad));
                     const s1 = Array.isArray(r?.seccion1) ? r.seccion1 : [];
                     const mapS2 = latestS2ByRisk(r);
-                    const estatusMes = latestEstatus(r);
 
                     for (const it of s1) {
-                        const k = Number(it?.codigo_riesgo);
-                        const s2 = mapS2.get(k);
-                        const responsable = safe(it?.responsable) || findResponsableInS3(r, k);
+                        const s2 = buscarPorRiesgo(mapS2, it);
+                        const responsable = safe(it?.responsable) || findResponsableInS3(r, it);
+                        const estatusRiesgo = findEstatusInS3(r, it);
 
                         const baseData = {
                             mes_num: m,
@@ -519,7 +727,7 @@ export default function VisualizacionSeguimientos() {
                             viceministerio: safe(it?.viceministerio),
                             direccion: dirTxt,
                             siglas,
-                            periodo_riesgo: safe(it?.periodo),
+                            periodo_riesgo: safe(getPeriodoRaizFila(it, it?.periodo)),
                             objetivo: safe(it?.objetivo),
                             descripcion: safe(it?.descripcion),
                             ref: safe(it?.ref),
@@ -529,7 +737,7 @@ export default function VisualizacionSeguimientos() {
                             monitoreo: safe(s2?.metodo_monitoreo ?? it?.metodo_monitoreo),
                             frecuencia: safe(s2?.frecuencia ?? it?.frecuencia),
                             responsable,
-                            estatus: estatusMes,
+                            estatus: estatusRiesgo,
                             comentario: "",
                         };
 
@@ -1117,6 +1325,18 @@ export default function VisualizacionSeguimientos() {
                                                                                 }}
                                                                             />
                                                                         )}
+
+                                                                        {/* Botón Documentos: evitar abrir el seguimiento */}
+                                                                        <Tooltip title="Gestionar documentos del mes">
+                                                                            <span>
+                                                                                <IconButton
+                                                                                    size="medium"
+                                                                                    onClick={(e) => { e.stopPropagation(); abrirDocs(mNum, nombre, codigo); }}
+                                                                                >
+                                                                                    <AttachFileRounded fontSize="medium" />
+                                                                                </IconButton>
+                                                                            </span>
+                                                                        </Tooltip>
                                                                     </Stack>
 
                                                                     <Typography
@@ -1180,6 +1400,17 @@ export default function VisualizacionSeguimientos() {
                     {snack.message}
                 </Alert>
             </Snackbar>
+
+            {/* Modal de Documentos (componente nuevo) */}
+            <SeguimientoDocsModal
+                open={openDocs}
+                onClose={() => setOpenDocs(false)}
+                entidadNombre={entidadNombre}
+                periodo={Number(periodo) || null}
+                mes={docsMes}
+                viewOnly={true}
+                entidadId={entidadId}
+            />
         </Box>
     );
 }

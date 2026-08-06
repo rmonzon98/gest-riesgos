@@ -8,7 +8,7 @@
  */
 
 import { useState } from 'react';
-import axios from 'axios';
+import apiClient from 'api/apiClient';
 import {
     Button, Select, MenuItem, Grid, FormControl, InputLabel,
     Card, CardHeader, CardContent, ButtonGroup,
@@ -63,8 +63,6 @@ function ReportesRiesgosUnidadCard({ tipos = [], unidades = [], periodos = [], l
     };
 
     /* ===================== Helpers ===================== */
-    const headers = () => ({ 'x-access-token': localStorage.getItem('token') });
-
     /**
      * mapTituloToConfig
      *
@@ -116,8 +114,7 @@ function ReportesRiesgosUnidadCard({ tipos = [], unidades = [], periodos = [], l
      * @returns {Promise<Object>} Payload con la información del reporte.
      */
     const fetchReporte = async (categoria) => {
-        const { data } = await axios.get('/api/reportes-actualizados/informacion-riesgos', {
-            headers: headers(),
+        const { data } = await apiClient.get('/api/reportes-actualizados/informacion-riesgos', {
             params: { periodo, tipo, unidad, categoria }
         });
         return data;

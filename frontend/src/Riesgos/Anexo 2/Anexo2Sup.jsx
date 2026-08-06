@@ -8,7 +8,7 @@
  */
 
 import React, { useEffect, useMemo, useState } from 'react';
-import axios from 'axios';
+import apiClient from 'api/apiClient';
 import {
     Box, Card, CardHeader, CardContent, Typography,
     FormControl, InputLabel, Select, MenuItem,
@@ -84,12 +84,24 @@ export default function Anexo2Sup() {
         () => window.matchMedia(`(max-width: ${theme.breakpoints.values.md}px)`).matches,
         [theme]
     );
-    const headers = { 'x-access-token': localStorage.getItem('token') };
 
     /**
      * Devuelve un Chip que representa el estado del formulario de Anexo 2.
      */
     const chipDeEstado = (v) => {
+        const map = {
+            A: { label: 'Recibido', color: 'success' },
+            R: { label: 'Se necesita revisión', color: 'error' },
+            P: { label: 'Pendiente', color: 'warning' },
+            M: { label: 'Modificado', color: 'info' },
+            I: { label: 'Ingresado', color: 'info' },
+            null: { label: 'Sin datos', color: 'default' }
+        };
+        const meta = map[v] || map.null;
+        return <Chip label={meta.label} color={meta.color} size="small" />;
+    };
+
+    const chipDeEstadoSuperior = (v) => {
         const map = {
             A: { label: 'Aceptado', color: 'success' },
             R: { label: 'Rechazado', color: 'error' },
@@ -106,7 +118,7 @@ export default function Anexo2Sup() {
     async function cargarLogoBase64() {
         if (logoBase64 !== null) return logoBase64; // puede ser string o null
         try {
-            const { data } = await axios.get('/api/reportes-actualizados/obtener-logo', { headers });
+            const { data } = await apiClient.get('/api/reportes-actualizados/obtener-logo');
             const base64 = data?.logo ? `data:image/png;base64,${data.logo}` : null;
             setLogoBase64(base64);
             return base64;
@@ -120,8 +132,8 @@ export default function Anexo2Sup() {
         (async () => {
             try {
                 const [entRes, perRes] = await Promise.all([
-                    axios.get('/api/direcciones-actualizados', { headers }),
-                    axios.get('/api/periodos-actualizados', { headers })
+                    apiClient.get('/api/direcciones-actualizados'),
+                    apiClient.get('/api/periodos-actualizados')
                 ]);
                 setEntidades(entRes.data.result ?? entRes.data ?? []);
                 setPeriodos(perRes.data.result ?? perRes.data ?? []);
@@ -139,8 +151,8 @@ export default function Anexo2Sup() {
         if (!selEntidad || !selPeriodo) return;
         setCargandoEstado(true);
         try {
-            const { data } = await axios.get(`${API}/estado-historial`, {
-                headers, params: { periodo: selPeriodo, entidad: selEntidad }
+            const { data } = await apiClient.get(`${API}/estado-historial`, {
+                params: { periodo: selPeriodo, entidad: selEntidad }
             });
 
             const lista = Array.isArray(data?.historial) ? data.historial : [];
@@ -199,11 +211,11 @@ export default function Anexo2Sup() {
     const handleGuardarDecision = async () => {
         if (!entidad || !periodo) { setAlerta('Seleccione unidad y período antes de guardar.'); return; }
         if (!histIdSel) { setAlerta('Seleccione una versión del historial.'); return; }
-        if (estado === 'R' && !(observacion || '').trim()) { setAlerta('Ingrese comentario si rechazará.'); return; }
+        if (estado === 'R' && !(observacion || '').trim()) { setAlerta('Ingrese comentario si Se necesita revisión.'); return; }
 
         try {
             setGuardando(true);
-            await axios.put(
+            await apiClient.put(
                 `${API}/estado-actualizar`,
                 {
                     entidad,
@@ -213,8 +225,7 @@ export default function Anexo2Sup() {
                     comentario: comentarioBloqueado
                         ? (histSel?.COMENTARIO_SUPERVISOR ?? null)
                         : ((observacion || '').trim() || null)
-                },
-                { headers }
+                }
             );
             setAlerta(`Decisión guardada para #${histIdSel}: ${estado === 'R' ? 'Rechazado' : 'Aceptado'}.`);
             await cargarEstadoHistorial(entidad, periodo);
@@ -250,8 +261,7 @@ export default function Anexo2Sup() {
         setPdfModalOpen(true);
         setPdfLoadingData(true);
         try {
-            const { data } = await axios.get('/api/reportes-actualizados/obtener-superior', {
-                headers,
+            const { data } = await apiClient.get('/api/reportes-actualizados/obtener-superior', {
                 params: { periodo, entidad }
             });
             const sup = data?.data ?? data ?? {};
@@ -395,11 +405,31 @@ export default function Anexo2Sup() {
                                     <Table size="small" stickyHeader sx={{ minWidth: 700 }}>
                                         <TableHead>
                                             <TableRow>
+                                                <TableCell colSpan={2}></TableCell>
+                                                <TableCell
+                                                    align="center"
+                                                    colSpan={3}
+                                                    style={{ fontWeight: 700, backgroundColor: "#f5f5f5" }}
+                                                >
+                                                    Superior
+                                                </TableCell>
+                                                <TableCell
+                                                    align="center"
+                                                    colSpan={3}
+                                                    style={{ fontWeight: 700, backgroundColor: "#f5f5f5" }}
+                                                >
+                                                    Encargado de supervisar
+                                                </TableCell>
+                                            </TableRow>
+                                            <TableRow>
                                                 <TableCell style={{ fontWeight: 700 }}>Usuario que ingresó información</TableCell>
                                                 <TableCell style={{ fontWeight: 700 }}>Fecha</TableCell>
                                                 <TableCell style={{ fontWeight: 700 }}>Estado</TableCell>
-                                                <TableCell style={{ fontWeight: 700 }}>Usuario que revisó</TableCell>
-                                                <TableCell style={{ fontWeight: 700 }}>Comentario revisión</TableCell>
+                                                <TableCell style={{ fontWeight: 700 }}>Nombre Superior</TableCell>
+                                                <TableCell style={{ fontWeight: 700 }}>Comentario</TableCell>
+                                                <TableCell style={{ fontWeight: 700 }}>Estado</TableCell>
+                                                <TableCell style={{ fontWeight: 700 }}>Nombre Supervisor</TableCell>
+                                                <TableCell style={{ fontWeight: 700 }}>Comentario</TableCell>
                                             </TableRow>
                                         </TableHead>
                                         <TableBody>
@@ -414,7 +444,14 @@ export default function Anexo2Sup() {
                                                         onClick={() => handleElegirHistPorFila(h)}
                                                     >
                                                         <TableCell>{h.NOMBRE_USUARIO_CREACION ?? '—'}</TableCell>
-                                                        <TableCell>{h.FECHA_CREACION ? new Date(h.FECHA_CREACION).toLocaleString() : '—'}</TableCell>
+                                                        <TableCell>{h.FECHA_CREACION ? new Date(h.FECHA_CREACION).toLocaleString() : '—'}</TableCell>                                                       
+                                                        <TableCell>{chipDeEstadoSuperior(h.ESTADO_SUPERIOR ?? null)}</TableCell>
+                                                        <TableCell>{h.NOMBRE_USUARIO_SUPERIOR ?? '—'}</TableCell>
+                                                        <TableCell>
+                                                            <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
+                                                                {h.COMENTARIO_SUPERIOR ?? '—'}
+                                                            </Typography>
+                                                        </TableCell>
                                                         <TableCell>{chipDeEstado(h.ESTADO ?? null)}</TableCell>
                                                         <TableCell>{h.NOMBRE_USUARIO_MODIFICACION ?? '—'}</TableCell>
                                                         <TableCell>
@@ -594,8 +631,8 @@ export default function Anexo2Sup() {
                                                         value={estado}
                                                         onChange={(e) => setEstado(e.target.value)}
                                                     >
-                                                        <MenuItem value="A">Aceptado (A)</MenuItem>
-                                                        <MenuItem value="R">Rechazado (R)</MenuItem>
+                                                        <MenuItem value="A">Recibir</MenuItem>
+                                                        <MenuItem value="R">Se necesita revisión</MenuItem>
                                                     </Select>
                                                 </FormControl>
                                             </Box>
@@ -678,9 +715,6 @@ export default function Anexo2Sup() {
                                                 />
                                             )
                                         }
-
-
-
 
                                         <Button variant="contained" color="primary" onClick={handleImprimir}>
                                             Imprimir PDF

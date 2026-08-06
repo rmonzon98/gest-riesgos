@@ -291,7 +291,7 @@ exports.obtenerFinales = async (req, res) => {
             b.NOMBRE,
             concat(a.codigo_entidad,'-',a.codigo_documento) AS tempId
         FROM gestion_riesgos.riesgos_documentos a
-        LEFT JOIN seguridad.seguridad_entidad b
+        LEFT JOIN gestion_riesgos.seguridad_entidad b
         ON a.codigo_cia = b.codigo_cia AND b.codigo_entidad = a.codigo_entidad
         WHERE 
             a.CODIGO_CIA = ?
@@ -479,6 +479,8 @@ exports.eliminarDocumento = async (req, res) => {
        WHERE CODIGO_CIA = ? AND CODIGO_DOCUMENTO = ? AND CODIGO_ENTIDAD = ?
     `;
         const params = [req.userId, codigo_cia, id, req.codigo_entidad];
+
+        console.log(codigo_cia, id, req.codigo_entidad, sql)
 
         const [result] = await pool.execute(sql, params);
         if (result.affectedRows === 0) {

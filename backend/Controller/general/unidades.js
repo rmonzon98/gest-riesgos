@@ -30,7 +30,7 @@ exports.obtenerDirecciones = async (req, res) => {
             CODIGO_ENTIDAD,   
             NOMBRE,
             SIGLAS
-        FROM \`seguridad\`.\`seguridad_entidad\`
+        FROM \`gestion_riesgos\`.\`seguridad_entidad\`
         WHERE CODIGO_CIA = ?
             AND ESTADO = '1'      
         ORDER BY NOMBRE ASC
@@ -63,7 +63,7 @@ exports.obtenerDireccionUnica = async (req, res) => {
     try {
         const sql = `
       SELECT CODIGO_ENTIDAD, NOMBRE, SIGLAS, DESCRIPCION
-      FROM seguridad.seguridad_entidad
+      FROM gestion_riesgos.seguridad_entidad
       WHERE CODIGO_CIA = ? AND CODIGO_ENTIDAD = ?
       LIMIT 1
     `;
@@ -106,7 +106,7 @@ exports.crearDirecciones = async (req, res) => {
 
         const [[row]] = await conn.execute(
             `SELECT COALESCE(MAX(CODIGO_ENTIDAD), 0) + 1 AS NUEVO
-         FROM seguridad.seguridad_entidad
+         FROM gestion_riesgos.seguridad_entidad
         WHERE CODIGO_CIA = ?
         FOR UPDATE`,
             [codigo_cia]
@@ -114,7 +114,7 @@ exports.crearDirecciones = async (req, res) => {
         const codigo_entidad = Number(row?.NUEVO || 1);
 
         await conn.execute(
-            `INSERT INTO seguridad.seguridad_entidad (
+            `INSERT INTO gestion_riesgos.seguridad_entidad (
          CODIGO_ENTIDAD, CODIGO_CIA, NOMBRE, SIGLAS, DESCRIPCION, ESTADO,
          USUARIO_CREACION, FECHA_CREACION
        ) VALUES (
@@ -156,7 +156,7 @@ exports.actualizarDirecciones = async (req, res) => {
 
     try {
         const [result] = await pool.execute(
-            `UPDATE seguridad.seguridad_entidad
+            `UPDATE gestion_riesgos.seguridad_entidad
           SET NOMBRE               = ?,
               SIGLAS               = ?,
               DESCRIPCION          = ?,

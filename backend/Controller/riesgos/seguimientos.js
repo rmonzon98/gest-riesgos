@@ -43,6 +43,211 @@ function isAllowedFile(file) {
     return false;
 }
 
+/* ===================== Compatibilidad de formato de seguimiento ===================== */
+
+const parseJSONSeguro = (value, fallback) => {
+    try {
+        if (value === null || value === undefined || value === '') return fallback;
+        const parsed = typeof value === 'string' ? JSON.parse(value) : value;
+        return parsed === null || parsed === undefined ? fallback : parsed;
+    } catch (_) {
+        return fallback;
+    }
+};
+
+const normalizarNumero = (value, fallback = null) => {
+    if (value === null || value === undefined || value === '') return fallback;
+    const n = Number(value);
+    return Number.isFinite(n) ? n : fallback;
+};
+
+const obtenerPrimero = (obj, keys = [], fallback = null) => {
+    for (const key of keys) {
+        const value = obj?.[key];
+        if (value !== undefined && value !== null && value !== '') return value;
+    }
+    return fallback;
+};
+
+const normalizarFilaSeguimiento = (fila = {}, contexto = {}) => {
+    const periodoTrabajo = normalizarNumero(
+        obtenerPrimero(contexto, ['periodo_trabajo', 'codigo_periodo'], null),
+        null
+    );
+
+    const periodoBase = normalizarNumero(
+        obtenerPrimero(
+            fila,
+            ['periodo_informacion', 'Periodo información', 'PERIODO_INFORMACION', 'periodo', 'Periodo', 'CODIGO_PERIODO'],
+            null
+        ),
+        null
+    );
+
+    const periodoRaiz = normalizarNumero(
+        obtenerPrimero(
+            fila,
+            ['periodo_raiz', 'Periodo raíz', 'PERIODO_RAIZ'],
+            periodoBase ?? periodoTrabajo
+        ),
+        periodoBase ?? periodoTrabajo
+    );
+
+    const periodoSeleccionado = normalizarNumero(
+        obtenerPrimero(
+            fila,
+            ['periodo_seleccionado', 'Periodo seleccionado', 'PERIODO_SELECCIONADO'],
+            periodoTrabajo
+        ),
+        periodoTrabajo
+    );
+
+    const codigoRiesgoBase = normalizarNumero(
+        obtenerPrimero(
+            fila,
+            ['codigo_riesgo', 'CODIGO_RIESGO', 'Riesgo seleccionado', 'riesgo_seleccionado'],
+            null
+        ),
+        null
+    );
+
+    const codigoRiesgoSeleccionado = normalizarNumero(
+        obtenerPrimero(
+            fila,
+            ['codigo_riesgo_seleccionado', 'CODIGO_RIESGO_SELECCIONADO', 'Riesgo seleccionado'],
+            codigoRiesgoBase
+        ),
+        codigoRiesgoBase
+    );
+
+    const codigoRiesgoInformacion = normalizarNumero(
+        obtenerPrimero(
+            fila,
+            ['codigo_riesgo_informacion', 'CODIGO_RIESGO_INFORMACION', 'Riesgo información'],
+            codigoRiesgoBase
+        ),
+        codigoRiesgoBase
+    );
+
+    const riesgoRaiz = normalizarNumero(
+        obtenerPrimero(
+            fila,
+            ['riesgo_raiz', 'Riesgo raíz', 'RIESGO_RAIZ'],
+            codigoRiesgoSeleccionado ?? codigoRiesgoInformacion ?? codigoRiesgoBase
+        ),
+        codigoRiesgoSeleccionado ?? codigoRiesgoInformacion ?? codigoRiesgoBase
+    );
+
+    const tieneCamposNuevos =
+        fila?.periodo_raiz !== undefined ||
+        fila?.periodo_informacion !== undefined ||
+        fila?.periodo_seleccionado !== undefined ||
+        fila?.codigo_riesgo_seleccionado !== undefined ||
+        fila?.codigo_riesgo_informacion !== undefined;
+
+    return {
+        ...fila,
+
+        // En el formato actual, "periodo" representa el período raíz / arrastre.
+        // Se mantiene para compatibilidad con componentes existentes.
+        periodo: periodoRaiz,
+        periodo_raiz: periodoRaiz,
+        periodo_seleccionado: periodoSeleccionado,
+        periodo_informacion: periodoBase ?? periodoRaiz ?? periodoTrabajo,
+
+        codigo_riesgo: codigoRiesgoSeleccionado ?? codigoRiesgoBase,
+        codigo_riesgo_seleccionado: codigoRiesgoSeleccionado ?? codigoRiesgoBase,
+        codigo_riesgo_informacion: codigoRiesgoInformacion ?? codigoRiesgoBase,
+
+        riesgo_raiz: riesgoRaiz,
+        ref_raiz: fila?.ref_raiz ?? fila?.['Ref. raíz'] ?? fila?.ref ?? fila?.REF ?? '',
+        descripcion_raiz: fila?.descripcion_raiz ?? fila?.['Descripción raíz'] ?? fila?.descripcion ?? fila?.DESCRIPCION ?? '',
+
+        origen_informacion:
+            fila?.origen_informacion ??
+            fila?.['Origen información'] ??
+            (tieneCamposNuevos ? '' : 'FORMATO_ANTERIOR')
+    };
+};
+
+const normalizarBloqueSeccion3 = (bloque = {}, contexto = {}) => {
+    const periodoTrabajo = normalizarNumero(
+        contexto?.periodo_trabajo ?? contexto?.codigo_periodo,
+        null
+    );
+
+    const periodoBloque = normalizarNumero(
+        obtenerPrimero(
+            bloque,
+            ['periodo_raiz', 'Periodo raíz', 'periodo', 'Periodo'],
+            periodoTrabajo
+        ),
+        periodoTrabajo
+    );
+
+    const resultados = Array.isArray(bloque?.resultados)
+        ? bloque.resultados.map((item) =>
+            normalizarFilaSeguimiento(
+                {
+                    ...item,
+                    periodo: item?.periodo ?? periodoBloque,
+                    periodo_raiz: item?.periodo_raiz ?? periodoBloque,
+                    periodo_seleccionado: item?.periodo_seleccionado ?? periodoTrabajo,
+                    periodo_informacion: item?.periodo_informacion ?? item?.periodo ?? periodoBloque,
+                },
+                {
+                    ...contexto,
+                    periodo_raiz: periodoBloque,
+                    periodo_informacion: periodoBloque,
+                }
+            )
+        )
+        : [];
+
+    return {
+        ...bloque,
+        periodo: periodoBloque,
+        periodo_raiz: periodoBloque,
+        periodo_seleccionado: normalizarNumero(
+            obtenerPrimero(bloque, ['periodo_seleccionado', 'Periodo seleccionado'], periodoTrabajo),
+            periodoTrabajo
+        ),
+        resultados,
+    };
+};
+
+const normalizarSeguimiento = ({ row, seccion1, seccion2, seccion3, seccion4 }) => {
+    const periodoTrabajo = normalizarNumero(
+        seccion4?.periodo_trabajo ?? row?.CODIGO_PERIODO,
+        row?.CODIGO_PERIODO ?? null
+    );
+
+    const contexto = {
+        codigo_periodo: row?.CODIGO_PERIODO,
+        periodo_trabajo: periodoTrabajo,
+    };
+
+    const s1 = (Array.isArray(seccion1) ? seccion1 : []).map((item) =>
+        normalizarFilaSeguimiento(item, contexto)
+    );
+
+    const s2 = (Array.isArray(seccion2) ? seccion2 : []).map((item) =>
+        normalizarFilaSeguimiento(item, contexto)
+    );
+
+    const s3 = (Array.isArray(seccion3) ? seccion3 : []).map((bloque) =>
+        normalizarBloqueSeccion3(bloque, contexto)
+    );
+
+    const s4 = {
+        ...(seccion4 && typeof seccion4 === 'object' && !Array.isArray(seccion4) ? seccion4 : {}),
+        periodo_trabajo: periodoTrabajo,
+    };
+
+    return { seccion1: s1, seccion2: s2, seccion3: s3, seccion4: s4 };
+};
+
+
 /**
  * listar
  *
@@ -338,146 +543,158 @@ exports.obtenerRelacionesPreviasGeneral = async (req, res) => {
 
     try {
         const sql = `
-    WITH RECURSIVE cadena AS (
-    -- Semilla: riesgos del período actual
-    SELECT
-        r.CODIGO_CIA,
-        r.CODIGO_ENTIDAD,
-        r.CODIGO_PERIODO,
-        r.CODIGO_RIESGO,
-        r.PERIODO_ANTERIOR,
-        r.CODIGO_PERIODO AS PERIODO_SEMILLA,
-        r.CODIGO_RIESGO  AS RIESGO_SEMILLA,
-        0 AS NIVEL
-    FROM gestion_riesgos.riesgos_riesgo_extendido r
-    WHERE r.CODIGO_CIA = ?
-      AND r.CODIGO_ENTIDAD = ?
-      AND r.CODIGO_PERIODO = ?
-      AND COALESCE(r.ELIMINADO, 0) != 1
+        WITH RECURSIVE cadena AS (
+            -- Semilla: riesgos del período actual
+            SELECT
+                r.CODIGO_CIA,
+                r.CODIGO_ENTIDAD,
+                r.CODIGO_PERIODO,
+                r.CODIGO_RIESGO,
+                r.PERIODO_ANTERIOR,
+                r.CODIGO_PERIODO AS PERIODO_SEMILLA,
+                r.CODIGO_RIESGO  AS RIESGO_SEMILLA,
+                0 AS NIVEL
+            FROM gestion_riesgos.riesgos_riesgo_extendido r
+            WHERE r.CODIGO_CIA = ?
+            AND r.CODIGO_ENTIDAD = ?
+            AND r.CODIGO_PERIODO = ?
+            AND COALESCE(r.ELIMINADO, 0) != 1
 
-    UNION ALL
+            UNION ALL
 
-    -- Vamos buscando el padre en el período anterior
-    SELECT
-        p.CODIGO_CIA,
-        p.CODIGO_ENTIDAD,
-        p.CODIGO_PERIODO,
-        p.CODIGO_RIESGO,
-        p.PERIODO_ANTERIOR,
-        c.PERIODO_SEMILLA,
-        c.RIESGO_SEMILLA,
-        c.NIVEL + 1
-    FROM cadena c
-    JOIN gestion_riesgos.riesgos_riesgo_extendido p
-      ON p.CODIGO_CIA = c.CODIGO_CIA
-     AND p.CODIGO_ENTIDAD = c.CODIGO_ENTIDAD
-     AND p.CODIGO_PERIODO = c.CODIGO_PERIODO - 1
-     AND p.CODIGO_RIESGO = c.PERIODO_ANTERIOR
-    WHERE c.PERIODO_ANTERIOR IS NOT NULL
-      AND COALESCE(p.ELIMINADO, 0) != 1
-),
+            -- Vamos buscando el padre en el período anterior
+            SELECT
+                p.CODIGO_CIA,
+                p.CODIGO_ENTIDAD,
+                p.CODIGO_PERIODO,
+                p.CODIGO_RIESGO,
+                p.PERIODO_ANTERIOR,
+                c.PERIODO_SEMILLA,
+                c.RIESGO_SEMILLA,
+                c.NIVEL + 1
+            FROM cadena c
+            JOIN gestion_riesgos.riesgos_riesgo_extendido p
+            ON p.CODIGO_CIA = c.CODIGO_CIA
+            AND p.CODIGO_ENTIDAD = c.CODIGO_ENTIDAD
+            AND p.CODIGO_PERIODO = c.CODIGO_PERIODO - 1
+            AND p.CODIGO_RIESGO = c.PERIODO_ANTERIOR
+            WHERE c.PERIODO_ANTERIOR IS NOT NULL
+            AND COALESCE(p.ELIMINADO, 0) != 1
+        ),
 
-raiz_por_semilla AS (
-    SELECT *
-    FROM (
+        raiz_por_semilla AS (
+            SELECT *
+            FROM (
+                SELECT
+                    c.*,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY c.CODIGO_CIA, c.CODIGO_ENTIDAD, c.PERIODO_SEMILLA, c.RIESGO_SEMILLA
+                        ORDER BY c.CODIGO_PERIODO ASC
+                    ) AS RN
+                FROM cadena c
+            ) x
+            WHERE x.RN = 1
+        ),
+
+        raices_unicas AS (
+            SELECT DISTINCT
+                CODIGO_CIA,
+                CODIGO_ENTIDAD,
+                CODIGO_PERIODO,
+                CODIGO_RIESGO
+            FROM raiz_por_semilla
+        )
+
         SELECT
-            c.*,
-            ROW_NUMBER() OVER (
-                PARTITION BY c.CODIGO_CIA, c.CODIGO_ENTIDAD, c.PERIODO_SEMILLA, c.RIESGO_SEMILLA
-                ORDER BY c.CODIGO_PERIODO ASC
-            ) AS RN
-        FROM cadena c
-    ) x
-    WHERE x.RN = 1
-),
+            rrx.CODIGO_ENTIDAD,
+            rrx.CODIGO_RIESGO,
+            rto.DESCRIPCION AS 'Tipo de objetivo',
+            ro.DESCRIPCION  AS 'Objetivo',
+            ra.DESCRIPCION  AS 'Área evaluada',
+            CONCAT(rprob.CODIGO_PROBABILIDAD, ' - ', rprob.DESCRIPCION) AS 'Probabilidad',
+            CONCAT(rsev.CODIGO_SEVERIDAD, ' - ', rsev.DESCRIPCION)      AS 'Severidad',
+            rrx.RIESGO_INHERENTE                                         AS 'Riesgo Inherente',
+            CONCAT(COALESCE(rm.CODIGO_MITIGACION,0) - 1, ' - ', COALESCE(rm.DESCRIPCION,'')) AS 'Eficiencia del mitigador',
+            rrx.VARIABLE_MITIGACION                                      AS 'A mitigar',
+            rrx.PROBABILIDAD_AJUSTADA                                    AS 'Probabilidad ajustada',
+            rrx.SEVERIDAD_AJUSTADA                                       AS 'Severidad ajustada',
+            rrx.RIESGO_RESIDUAL                                          AS 'Riesgo residual',
+            rrx.OBSERVACIONES                                            AS 'Observaciones',
+            rrx.EVENTO                                                   AS 'Evento',
+            rtol.DESCRIPCION                                             AS 'Tolerancia',
+            rrx.DESCRIPCION                                              AS 'Descripción del riesgo',
+            rrx.REF                                                      AS 'Ref.',
+            rrx.SEVERIDAD_NARRACION                                      AS 'Severidad (narración)',
+            rrx.CONTROL                                                  AS 'Control interno para mitigar',
+            rrx.MONITOREO                                                AS 'Método de monitoreo',
+            rf.DESCRIPCION                                               AS 'Frecuencia',
+            rrx.RESPONSABLE                                              AS 'Responsable',
+            rrx.CODIGO_PERIODO                                           AS 'Periodo',
+            rrx.PERIODO_ANTERIOR                                         AS 'Riesgo año pasado',
+            org.NOMBRE                                                   AS 'Organo',
+            vi.NOMBRE                                                    AS 'Viceministerio',
+            CASE
+                WHEN JSON_VALID(rrx.EXTRAS_ME)
+                    THEN JSON_EXTRACT(rrx.EXTRAS_ME, '$')
+                ELSE JSON_OBJECT('EXTRAS_ME', JSON_ARRAY())
+            END AS EXTRAS_ME,
 
-raices_unicas AS (
-    SELECT DISTINCT
-        CODIGO_CIA,
-        CODIGO_ENTIDAD,
-        CODIGO_PERIODO,
-        CODIGO_RIESGO
-    FROM raiz_por_semilla
-)
+            CASE
+                WHEN JSON_VALID(rrx.EXTRAS_MCE)
+                    THEN JSON_EXTRACT(rrx.EXTRAS_MCE, '$')
+                ELSE JSON_OBJECT('EXTRAS_MCE', JSON_ARRAY())
+            END AS EXTRAS_MCE,
 
-SELECT
-    rrx.CODIGO_ENTIDAD,
-    rrx.CODIGO_RIESGO,
-    rto.DESCRIPCION AS 'Tipo de objetivo',
-    ro.DESCRIPCION  AS 'Objetivo',
-    ra.DESCRIPCION  AS 'Área evaluada',
-    CONCAT(rprob.CODIGO_PROBABILIDAD, ' - ', rprob.DESCRIPCION) AS 'Probabilidad',
-    CONCAT(rsev.CODIGO_SEVERIDAD, ' - ', rsev.DESCRIPCION)      AS 'Severidad',
-    rrx.RIESGO_INHERENTE                                         AS 'Riesgo Inherente',
-    CONCAT(COALESCE(rm.CODIGO_MITIGACION,0) - 1, ' - ', COALESCE(rm.DESCRIPCION,'')) AS 'Eficiencia del mitigador',
-    rrx.VARIABLE_MITIGACION                                      AS 'A mitigar',
-    rrx.PROBABILIDAD_AJUSTADA                                    AS 'Probabilidad ajustada',
-    rrx.SEVERIDAD_AJUSTADA                                       AS 'Severidad ajustada',
-    rrx.RIESGO_RESIDUAL                                          AS 'Riesgo residual',
-    rrx.OBSERVACIONES                                            AS 'Observaciones',
-    rrx.EVENTO                                                   AS 'Evento',
-    rtol.DESCRIPCION                                             AS 'Tolerancia',
-    rrx.DESCRIPCION                                              AS 'Descripción del riesgo',
-    rrx.REF                                                      AS 'Ref.',
-    rrx.SEVERIDAD_NARRACION                                      AS 'Severidad(narración)',
-    rrx.CONTROL                                                  AS 'Control interno para mitigar',
-    rrx.MONITOREO                                                AS 'Método de monitoreo',
-    rf.DESCRIPCION                                               AS 'Frecuencia',
-    rrx.RESPONSABLE                                              AS 'Responsable',
-    rrx.CODIGO_PERIODO                                           AS 'Periodo',
-    rrx.PERIODO_ANTERIOR                                         AS 'Riesgo año pasado',
-    org.NOMBRE                                                   AS 'Organo',
-    vi.NOMBRE                                                    AS 'Viceministerio',
-    CASE
-        WHEN JSON_VALID(rrx.EXTRAS_ME)
-            THEN JSON_EXTRACT(rrx.EXTRAS_ME, '$')
-        ELSE JSON_OBJECT('EXTRAS_ME', JSON_ARRAY())
-    END AS EXTRAS_ME,
-    CASE
-        WHEN JSON_VALID(rrx.EXTRAS_MCE)
-            THEN JSON_EXTRACT(rrx.EXTRAS_MCE, '$')
-        ELSE JSON_OBJECT('EXTRAS_MCE', JSON_ARRAY())
-    END AS EXTRAS_MCE,
-    CASE
-        WHEN JSON_VALID(rrx.EXTRAS_MC)
-            THEN JSON_EXTRACT(rrx.EXTRAS_MC, '$')
-        ELSE JSON_OBJECT('EXTRAS_MC', JSON_ARRAY())
-    END AS EXTRAS_MC
-FROM raices_unicas ru
-JOIN gestion_riesgos.riesgos_riesgo_extendido rrx
-  ON rrx.CODIGO_CIA = ru.CODIGO_CIA
- AND rrx.CODIGO_ENTIDAD = ru.CODIGO_ENTIDAD
- AND rrx.CODIGO_PERIODO = ru.CODIGO_PERIODO
- AND rrx.CODIGO_RIESGO = ru.CODIGO_RIESGO
-LEFT JOIN gestion_riesgos.riesgos_tipo_objetivo rto
-  ON rto.CODIGO_TIPO_OBJETIVO = rrx.CODIGO_TIPO_OBJETIVO
- AND rto.CODIGO_CIA = rrx.CODIGO_CIA
-LEFT JOIN gestion_riesgos.riesgos_objetivo ro
-  ON ro.CODIGO_OBJETIVO = rrx.CODIGO_OBJETIVO
- AND ro.CODIGO_CIA = rrx.CODIGO_CIA
- AND ro.CODIGO_TIPO_OBJETIVO = rrx.CODIGO_TIPO_OBJETIVO
-LEFT JOIN gestion_riesgos.riesgos_area ra
-  ON ra.CODIGO_AREA = rrx.CODIGO_AREA
- AND ra.CODIGO_CIA = rrx.CODIGO_CIA
-LEFT JOIN gestion_riesgos.riesgos_probabilidad rprob
-  ON rprob.CODIGO_PROBABILIDAD = rrx.CODIGO_PROBABILIDAD
-LEFT JOIN gestion_riesgos.riesgos_severidad rsev
-  ON rsev.CODIGO_SEVERIDAD = rrx.CODIGO_SEVERIDAD
-LEFT JOIN gestion_riesgos.riesgos_mitigacion rm
-  ON rm.CODIGO_MITIGACION = rrx.CODIGO_MITIGACION
-LEFT JOIN gestion_riesgos.riesgos_tolerancia rtol
-  ON rtol.CODIGO_TOLERANCIA = rrx.CODIGO_TOLERANCIA
-LEFT JOIN gestion_riesgos.riesgos_frecuencia rf
-  ON rf.CODIGO_FRECUENCIA = rrx.CODIGO_FRECUENCIA
- AND rf.CODIGO_CIA = rrx.CODIGO_CIA
-LEFT JOIN gestion_riesgos.riesgos_viceministerio vi
-  ON vi.CODIGO_CIA = rrx.CODIGO_CIA
- AND vi.CODIGO_VICEMINISTERIO = rrx.VICEMINISTERIO
-LEFT JOIN gestion_riesgos.riesgos_organos org
-  ON org.CODIGO_CIA = rrx.CODIGO_CIA
- AND org.CODIGO_ORGANO = rrx.ORGANO
-WHERE COALESCE(rrx.ELIMINADO, 0) != 1
-ORDER BY rrx.CODIGO_PERIODO ASC, rrx.CODIGO_RIESGO;
+            CASE
+                WHEN JSON_VALID(rrx.EXTRAS_MC)
+                    THEN JSON_EXTRACT(rrx.EXTRAS_MC, '$')
+                ELSE JSON_OBJECT('EXTRAS_MC', JSON_ARRAY())
+            END AS EXTRAS_MC
+        FROM raices_unicas ru
+        JOIN gestion_riesgos.riesgos_riesgo_extendido rrx
+        ON rrx.CODIGO_CIA = ru.CODIGO_CIA
+        AND rrx.CODIGO_ENTIDAD = ru.CODIGO_ENTIDAD
+        AND rrx.CODIGO_PERIODO = ru.CODIGO_PERIODO
+        AND rrx.CODIGO_RIESGO = ru.CODIGO_RIESGO
+        LEFT JOIN gestion_riesgos.riesgos_tipo_objetivo rto
+        ON rto.CODIGO_TIPO_OBJETIVO = rrx.CODIGO_TIPO_OBJETIVO
+        AND rto.CODIGO_CIA = rrx.CODIGO_CIA
+
+        LEFT JOIN gestion_riesgos.riesgos_objetivo ro
+        ON ro.CODIGO_OBJETIVO = rrx.CODIGO_OBJETIVO
+        AND ro.CODIGO_CIA = rrx.CODIGO_CIA
+        AND ro.CODIGO_TIPO_OBJETIVO = rrx.CODIGO_TIPO_OBJETIVO
+
+        LEFT JOIN gestion_riesgos.riesgos_area ra
+        ON ra.CODIGO_AREA = rrx.CODIGO_AREA
+        AND ra.CODIGO_CIA = rrx.CODIGO_CIA
+
+        LEFT JOIN gestion_riesgos.riesgos_probabilidad rprob
+        ON rprob.CODIGO_PROBABILIDAD = rrx.CODIGO_PROBABILIDAD
+
+        LEFT JOIN gestion_riesgos.riesgos_severidad rsev
+        ON rsev.CODIGO_SEVERIDAD = rrx.CODIGO_SEVERIDAD
+
+        LEFT JOIN gestion_riesgos.riesgos_mitigacion rm
+        ON rm.CODIGO_MITIGACION = rrx.CODIGO_MITIGACION
+
+        LEFT JOIN gestion_riesgos.riesgos_tolerancia rtol
+        ON rtol.CODIGO_TOLERANCIA = rrx.CODIGO_TOLERANCIA
+
+        LEFT JOIN gestion_riesgos.riesgos_frecuencia rf
+        ON rf.CODIGO_FRECUENCIA = rrx.CODIGO_FRECUENCIA
+        AND rf.CODIGO_CIA = rrx.CODIGO_CIA
+
+        LEFT JOIN gestion_riesgos.riesgos_viceministerio vi
+        ON vi.CODIGO_CIA = rrx.CODIGO_CIA
+        AND vi.CODIGO_VICEMINISTERIO = rrx.VICEMINISTERIO
+
+        LEFT JOIN gestion_riesgos.riesgos_organos org
+        ON org.CODIGO_CIA = rrx.CODIGO_CIA
+        AND org.CODIGO_ORGANO = rrx.ORGANO
+
+        WHERE COALESCE(rrx.ELIMINADO, 0) != 1
+        ORDER BY rrx.CODIGO_PERIODO ASC, rrx.CODIGO_RIESGO;
     `;
 
         const params = [
@@ -522,7 +739,7 @@ exports.docsListar = async (req, res) => {
         RUTA            AS ruta,
         FECHA_CREACION  AS fecha
       FROM gestion_riesgos.riesgos_seguimiento_docs
-      WHERE CODIGO_CIA = ? AND CODIGO_ENTIDAD = ? AND CODIGO_PERIODO = ? AND MES = ?
+      WHERE CODIGO_CIA = ? AND CODIGO_ENTIDAD = ? AND CODIGO_PERIODO = ? AND MES = ? AND ACTIVO = 1
       ORDER BY FECHA_CREACION DESC, CODIGO_DOC DESC
     `;
         const [rows] = await pool.execute(sql, [codigo_cia, codigo_entidad, codigo_periodo, mes]);
@@ -691,88 +908,214 @@ exports.eliminarDocumento = async (req, res) => {
 
 }
 
+const toIntOrNull = (value) => {
+    const n = Number(value);
+    return Number.isInteger(n) ? n : null;
+};
+
+const obtenerCodigoRiesgo = (riesgo) => {
+    return toIntOrNull(
+        riesgo?.codigo_riesgo ??
+        riesgo?.CODIGO_RIESGO ??
+        riesgo?.["Código riesgo"] ??
+        riesgo?.codigo ??
+        riesgo
+    );
+};
+
 /**
  * copiarSiguientePeriodo
  *
- * Función del controlador encargada de procesar la operación copiarSiguientePeriodo.
+ * Crea un riesgo en el siguiente período y lo relaciona con el riesgo actual.
  *
- * - Ejecuta la lógica correspondiente del módulo.
- * - Interactúa con la base de datos según sea necesario.
- *
- * @route POST /copiar-riesgo-proximo-periodo
- * @returns {200|400|404|500} Respuesta del servicio.
+ * Validaciones:
+ * - El riesgo actual debe existir y no estar eliminado.
+ * - El riesgo actual no debe tener ya una continuidad activa en el siguiente período.
+ * - Si ya existe un riesgo activo con la misma referencia en el siguiente período, no se duplica.
  */
 exports.copiarSiguientePeriodo = async (req, res) => {
-    const codigo_cia = req.codigo_cia;
-    const codigo_entidad = Number(req.body.codigo_entidad);
-    const codigo_riesgo = Number(req.body.codigo_riesgo);
-    const pPeriodo = Number(req.body.codigo_periodo) + 1;
+    const codigo_cia = toIntOrNull(req.codigo_cia);
+    const codigo_entidad = toIntOrNull(req.body.codigo_entidad ?? req.codigo_entidad);
+    const codigo_riesgo = toIntOrNull(req.body.codigo_riesgo);
+    const periodoOrigen = toIntOrNull(req.body.codigo_periodo);
+    const periodoDestino = periodoOrigen ? periodoOrigen + 1 : null;
+
+    if (!codigo_cia || !codigo_entidad || !codigo_riesgo || !periodoOrigen || !periodoDestino) {
+        return res.status(400).json({
+            ok: false,
+            message: "Faltan datos requeridos para continuar el riesgo."
+        });
+    }
+
     let conn;
 
     try {
         conn = await pool.getConnection();
         await conn.beginTransaction();
 
-        const [[nxt]] = await conn.execute(
+        const [[riesgoOrigen]] = await conn.execute(
             `
-        SELECT COALESCE(MAX(CODIGO_RIESGO), 0) + 1 AS NEXT_VAL
-        FROM gestion_riesgos.riesgos_riesgo_extendido
-        WHERE CODIGO_CIA = ? AND CODIGO_ENTIDAD = ? AND CODIGO_PERIODO = ?
-        FOR UPDATE
-      `,
-            [codigo_cia, codigo_entidad, pPeriodo]
+            SELECT
+                CODIGO_CIA,
+                CODIGO_ENTIDAD,
+                CODIGO_PERIODO,
+                CODIGO_RIESGO,
+                DESCRIPCION,
+                CODIGO_AREA,
+                CODIGO_OBJETIVO,
+                CODIGO_TIPO_OBJETIVO,
+                REF,
+                ORGANO,
+                VICEMINISTERIO
+            FROM gestion_riesgos.riesgos_riesgo_extendido
+            WHERE CODIGO_CIA = ?
+              AND CODIGO_ENTIDAD = ?
+              AND CODIGO_PERIODO = ?
+              AND CODIGO_RIESGO = ?
+              AND COALESCE(ELIMINADO, 0) <> 1
+            LIMIT 1
+            FOR UPDATE
+            `,
+            [codigo_cia, codigo_entidad, periodoOrigen, codigo_riesgo]
         );
-        const codigo_riesgoN = Number(nxt?.NEXT_VAL || 1);
 
-        const sql = `
-      INSERT INTO gestion_riesgos.riesgos_riesgo_extendido (
-        codigo_cia, codigo_entidad, descripcion, codigo_area, 
-        codigo_objetivo, codigo_tipo_objetivo, ref, organo, viceministerio,
-        codigo_riesgo, periodo_anterior, codigo_periodo,
-        usuario_creacion, fecha_creacion
-      )
-      SELECT 
-        s.codigo_cia, s.codigo_entidad, s.descripcion, s.codigo_area, 
-        s.codigo_objetivo, s.codigo_tipo_objetivo, s.ref, s.organo, s.viceministerio,
-        ? AS codigo_riesgo, ? AS periodo_anterior, ? AS codigo_periodo,
-        ? AS usuario_creacion, now() as fecha_creacion
-      FROM   gestion_riesgos.riesgos_riesgo_extendido AS s
-      WHERE  s.codigo_cia = ? 
-         AND s.codigo_entidad = ? 
-         AND s.codigo_periodo = ?         -- periodo origen (pPeriodo - 1)
-         AND s.codigo_riesgo = ?
-         AND NOT EXISTS (
-              SELECT 1
-              FROM gestion_riesgos.riesgos_riesgo_extendido t
-              WHERE t.codigo_cia = s.codigo_cia
-                AND t.codigo_entidad = s.codigo_entidad
-                AND t.codigo_periodo = ?   -- destino
-                AND t.ref = s.ref
-         )
-    `;
-        const [result] = await conn.execute(sql, [
-            codigo_riesgoN,
-            codigo_riesgo,
-            pPeriodo,
-            req.userId,
-            codigo_cia,
-            codigo_entidad,
-            pPeriodo - 1,
-            codigo_riesgo,
-            pPeriodo
-        ]);
-
-        if ((result?.affectedRows ?? 0) === 0) {
+        if (!riesgoOrigen) {
             await conn.rollback();
-            return res.status(409).json({ message: "Ya existe un riesgo con la misma referencia en el periodo destino." });
+            return res.status(404).json({
+                ok: false,
+                message: "El riesgo origen no existe o está eliminado."
+            });
         }
 
+        const [[relacionExistente]] = await conn.execute(
+            `
+            SELECT
+                CODIGO_RIESGO,
+                REF,
+                DESCRIPCION
+            FROM gestion_riesgos.riesgos_riesgo_extendido
+            WHERE CODIGO_CIA = ?
+              AND CODIGO_ENTIDAD = ?
+              AND CODIGO_PERIODO = ?
+              AND PERIODO_ANTERIOR = ?
+              AND COALESCE(ELIMINADO, 0) <> 1
+            LIMIT 1
+            FOR UPDATE
+            `,
+            [codigo_cia, codigo_entidad, periodoDestino, codigo_riesgo]
+        );
+
+        if (relacionExistente) {
+            await conn.rollback();
+            return res.status(409).json({
+                ok: false,
+                code: "RIESGO_YA_CONTINUADO",
+                message: "Este riesgo ya tiene una continuidad activa en el siguiente período.",
+                relacion: relacionExistente
+            });
+        }
+
+        if (riesgoOrigen.REF !== null && riesgoOrigen.REF !== undefined && String(riesgoOrigen.REF).trim() !== "") {
+            const [[riesgoMismaReferencia]] = await conn.execute(
+                `
+                SELECT
+                    CODIGO_RIESGO,
+                    REF,
+                    DESCRIPCION
+                FROM gestion_riesgos.riesgos_riesgo_extendido
+                WHERE CODIGO_CIA = ?
+                  AND CODIGO_ENTIDAD = ?
+                  AND CODIGO_PERIODO = ?
+                  AND REF = ?
+                  AND COALESCE(ELIMINADO, 0) <> 1
+                LIMIT 1
+                FOR UPDATE
+                `,
+                [codigo_cia, codigo_entidad, periodoDestino, riesgoOrigen.REF]
+            );
+
+            if (riesgoMismaReferencia) {
+                await conn.rollback();
+                return res.status(409).json({
+                    ok: false,
+                    code: "REF_DUPLICADA",
+                    message: "Ya existe un riesgo activo con la misma referencia en el período destino.",
+                    riesgo: riesgoMismaReferencia
+                });
+            }
+        }
+
+        const [[nxt]] = await conn.execute(
+            `
+            SELECT COALESCE(MAX(CODIGO_RIESGO), 0) + 1 AS NEXT_VAL
+            FROM gestion_riesgos.riesgos_riesgo_extendido
+            WHERE CODIGO_CIA = ?
+              AND CODIGO_ENTIDAD = ?
+              AND CODIGO_PERIODO = ?
+            FOR UPDATE
+            `,
+            [codigo_cia, codigo_entidad, periodoDestino]
+        );
+
+        const codigo_riesgo_nuevo = Number(nxt?.NEXT_VAL || 1);
+
+        await conn.execute(
+            `
+            INSERT INTO gestion_riesgos.riesgos_riesgo_extendido (
+                CODIGO_CIA,
+                CODIGO_ENTIDAD,
+                DESCRIPCION,
+                CODIGO_AREA,
+                CODIGO_OBJETIVO,
+                CODIGO_TIPO_OBJETIVO,
+                REF,
+                ORGANO,
+                VICEMINISTERIO,
+                CODIGO_RIESGO,
+                PERIODO_ANTERIOR,
+                CODIGO_PERIODO,
+                USUARIO_CREACION,
+                FECHA_CREACION
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+            `,
+            [
+                codigo_cia,
+                codigo_entidad,
+                riesgoOrigen.DESCRIPCION,
+                riesgoOrigen.CODIGO_AREA,
+                riesgoOrigen.CODIGO_OBJETIVO,
+                riesgoOrigen.CODIGO_TIPO_OBJETIVO,
+                riesgoOrigen.REF,
+                riesgoOrigen.ORGANO,
+                riesgoOrigen.VICEMINISTERIO,
+                codigo_riesgo_nuevo,
+                codigo_riesgo,
+                periodoDestino,
+                req.userId
+            ]
+        );
+
         await conn.commit();
-        return res.status(201).json({ message: "Riesgo creado exitosamente." });
+
+        return res.status(201).json({
+            ok: true,
+            message: "Riesgo creado exitosamente en el siguiente período.",
+            data: {
+                codigo_periodo_origen: periodoOrigen,
+                codigo_riesgo_origen: codigo_riesgo,
+                codigo_periodo_destino: periodoDestino,
+                codigo_riesgo_destino: codigo_riesgo_nuevo
+            }
+        });
     } catch (err) {
         try { await conn?.rollback(); } catch { }
-        console.error("❌ copiarSiguientePeriodo:", err);
-        return res.status(500).json({ error: "Error al crear el riesgo extendido." });
+        console.error("copiarSiguientePeriodo:", err);
+        return res.status(500).json({
+            ok: false,
+            error: "Error al crear la continuidad del riesgo.",
+            detail: err.message
+        });
     } finally {
         try { conn?.release?.(); } catch { }
     }
@@ -781,41 +1124,521 @@ exports.copiarSiguientePeriodo = async (req, res) => {
 /**
  * relacionarRiesgoAnteriorPeriodo
  *
- * Función del controlador encargada de procesar la operación relacionarRiesgoAnteriorPeriodo.
+ * Relaciona un riesgo actual con un riesgo del período anterior.
  *
- * - Ejecuta la lógica correspondiente del módulo.
- * - Interactúa con la base de datos según sea necesario.
- *
- * @route PUT /relacionar-riesgo-anterior-periodo
- * @returns {200|400|404|500} Respuesta del servicio.
+ * Validaciones:
+ * - Ambos riesgos deben existir y no estar eliminados.
+ * - El riesgo actual no debe tener otra relación anterior activa.
+ * - El riesgo anterior no debe estar usado por otro riesgo activo del período actual.
  */
 exports.relacionarRiesgoAnteriorPeriodo = async (req, res) => {
-    const codigo_cia = req.codigo_cia;
-    const codigo_entidad = Number(req.body.codigo_entidad);
-    const codigo_periodo = Number(req.body.codigo_periodo_actual);
-    const riesgo_actual = req.body.riesgo_actual;
-    const riesgo_anterior = req.body.riesgo_anterior;
-    try {
-        const sql = `
-      UPDATE gestion_riesgos.riesgos_riesgo_extendido
-      SET periodo_anterior = ?,
-          usuario_modificacion = ?,
-          fecha_modificacion = NOW()
-      WHERE CODIGO_CIA = ? AND CODIGO_ENTIDAD = ? AND CODIGO_PERIODO = ? AND CODIGO_RIESGO = ?
-    `;
-        const params = [
-            riesgo_anterior.codigo_riesgo, req.userId, codigo_cia, codigo_entidad, codigo_periodo, riesgo_actual.codigo_riesgo
-        ];
+    const codigo_cia = toIntOrNull(req.codigo_cia);
+    const codigo_entidad = toIntOrNull(req.body.codigo_entidad ?? req.codigo_entidad);
+    const codigo_periodo = toIntOrNull(req.body.codigo_periodo_actual ?? req.body.codigo_periodo);
 
-        const [result] = await pool.execute(sql, params);
-        if (result.affectedRows === 0) {
-            return res.status(404).json({ error: 'Riesgo no encontrado' });
+    const codigo_riesgo_actual = obtenerCodigoRiesgo(
+        req.body.riesgo_actual ?? req.body.codigo_riesgo_actual
+    );
+
+    const codigo_riesgo_anterior = obtenerCodigoRiesgo(
+        req.body.riesgo_anterior ?? req.body.codigo_riesgo_anterior
+    );
+
+    const periodoAnterior = codigo_periodo ? codigo_periodo - 1 : null;
+
+    if (!codigo_cia || !codigo_entidad || !codigo_periodo || !periodoAnterior || !codigo_riesgo_actual || !codigo_riesgo_anterior) {
+        return res.status(400).json({
+            ok: false,
+            message: "Faltan datos requeridos para relacionar el riesgo."
+        });
+    }
+
+    let conn;
+
+    try {
+        conn = await pool.getConnection();
+        await conn.beginTransaction();
+
+        const [[riesgoActual]] = await conn.execute(
+            `
+            SELECT
+                CODIGO_RIESGO,
+                PERIODO_ANTERIOR,
+                REF,
+                DESCRIPCION
+            FROM gestion_riesgos.riesgos_riesgo_extendido
+            WHERE CODIGO_CIA = ?
+              AND CODIGO_ENTIDAD = ?
+              AND CODIGO_PERIODO = ?
+              AND CODIGO_RIESGO = ?
+              AND COALESCE(ELIMINADO, 0) <> 1
+            LIMIT 1
+            FOR UPDATE
+            `,
+            [codigo_cia, codigo_entidad, codigo_periodo, codigo_riesgo_actual]
+        );
+
+        if (!riesgoActual) {
+            await conn.rollback();
+            return res.status(404).json({
+                ok: false,
+                message: "El riesgo actual no existe o está eliminado."
+            });
         }
 
-        return res.json({ mensaje: 'Riesgo actualizado correctamente' });
+        const [[riesgoAnterior]] = await conn.execute(
+            `
+            SELECT
+                CODIGO_RIESGO,
+                REF,
+                DESCRIPCION
+            FROM gestion_riesgos.riesgos_riesgo_extendido
+            WHERE CODIGO_CIA = ?
+              AND CODIGO_ENTIDAD = ?
+              AND CODIGO_PERIODO = ?
+              AND CODIGO_RIESGO = ?
+              AND COALESCE(ELIMINADO, 0) <> 1
+            LIMIT 1
+            FOR UPDATE
+            `,
+            [codigo_cia, codigo_entidad, periodoAnterior, codigo_riesgo_anterior]
+        );
+
+        if (!riesgoAnterior) {
+            await conn.rollback();
+            return res.status(404).json({
+                ok: false,
+                message: "El riesgo anterior no existe o está eliminado."
+            });
+        }
+
+        if (
+            riesgoActual.PERIODO_ANTERIOR !== null &&
+            riesgoActual.PERIODO_ANTERIOR !== undefined &&
+            Number(riesgoActual.PERIODO_ANTERIOR) !== codigo_riesgo_anterior
+        ) {
+            await conn.rollback();
+            return res.status(409).json({
+                ok: false,
+                code: "RIESGO_ACTUAL_YA_RELACIONADO",
+                message: "Este riesgo ya tiene una relación con otro riesgo del año anterior. Quite primero la relación actual.",
+                relacion_actual: {
+                    codigo_riesgo_anterior: riesgoActual.PERIODO_ANTERIOR
+                }
+            });
+        }
+
+        const [[riesgoAnteriorOcupado]] = await conn.execute(
+            `
+            SELECT
+                CODIGO_RIESGO,
+                REF,
+                DESCRIPCION
+            FROM gestion_riesgos.riesgos_riesgo_extendido
+            WHERE CODIGO_CIA = ?
+              AND CODIGO_ENTIDAD = ?
+              AND CODIGO_PERIODO = ?
+              AND PERIODO_ANTERIOR = ?
+              AND CODIGO_RIESGO <> ?
+              AND COALESCE(ELIMINADO, 0) <> 1
+            LIMIT 1
+            FOR UPDATE
+            `,
+            [codigo_cia, codigo_entidad, codigo_periodo, codigo_riesgo_anterior, codigo_riesgo_actual]
+        );
+
+        if (riesgoAnteriorOcupado) {
+            await conn.rollback();
+            return res.status(409).json({
+                ok: false,
+                code: "RIESGO_ANTERIOR_YA_USADO",
+                message: "El riesgo del año anterior ya está relacionado con otro riesgo activo de este período.",
+                riesgo_ocupante: riesgoAnteriorOcupado
+            });
+        }
+
+        await conn.execute(
+            `
+            UPDATE gestion_riesgos.riesgos_riesgo_extendido
+            SET PERIODO_ANTERIOR = ?,
+                USUARIO_MODIFICACION = ?,
+                FECHA_MODIFICACION = NOW()
+            WHERE CODIGO_CIA = ?
+              AND CODIGO_ENTIDAD = ?
+              AND CODIGO_PERIODO = ?
+              AND CODIGO_RIESGO = ?
+              AND COALESCE(ELIMINADO, 0) <> 1
+            `,
+            [
+                codigo_riesgo_anterior,
+                req.userId,
+                codigo_cia,
+                codigo_entidad,
+                codigo_periodo,
+                codigo_riesgo_actual
+            ]
+        );
+
+        await conn.commit();
+
+        return res.json({
+            ok: true,
+            message: "Riesgo relacionado correctamente.",
+            data: {
+                codigo_periodo_actual: codigo_periodo,
+                codigo_riesgo_actual,
+                codigo_periodo_anterior: periodoAnterior,
+                codigo_riesgo_anterior
+            }
+        });
     } catch (err) {
-        console.error('actualizarRiesgo:', err);
-        return res.status(500).json({ error: 'Error al actualizar riesgo' });
+        try { await conn?.rollback(); } catch { }
+        console.error("relacionarRiesgoAnteriorPeriodo:", err);
+        return res.status(500).json({
+            ok: false,
+            error: "Error al relacionar el riesgo.",
+            detail: err.message
+        });
+    } finally {
+        try { conn?.release?.(); } catch { }
+    }
+};
+
+/**
+ * obtenerRelacionesContinuidad
+ *
+ * Obtiene, para cada riesgo activo del período seleccionado:
+ * - relación con riesgo del año anterior;
+ * - relación con riesgo del año siguiente.
+ */
+exports.obtenerRelacionesContinuidad = async (req, res) => {
+    const codigo_cia = toIntOrNull(req.codigo_cia);
+    const codigo_entidad = toIntOrNull(req.query.codigo_entidad ?? req.codigo_entidad);
+    const codigo_periodo = toIntOrNull(req.query.codigo_periodo ?? req.query.periodo);
+
+    if (!codigo_cia || !codigo_entidad || !codigo_periodo) {
+        return res.status(400).json({
+            ok: false,
+            message: "Faltan parámetros requeridos: codigo_entidad y codigo_periodo."
+        });
+    }
+
+    try {
+        const sql = `
+            SELECT
+                r.CODIGO_RIESGO AS codigo_riesgo,
+                r.CODIGO_PERIODO AS codigo_periodo,
+                r.REF AS ref,
+                r.DESCRIPCION AS descripcion,
+                r.PERIODO_ANTERIOR AS periodo_anterior,
+
+                ant.CODIGO_RIESGO AS anterior_codigo_riesgo,
+                ant.CODIGO_PERIODO AS anterior_codigo_periodo,
+                ant.REF AS anterior_ref,
+                ant.DESCRIPCION AS anterior_descripcion,
+
+                sig.CODIGO_RIESGO AS siguiente_codigo_riesgo,
+                sig.CODIGO_PERIODO AS siguiente_codigo_periodo,
+                sig.REF AS siguiente_ref,
+                sig.DESCRIPCION AS siguiente_descripcion
+            FROM gestion_riesgos.riesgos_riesgo_extendido r
+            LEFT JOIN gestion_riesgos.riesgos_riesgo_extendido ant
+              ON ant.CODIGO_CIA = r.CODIGO_CIA
+             AND ant.CODIGO_ENTIDAD = r.CODIGO_ENTIDAD
+             AND ant.CODIGO_PERIODO = r.CODIGO_PERIODO - 1
+             AND ant.CODIGO_RIESGO = r.PERIODO_ANTERIOR
+             AND COALESCE(ant.ELIMINADO, 0) <> 1
+            LEFT JOIN gestion_riesgos.riesgos_riesgo_extendido sig
+              ON sig.CODIGO_CIA = r.CODIGO_CIA
+             AND sig.CODIGO_ENTIDAD = r.CODIGO_ENTIDAD
+             AND sig.CODIGO_PERIODO = r.CODIGO_PERIODO + 1
+             AND sig.PERIODO_ANTERIOR = r.CODIGO_RIESGO
+             AND COALESCE(sig.ELIMINADO, 0) <> 1
+            WHERE r.CODIGO_CIA = ?
+              AND r.CODIGO_ENTIDAD = ?
+              AND r.CODIGO_PERIODO = ?
+              AND COALESCE(r.ELIMINADO, 0) <> 1
+            ORDER BY r.CODIGO_RIESGO ASC, sig.CODIGO_RIESGO ASC
+        `;
+
+        const [rows] = await pool.execute(sql, [codigo_cia, codigo_entidad, codigo_periodo]);
+
+        const mapa = {};
+
+        for (const row of rows) {
+            const codigo = Number(row.codigo_riesgo);
+
+            if (!mapa[codigo]) {
+                mapa[codigo] = {
+                    codigo_riesgo: codigo,
+                    codigo_periodo: Number(row.codigo_periodo),
+                    ref: row.ref,
+                    descripcion: row.descripcion,
+                    anterior: row.anterior_codigo_riesgo
+                        ? {
+                            codigo_periodo: Number(row.anterior_codigo_periodo),
+                            codigo_riesgo: Number(row.anterior_codigo_riesgo),
+                            ref: row.anterior_ref,
+                            descripcion: row.anterior_descripcion
+                        }
+                        : null,
+                    siguiente: null,
+                    siguientes: []
+                };
+            }
+
+            if (row.siguiente_codigo_riesgo) {
+                const yaExiste = mapa[codigo].siguientes.some(
+                    (x) => Number(x.codigo_riesgo) === Number(row.siguiente_codigo_riesgo)
+                );
+
+                if (!yaExiste) {
+                    mapa[codigo].siguientes.push({
+                        codigo_periodo: Number(row.siguiente_codigo_periodo),
+                        codigo_riesgo: Number(row.siguiente_codigo_riesgo),
+                        ref: row.siguiente_ref,
+                        descripcion: row.siguiente_descripcion
+                    });
+                }
+            }
+        }
+
+        const data = Object.values(mapa).map((item) => ({
+            ...item,
+            siguiente: item.siguientes.length === 1 ? item.siguientes[0] : null,
+            tiene_conflicto_siguiente: item.siguientes.length > 1
+        }));
+
+        const relaciones = {};
+        for (const item of data) {
+            relaciones[item.codigo_riesgo] = {
+                anterior: item.anterior,
+                siguiente: item.siguiente,
+                siguientes: item.siguientes,
+                tiene_conflicto_siguiente: item.tiene_conflicto_siguiente
+            };
+        }
+
+        return res.json({
+            ok: true,
+            total: data.length,
+            data,
+            relaciones
+        });
+    } catch (err) {
+        console.error("obtenerRelacionesContinuidad:", err);
+        return res.status(500).json({
+            ok: false,
+            error: "Error al obtener las relaciones de continuidad.",
+            detail: err.message
+        });
+    }
+};
+
+/**
+ * quitarRelacionAnteriorPeriodo
+ *
+ * Quita la relación del riesgo actual con el riesgo del año anterior.
+ */
+exports.quitarRelacionAnteriorPeriodo = async (req, res) => {
+    const codigo_cia = toIntOrNull(req.codigo_cia);
+    const codigo_entidad = toIntOrNull(req.body.codigo_entidad ?? req.codigo_entidad);
+    const codigo_periodo = toIntOrNull(req.body.codigo_periodo_actual ?? req.body.codigo_periodo);
+    const codigo_riesgo = obtenerCodigoRiesgo(req.body.riesgo_actual ?? req.body.codigo_riesgo);
+
+    if (!codigo_cia || !codigo_entidad || !codigo_periodo || !codigo_riesgo) {
+        return res.status(400).json({
+            ok: false,
+            message: "Faltan datos requeridos para quitar la relación anterior."
+        });
+    }
+
+    let conn;
+
+    try {
+        conn = await pool.getConnection();
+        await conn.beginTransaction();
+
+        const [[riesgoActual]] = await conn.execute(
+            `
+            SELECT
+                CODIGO_RIESGO,
+                PERIODO_ANTERIOR
+            FROM gestion_riesgos.riesgos_riesgo_extendido
+            WHERE CODIGO_CIA = ?
+              AND CODIGO_ENTIDAD = ?
+              AND CODIGO_PERIODO = ?
+              AND CODIGO_RIESGO = ?
+              AND COALESCE(ELIMINADO, 0) <> 1
+            LIMIT 1
+            FOR UPDATE
+            `,
+            [codigo_cia, codigo_entidad, codigo_periodo, codigo_riesgo]
+        );
+
+        if (!riesgoActual) {
+            await conn.rollback();
+            return res.status(404).json({
+                ok: false,
+                message: "El riesgo no existe o está eliminado."
+            });
+        }
+
+        if (riesgoActual.PERIODO_ANTERIOR === null || riesgoActual.PERIODO_ANTERIOR === undefined) {
+            await conn.rollback();
+            return res.json({
+                ok: true,
+                message: "El riesgo no tenía relación con el año anterior."
+            });
+        }
+
+        await conn.execute(
+            `
+            UPDATE gestion_riesgos.riesgos_riesgo_extendido
+            SET PERIODO_ANTERIOR = NULL,
+                USUARIO_MODIFICACION = ?,
+                FECHA_MODIFICACION = NOW()
+            WHERE CODIGO_CIA = ?
+              AND CODIGO_ENTIDAD = ?
+              AND CODIGO_PERIODO = ?
+              AND CODIGO_RIESGO = ?
+              AND COALESCE(ELIMINADO, 0) <> 1
+            `,
+            [req.userId, codigo_cia, codigo_entidad, codigo_periodo, codigo_riesgo]
+        );
+
+        await conn.commit();
+
+        return res.json({
+            ok: true,
+            message: "Relación con el año anterior eliminada correctamente."
+        });
+    } catch (err) {
+        try { await conn?.rollback(); } catch { }
+        console.error("quitarRelacionAnteriorPeriodo:", err);
+        return res.status(500).json({
+            ok: false,
+            error: "Error al quitar la relación anterior.",
+            detail: err.message
+        });
+    } finally {
+        try { conn?.release?.(); } catch { }
+    }
+};
+
+/**
+ * quitarRelacionSiguientePeriodo
+ *
+ * Quita la relación entre el riesgo actual y su riesgo del siguiente período.
+ *
+ * Si hay más de una relación activa hacia el siguiente período, no elimina nada sin que
+ * se indique codigo_riesgo_siguiente, para evitar borrar una relación equivocada.
+ */
+exports.quitarRelacionSiguientePeriodo = async (req, res) => {
+    const codigo_cia = toIntOrNull(req.codigo_cia);
+    const codigo_entidad = toIntOrNull(req.body.codigo_entidad ?? req.codigo_entidad);
+    const codigo_periodo = toIntOrNull(req.body.codigo_periodo_actual ?? req.body.codigo_periodo);
+    const codigo_riesgo_actual = obtenerCodigoRiesgo(req.body.riesgo_actual ?? req.body.codigo_riesgo_actual ?? req.body.codigo_riesgo);
+    const codigo_riesgo_siguiente = obtenerCodigoRiesgo(req.body.riesgo_siguiente ?? req.body.codigo_riesgo_siguiente);
+
+    const periodoSiguiente = codigo_periodo ? codigo_periodo + 1 : null;
+
+    if (!codigo_cia || !codigo_entidad || !codigo_periodo || !periodoSiguiente || !codigo_riesgo_actual) {
+        return res.status(400).json({
+            ok: false,
+            message: "Faltan datos requeridos para quitar la relación siguiente."
+        });
+    }
+
+    let conn;
+
+    try {
+        conn = await pool.getConnection();
+        await conn.beginTransaction();
+
+        let sqlBuscar = `
+            SELECT
+                CODIGO_RIESGO,
+                REF,
+                DESCRIPCION
+            FROM gestion_riesgos.riesgos_riesgo_extendido
+            WHERE CODIGO_CIA = ?
+              AND CODIGO_ENTIDAD = ?
+              AND CODIGO_PERIODO = ?
+              AND PERIODO_ANTERIOR = ?
+              AND COALESCE(ELIMINADO, 0) <> 1
+        `;
+
+        const paramsBuscar = [codigo_cia, codigo_entidad, periodoSiguiente, codigo_riesgo_actual];
+
+        if (codigo_riesgo_siguiente) {
+            sqlBuscar += ` AND CODIGO_RIESGO = ? `;
+            paramsBuscar.push(codigo_riesgo_siguiente);
+        }
+
+        sqlBuscar += ` ORDER BY CODIGO_RIESGO ASC FOR UPDATE `;
+
+        const [relaciones] = await conn.execute(sqlBuscar, paramsBuscar);
+
+        if (!relaciones || relaciones.length === 0) {
+            await conn.rollback();
+            return res.status(404).json({
+                ok: false,
+                message: "No se encontró una relación activa con el siguiente período."
+            });
+        }
+
+        if (!codigo_riesgo_siguiente && relaciones.length > 1) {
+            await conn.rollback();
+            return res.status(409).json({
+                ok: false,
+                code: "MULTIPLES_RELACIONES_SIGUIENTES",
+                message: "Este riesgo tiene más de una relación activa en el siguiente período. Indique cuál desea quitar.",
+                relaciones
+            });
+        }
+
+        const codigoDestino = codigo_riesgo_siguiente || Number(relaciones[0].CODIGO_RIESGO);
+
+        await conn.execute(
+            `
+            UPDATE gestion_riesgos.riesgos_riesgo_extendido
+            SET PERIODO_ANTERIOR = NULL,
+                USUARIO_MODIFICACION = ?,
+                FECHA_MODIFICACION = NOW()
+            WHERE CODIGO_CIA = ?
+              AND CODIGO_ENTIDAD = ?
+              AND CODIGO_PERIODO = ?
+              AND CODIGO_RIESGO = ?
+              AND PERIODO_ANTERIOR = ?
+              AND COALESCE(ELIMINADO, 0) <> 1
+            `,
+            [
+                req.userId,
+                codigo_cia,
+                codigo_entidad,
+                periodoSiguiente,
+                codigoDestino,
+                codigo_riesgo_actual
+            ]
+        );
+
+        await conn.commit();
+
+        return res.json({
+            ok: true,
+            message: "Relación con el siguiente período eliminada correctamente."
+        });
+    } catch (err) {
+        try { await conn?.rollback(); } catch { }
+        console.error("quitarRelacionSiguientePeriodo:", err);
+        return res.status(500).json({
+            ok: false,
+            error: "Error al quitar la relación siguiente.",
+            detail: err.message
+        });
+    } finally {
+        try { conn?.release?.(); } catch { }
     }
 };
 
@@ -911,24 +1734,26 @@ exports.obtenerSeguimientosPorCia = async (req, res) => {
         const [rows] = await pool.execute(sql, params);
 
         const data = rows.map(r => {
-            let s1 = [];
-            try { if (r.SECCION1 !== null && r.SECCION1 !== undefined && r.SECCION1 !== '') s1 = JSON.parse(r.SECCION1); } catch { }
-            let s2 = [];
-            try { if (r.SECCION2 !== null && r.SECCION2 !== undefined && r.SECCION2 !== '') s2 = JSON.parse(r.SECCION2); } catch { }
-            let s3 = [];
-            try { if (r.SECCION3 !== null && r.SECCION3 !== undefined && r.SECCION3 !== '') s3 = JSON.parse(r.SECCION3); } catch { }
-            let s4 = {};
-            try { if (r.SECCION4 !== null && r.SECCION4 !== undefined && r.SECCION4 !== '') s4 = JSON.parse(r.SECCION4); } catch { }
+            const s1Raw = parseJSONSeguro(r.SECCION1, []);
+            const s2Raw = parseJSONSeguro(r.SECCION2, []);
+            const s3Raw = parseJSONSeguro(r.SECCION3, []);
+            const s4Raw = parseJSONSeguro(r.SECCION4, {});
+
+            const normalizado = normalizarSeguimiento({
+                row: r,
+                seccion1: Array.isArray(s1Raw) ? s1Raw : [],
+                seccion2: Array.isArray(s2Raw) ? s2Raw : [],
+                seccion3: Array.isArray(s3Raw) ? s3Raw : [],
+                seccion4: (s4Raw && typeof s4Raw === 'object' && !Array.isArray(s4Raw)) ? s4Raw : {}
+            });
 
             return {
                 codigo_cia: r.CODIGO_CIA,
                 codigo_entidad: r.CODIGO_ENTIDAD,
                 codigo_periodo: r.CODIGO_PERIODO,
+                periodo_trabajo: normalizado.seccion4?.periodo_trabajo ?? r.CODIGO_PERIODO,
                 mes: r.MES,
-                seccion1: Array.isArray(s1) ? s1 : [],
-                seccion2: Array.isArray(s2) ? s2 : [],
-                seccion3: Array.isArray(s3) ? s3 : [],
-                seccion4: (s4 && typeof s4 === 'object' && !Array.isArray(s4)) ? s4 : {}
+                ...normalizado
             };
         });
 

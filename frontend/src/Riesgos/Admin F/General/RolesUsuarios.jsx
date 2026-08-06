@@ -12,7 +12,7 @@ import {
     Button, Typography, Box, Paper, Table, TableHead,
     TableRow, TableCell, TableBody
 } from "@mui/material";
-import axios from "axios";
+import apiClient from "api/apiClient";
 import AddIcon from "@mui/icons-material/Add";
 import EditIcon from "@mui/icons-material/Edit";
 import AlertaMensaje from "./../../Alerta F/AlertaMensaje";
@@ -40,9 +40,7 @@ function RolesUsuarios() {
      */
     const obtenerPersonas = async () => {
         try {
-            const result = await axios.get("/api/responsables-actualizados", {
-                headers: { "x-access-token": localStorage.getItem("token") }
-            });
+            const result = await apiClient.get("/api/responsables-actualizados");
             setPersonas(result.data.data);
         } catch (err) {
             console.error(err);
@@ -55,9 +53,7 @@ function RolesUsuarios() {
      */
     const obtenerRoles = async () => {
         try {
-            const result = await axios.get("/api/roles-actualizados/informacion-roles", {
-                headers: { "x-access-token": localStorage.getItem("token") }
-            });
+            const result = await apiClient.get("/api/roles-actualizados/informacion-roles");
             setRoles(result.data.roles);
         } catch (err) {
             console.error(err);
@@ -70,9 +66,7 @@ function RolesUsuarios() {
      */
     const obtenerLista = async () => {
         try {
-            const result = await axios.get("/api/roles-actualizados/obtener-personas-con-roles", {
-                headers: { "x-access-token": localStorage.getItem("token") }
-            });
+            const result = await apiClient.get("/api/roles-actualizados/obtener-personas-con-roles");
             const agrupado = agruparRolesPorPersona(result.data.data);
             setData(agrupado);
         } catch (err) {

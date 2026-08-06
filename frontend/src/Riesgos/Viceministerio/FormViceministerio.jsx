@@ -8,9 +8,7 @@ import {
     Button,
     Box,
 } from "@mui/material";
-import axios from "axios";
-
-const headers = () => ({ "x-access-token": localStorage.getItem("token") });
+import apiClient from "api/apiClient";
 
 /**
  * FormViceministerio
@@ -34,9 +32,8 @@ export default function FormViceministerio({
     // Cargar en edición
     useEffect(() => {
         if (showModal && codigoViceministerio) {
-            axios
+            apiClient
                 .get("/api/viceministerios/obtener-viceministerio", {
-                    headers: headers(),
                     params: { codigo_viceministerio: Number(codigoViceministerio) },
                 })
                 .then(({ data }) => {
@@ -61,13 +58,12 @@ export default function FormViceministerio({
             }
 
             if (codigoViceministerio) {
-                await axios.put(
+                await apiClient.put(
                     "/api/viceministerios",
-                    { ...body, codigo_viceministerio: Number(codigoViceministerio) },
-                    { headers: headers() }
+                    { ...body, codigo_viceministerio: Number(codigoViceministerio) }
                 );
             } else {
-                await axios.post("/api/viceministerios", body, { headers: headers() });
+                await apiClient.post("/api/viceministerios", body);
             }
 
             onSuccess ? onSuccess() : onClose();

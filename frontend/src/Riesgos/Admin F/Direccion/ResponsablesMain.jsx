@@ -20,7 +20,7 @@ import {
     FormControl, Select, MenuItem, InputLabel
 } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
-import axios from "axios";
+import apiClient from "api/apiClient";
 import LockRoundedIcon from "@mui/icons-material/LockRounded";
 import LockOpenRoundedIcon from "@mui/icons-material/LockOpenRounded";
 import LockResetIcon from "@mui/icons-material/LockReset";
@@ -65,8 +65,6 @@ function ResponablesMain() {
     });
     const [openCollapse, setOpenCollapse] = useState(null);
 
-    const headers = { "x-access-token": localStorage.getItem("token") };
-
     /**
      * Muestra un mensaje temporal (por ejemplo una contraseña generada)
      * y lo limpia automáticamente después de un tiempo definido.
@@ -88,7 +86,7 @@ function ResponablesMain() {
      */
     const obtenerColaboradores = async () => {
         try {
-            const res = await axios.get("/api/responsables-actualizados/administracion-direccion", { headers });
+            const res = await apiClient.get("/api/responsables-actualizados/administracion-direccion");
             setData(res.data.data || []);
         } catch (err) {
             console.error(err);
@@ -104,7 +102,7 @@ function ResponablesMain() {
      */
     const fetchEntidades = async () => {
         try {
-            const resEntidades = await axios.get("/api/direcciones-actualizados", { headers });
+            const resEntidades = await apiClient.get("/api/direcciones-actualizados");
             setEntidades(resEntidades.data.result || []);
         } catch (err) {
             onError("Error al cargar responsable");
@@ -124,7 +122,7 @@ function ResponablesMain() {
     const actualizarEstado = async (propiedad, valor, colaborador) => {
         try {
             const payload = { valor, codigo_colaborador: colaborador };
-            await axios.put(`/api/responsables-actualizados/cambiar-${propiedad}`, payload, { headers });
+            await apiClient.put(`/api/responsables-actualizados/cambiar-${propiedad}`, payload);
             obtenerColaboradores();
         } catch (err) {
             onError("Error al actualizar estado");
@@ -193,7 +191,7 @@ function ResponablesMain() {
         try {
             setResetLoading(correo);
             const endpoint = "/api/responsables-actualizados/actualizar-contrasena-admin";
-            const result = await axios.put(endpoint, { correo }, { headers });
+            const result = await apiClient.put(endpoint, { correo });
             const ok = result?.data?.ok !== false;
             const msg = result?.data?.msg || (ok
                 ? `Se restableció la contraseña y se envió un correo a ${correo}.`

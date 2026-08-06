@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import axios from "axios";
+import apiClient from "api/apiClient";
 import {
     Dialog, DialogTitle, DialogContent, DialogActions,
     TextField, Button
@@ -10,15 +10,16 @@ function FormTipoObjetivo({ showModal, id, onClose, onSuccess, onError }) {
 
     const obtenerUno = async () => {
         try {
-            const res = await axios.get("/api/tipo-objetivo-actualizados/obtener-tipo", {
+            const res = await apiClient.get("/api/tipo-objetivo-actualizados/obtener-tipo", {
                 params: { codigo: id },
-                headers: { "x-access-token": localStorage.getItem("token") }
             });
+
             const data = res.data.result?.[0];
+
             if (data) {
                 setForm({
                     codigo: data.CODIGO_TIPO_OBJETIVO,
-                    descripcion: data.DESCRIPCION
+                    descripcion: data.DESCRIPCION,
                 });
             }
         } catch (err) {
@@ -42,22 +43,19 @@ function FormTipoObjetivo({ showModal, id, onClose, onSuccess, onError }) {
 
     const handleSubmit = async () => {
         try {
-            const endpoint = id
-                ? "/api/tipo-objetivo-actualizados"
-                : "/api/tipo-objetivo-actualizados";
+            const endpoint = "/api/tipo-objetivo-actualizados";
             const payload = { ...form };
             const method = id ? "put" : "post";
-            await axios({
+
+            await apiClient({
                 method,
                 url: endpoint,
                 data: payload,
-                headers: {
-                    "x-access-token": localStorage.getItem("token")
-                }
             });
+
             onSuccess();
         } catch (err) {
-            onError()
+            onError();
             console.error("Error:", err);
         }
     };

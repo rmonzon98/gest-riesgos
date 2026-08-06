@@ -8,7 +8,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import axios from 'axios';
+import apiClient from 'api/apiClient';
 import {
     Box, FormControl, InputLabel, Select, MenuItem,
     Typography, Card, CardHeader, CardContent,
@@ -50,8 +50,6 @@ function Anexo2Mant({ apiBase = '/api/segunda-matriz-actualizados' }) {
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
-    const headersAuth = { 'x-access-token': localStorage.getItem('token') };
-
     const parseJSON = (val) => {
         if (val == null) return null;
         try {
@@ -67,7 +65,7 @@ function Anexo2Mant({ apiBase = '/api/segunda-matriz-actualizados' }) {
     useEffect(() => {
         const fetchPeriodos = async () => {
             try {
-                const { data } = await axios.get('/api/periodos-actualizados', { headers: headersAuth });
+                const { data } = await apiClient.get('/api/periodos-actualizados');
                 setPeriodos(data.result ?? data);
             } catch (err) {
                 console.error('Error al cargar periodos', err);
@@ -83,9 +81,8 @@ function Anexo2Mant({ apiBase = '/api/segunda-matriz-actualizados' }) {
         const fetchVersiones = async () => {
             if (!periodo) return;
             try {
-                const { data } = await axios.get(apiBase, {
-                    headers: headersAuth,
-                    params: { periodo }
+                const { data } = await apiClient.get(apiBase, {
+                params: { periodo }
                 });
                 setVersiones(Array.isArray(data) ? data : (data?.versiones ?? []));
                 setVersion('');
@@ -107,9 +104,8 @@ function Anexo2Mant({ apiBase = '/api/segunda-matriz-actualizados' }) {
         const fetchMonitoreo = async () => {
             if (!periodo || !version) return;
             try {
-                const { data } = await axios.get(`${apiBase}/obtener-unico`, {
-                    headers: headersAuth,
-                    params: { periodo, version }
+                const { data } = await apiClient.get(`${apiBase}/obtener-unico`, {
+                params: { periodo, version }
                 });
                 setMatrices(data.matrices ?? []);
                 setActivePreview(0);
@@ -123,7 +119,7 @@ function Anexo2Mant({ apiBase = '/api/segunda-matriz-actualizados' }) {
     const reloadVersiones = async () => {
         if (!periodo) return;
         try {
-            const { data } = await axios.get(apiBase, { headers: headersAuth, params: { periodo } });
+            const { data } = await apiClient.get(apiBase, { params: { periodo } });
             setVersiones(Array.isArray(data) ? data : (data?.versiones ?? []));
         } catch (err) {
             console.error(err);
@@ -136,10 +132,9 @@ function Anexo2Mant({ apiBase = '/api/segunda-matriz-actualizados' }) {
     const handleSetDefault = async () => {
         if (!periodo || !version) return;
         try {
-            await axios.put(
+            await apiClient.put(
                 `${apiBase}/establecer-defecto`,
-                { periodo, version },
-                { headers: headersAuth }
+                { periodo, version }
             );
             reloadVersiones();
         } catch (err) {
@@ -162,10 +157,9 @@ function Anexo2Mant({ apiBase = '/api/segunda-matriz-actualizados' }) {
         if (!periodo) return;
         try {
             setLoadingSysDefault(true);
-            await axios.post(
+            await apiClient.post(
                 `${apiBase}`,
-                { periodo, matrices: anexo2DefaultSistema },
-                { headers: headersAuth }
+                { periodo, matrices: anexo2DefaultSistema }
             );
             await reloadVersiones();
         } catch (err) {
@@ -417,10 +411,9 @@ function Anexo2Mant({ apiBase = '/api/segunda-matriz-actualizados' }) {
                                     disabled={!periodo}
                                     onClick={async () => {
                                         try {
-                                            await axios.post(
+                                            await apiClient.post(
                                                 `${apiBase}/copiar-defecto-anio-pasado`,
-                                                { periodo },
-                                                { headers: headersAuth }
+                                                { periodo }
                                             );
                                             reloadVersiones();
                                         } catch (err) {

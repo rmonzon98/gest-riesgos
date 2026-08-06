@@ -11,7 +11,7 @@
 import { Box, Stack, Typography } from '@mui/material';
 import ReportesRiesgosUnidadCard from './ReportesRiesgosUnidadCard';
 import ReportesInstitucionalesCard from './ReportesInstitucionalesCard';
-import axios from 'axios';
+import apiClient from 'api/apiClient';
 import { useState, useEffect } from 'react';
 import ReportesControlFraudeUnidadCard from './ReportesControlFraudeUnidadCard';
 
@@ -47,9 +47,7 @@ function ReportesMain() {
  */
   const fetchData = async () => {
     try {
-      const { data } = await axios.get('/api/reportes-actualizados/informacion-select', {
-        headers: { 'x-access-token': localStorage.getItem('token') }
-      });
+      const { data } = await apiClient.get('/api/reportes-actualizados/informacion-select');
       setTipos(data.tipos || []);
       setPeriodos(data.periodos || []);
       setUnidades(data.unidades || []);
@@ -70,7 +68,7 @@ function ReportesMain() {
    */
   const obtenerLogo = async () => {
     try {
-      const { data } = await axios.get('/api/reportes-actualizados/obtener-logo', { headers: { 'x-access-token': localStorage.getItem('token') } });
+      const { data } = await apiClient.get('/api/reportes-actualizados/obtener-logo');
       setLogo('data:image/png;base64,' + data.logo ?? '');
       setInstitucion(data.nombre)
     } catch (e) {

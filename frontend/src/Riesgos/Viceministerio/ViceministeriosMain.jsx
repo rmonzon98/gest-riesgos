@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import axios from "axios";
+import apiClient from "api/apiClient";
 import {
     Box,
     Typography,
@@ -20,7 +20,6 @@ import SearchIcon from "@mui/icons-material/Search";
 import FormViceministerio from "./FormViceministerio";
 import AlertaMensaje from "../Alerta F/AlertaMensaje";
 
-const headers = () => ({ "x-access-token": localStorage.getItem("token") });
 
 export default function ViceministeriosMain() {
     const [alerta, setAlerta] = useState({
@@ -41,8 +40,7 @@ export default function ViceministeriosMain() {
 
     const obtener = async (q = "") => {
         try {
-            const { data } = await axios.get("/api/viceministerios", {
-                headers: headers(),
+            const { data } = await apiClient.get("/api/viceministerios", {
                 params: q ? { q } : {},
             });
             const arr = Array.isArray(data?.viceministerios)
@@ -154,7 +152,7 @@ export default function ViceministeriosMain() {
                     onClose();
                     mostrarAlerta("success", "Guardado exitosamente");
                 }}
-                onError={(e) => mostrarAlerta("error", e.response.data?.mensaje || "Ocurrió un error.")}
+                onError={(e) => mostrarAlerta("error", e?.response?.data?.mensaje || "Ocurrió un error.")}
             />
 
             <AlertaMensaje

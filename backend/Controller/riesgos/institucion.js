@@ -82,16 +82,16 @@ exports.obtenerPrimeraMatrizDirecciones = async (req, res) => {
                 AND z.CODIGO_PERIODO = h.CODIGO_PERIODO
                 AND z.CODIGO_ENTIDAD = h.CODIGO_ENTIDAD
                 AND z.MAX_HIS = h.CODIGO_HISTORIAL
-            LEFT JOIN seguridad.seguridad_persona p1
+            LEFT JOIN gestion_riesgos.seguridad_persona p1
                 ON p1.CODIGO_CIA = h.CODIGO_CIA
                AND p1.CODIGO_COLABORADOR = h.USUARIO_CREACION
-            LEFT JOIN seguridad.seguridad_persona p2
+            LEFT JOIN gestion_riesgos.seguridad_persona p2
                 ON p2.CODIGO_CIA = h.CODIGO_CIA
                AND p2.CODIGO_COLABORADOR = h.USUARIO_MODIFICACION
-            LEFT JOIN seguridad.seguridad_persona p3
+            LEFT JOIN gestion_riesgos.seguridad_persona p3
                 ON p3.CODIGO_CIA = h.CODIGO_CIA
                AND p3.CODIGO_COLABORADOR = h.USUARIO_SUPERIOR
-            LEFT JOIN seguridad.seguridad_entidad ent
+            LEFT JOIN gestion_riesgos.seguridad_entidad ent
                 ON ent.CODIGO_CIA = h.CODIGO_CIA
                AND ent.CODIGO_ENTIDAD = h.CODIGO_ENTIDAD
             WHERE h.CODIGO_CIA = ?
@@ -168,7 +168,7 @@ exports.attachInstitucion = async (req, res, next) => {
     try {
         const sql = `
       SELECT TIPO, NOMBRE
-      FROM \`seguridad\`.\`seguridad_institucion\`
+      FROM \`gestion_riesgos\`.\`seguridad_institucion\`
       WHERE CODIGO_CIA = ?
       LIMIT 1
     `;
@@ -391,16 +391,16 @@ exports.obtenerSegundaMatrizDirecciones = async (req, res) => {
                 GROUP BY CODIGO_ENTIDAD
             ) u ON u.CODIGO_ENTIDAD = h.CODIGO_ENTIDAD
             AND u.MAX_HIS = h.CODIGO_HISTORIAL
-            LEFT JOIN seguridad.seguridad_persona p1
+            LEFT JOIN gestion_riesgos.seguridad_persona p1
                 ON p1.CODIGO_CIA = h.CODIGO_CIA
             AND p1.CODIGO_COLABORADOR = h.USUARIO_CREACION
-            LEFT JOIN seguridad.seguridad_persona p2
+            LEFT JOIN gestion_riesgos.seguridad_persona p2
                 ON p2.CODIGO_CIA = h.CODIGO_CIA
             AND p2.CODIGO_COLABORADOR = h.USUARIO_MODIFICACION
-            LEFT JOIN seguridad.seguridad_persona p3
+            LEFT JOIN gestion_riesgos.seguridad_persona p3
                 ON p3.CODIGO_CIA = h.CODIGO_CIA
             AND p3.CODIGO_COLABORADOR = h.USUARIO_SUPERIOR
-            LEFT JOIN seguridad.seguridad_entidad ent
+            LEFT JOIN gestion_riesgos.seguridad_entidad ent
                 ON ent.CODIGO_CIA = h.CODIGO_CIA
             AND ent.CODIGO_ENTIDAD = h.CODIGO_ENTIDAD
             WHERE h.CODIGO_CIA = ? 

@@ -8,7 +8,7 @@
  */
 
 import React, { useMemo, useState, useEffect } from 'react';
-import axios from 'axios';
+import apiClient from 'api/apiClient';
 import {
     Stepper, Step, StepLabel, Button, TextField, Stack, Box, Typography,
     IconButton, useMediaQuery, MobileStepper, Table, TableHead, TableRow, TableCell,
@@ -78,8 +78,6 @@ export default function CrearMatrices({
             setActive(0);
         }
     }, [initialTablas]);
-
-    const headersReq = { 'x-access-token': localStorage.getItem('token') };
 
     const handleCloseSnack = (_e, reason) => {
         if (reason === 'clickaway') return;
@@ -272,10 +270,9 @@ export default function CrearMatrices({
                 obligatorio: 1
             }));
 
-            const { data } = await axios.post(
+            const { data } = await apiClient.post(
                 apiBase,
-                { periodo, tipo: TIPO_MATRIZ, matrices },
-                { headers: headersReq }
+                { periodo, tipo: TIPO_MATRIZ, matrices }
             );
 
             setSnack({ open: true, msg: 'Matrices guardadas correctamente.', sev: 'success' });

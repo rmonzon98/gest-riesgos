@@ -23,11 +23,10 @@ import {
     AddRounded, ContentCopyRounded, StarRounded, StarBorderRounded,
     DeleteRounded, SaveRounded, CloseRounded
 } from "@mui/icons-material";
-import axios from "axios";
+import apiClient from "api/apiClient";
 
 /* ===================== Config / Helpers ===================== */
 const API_BASE = "/api/riesgos-variables-actualizados";
-const headers = () => ({ "x-access-token": localStorage.getItem("token") });
 const norm = (s) => (s ?? "").toString().trim().toLowerCase();
 
 /**
@@ -222,8 +221,8 @@ export default function MantenimientoRiesgosPropiedades({ periodo = "" }) {
         if (!periodo) { setVersions([]); setVersionSel(""); setPropsList([]); return; }
         try {
             setLoadingVersions(true); setError("");
-            const { data } = await axios.get(`${API_BASE}/versiones-riesgos`, {
-                params: { periodo }, headers: headers()
+            const { data } = await apiClient.get(`${API_BASE}/versiones-riesgos`, {
+                params: { periodo }
             });
             const rows = Array.isArray(data) ? data : (data?.data ?? []);
             setVersions(rows);
@@ -248,8 +247,8 @@ export default function MantenimientoRiesgosPropiedades({ periodo = "" }) {
         if (!periodo || !versionSel) { setPropsList([]); return; }
         try {
             setLoadingProps(true);
-            const { data } = await axios.get(`${API_BASE}/propiedades-riesgos`, {
-                params: { periodo, codigo_version: versionSel }, headers: headers()
+            const { data } = await apiClient.get(`${API_BASE}/propiedades-riesgos`, {
+                params: { periodo, codigo_version: versionSel }
             });
             const rows = Array.isArray(data) ? data : (data?.data ?? []);
             const normalized = (rows || []).map(r => ({
@@ -275,7 +274,7 @@ export default function MantenimientoRiesgosPropiedades({ periodo = "" }) {
     const handleGuardarNueva = async (propiedades) => {
         try {
             setError(""); setInfo("");
-            await axios.post(`${API_BASE}/propiedades-riesgos`, { periodo, propiedades }, { headers: headers() });
+            await apiClient.post(`${API_BASE}/propiedades-riesgos`, { periodo, propiedades });
             setModeCrear(false);
             await fetchVersiones();
             setInfo("Versión creada correctamente.");
@@ -288,7 +287,7 @@ export default function MantenimientoRiesgosPropiedades({ periodo = "" }) {
     const handleGuardarDerivada = async (propiedades) => {
         try {
             setError(""); setInfo("");
-            await axios.post(`${API_BASE}/propiedades-riesgos`, { periodo, propiedades }, { headers: headers() });
+            await apiClient.post(`${API_BASE}/propiedades-riesgos`, { periodo, propiedades });
             setModeDerivar(false);
             await fetchVersiones();
             setInfo("Nueva versión derivada creada correctamente.");
@@ -303,7 +302,7 @@ export default function MantenimientoRiesgosPropiedades({ periodo = "" }) {
         try {
             setError(""); setInfo("");
             setSettingDefault(true);
-            await axios.put(`${API_BASE}/defecto-riesgos`, { periodo, codigo_version: versionSel }, { headers: headers() });
+            await apiClient.put(`${API_BASE}/defecto-riesgos`, { periodo, codigo_version: versionSel });
             await fetchVersiones();
             setInfo("Versión establecida como defecto.");
         } catch (e) {
@@ -320,10 +319,9 @@ export default function MantenimientoRiesgosPropiedades({ periodo = "" }) {
         try {
             setError(""); setInfo("");
             setCopyingPrev(true);
-            await axios.post(
+            await apiClient.post(
                 `${API_BASE}/defecto-pasado-riesgo`,
-                { periodo },
-                { headers: headers() }
+                { periodo }
             );
             await fetchVersiones();
             setInfo("Se copió la versión por defecto del año pasado.");
@@ -377,7 +375,7 @@ export default function MantenimientoRiesgosPropiedades({ periodo = "" }) {
                                 onClick={handleEstablecerDefecto}
                                 disabled={!hayVersiones || !versionSel || loadingVersions || settingDefault}
                             >
-                                {selEsDefecto ? "Es defecto" : (settingDefault ? "Estableciendo…" : "Establecer como defecto")}
+                                {selEsDefecto ? "Es defecto" : (settingDefault ? "Estableciendo…" : "Establecer por defecto")}
                             </Button>
                         </Stack>
                     }

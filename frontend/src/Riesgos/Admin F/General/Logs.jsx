@@ -1,6 +1,6 @@
 // src/Administracion/Logs.jsx
 import { useState, useEffect } from "react";
-import axios from "axios";
+import apiClient from "api/apiClient";
 
 import {
     Box,
@@ -198,11 +198,10 @@ function Logs() {
         }
 
         try {
-            const response = await axios.get(
+            const response = await apiClient.get(
                 "/api/administracion-actualizados/obtener-logs",
                 {
                     params: { tabla: nombreTabla },
-                    headers: { "x-access-token": localStorage.getItem("token") },
                 }
             );
 

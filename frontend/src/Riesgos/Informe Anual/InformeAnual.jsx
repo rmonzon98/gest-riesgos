@@ -1,6 +1,6 @@
 // src/Reportes/InformeAnual.jsx
 import { useEffect, useRef, useState, useMemo } from "react";
-import axios from "axios";
+import apiClient from "api/apiClient";
 import {
   Box, Card, CardContent, Typography, Stack, Select, MenuItem, LinearProgress, Alert, Button,
   TextField, IconButton, Divider, Collapse, Tooltip, Chip, InputAdornment, Snackbar
@@ -31,7 +31,6 @@ delete Size.whitelist;
 Quill.register(Size, true);
 
 /* ===================== Helpers ===================== */
-const headers = () => ({ "x-access-token": localStorage.getItem("token") });
 const safeArr = (a) => (Array.isArray(a) ? a : []);
 const newId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
 const safe = (v) => (v === null || v === undefined || v === "") ? "—" : String(v);
@@ -463,7 +462,7 @@ const groupByUnidad = (rows, meta = {}) => {
 
 // Fetchers
 const fetchPrimeraMatriz = async (periodo) => {
-  const { data } = await axios.get("/api/institucion-actualizados/primera-matriz", { headers: headers(), params: { periodo, tipo: 1 } });
+  const { data } = await apiClient.get("/api/institucion-actualizados/primera-matriz", { params: { periodo, tipo: 1 } });
   const matrices =
     Array.isArray(data?.matrices) ? normalizeMatrices(data.matrices)
       : Array.isArray(data?.MATRICES) ? normalizeMatrices(data.MATRICES)
@@ -473,7 +472,7 @@ const fetchPrimeraMatriz = async (periodo) => {
 };
 
 const fetchSegundaMatriz = async (periodo) => {
-  const { data } = await axios.get("/api/institucion-actualizados/segunda-matriz", { headers: headers(), params: { periodo, tipo: 2 } });
+  const { data } = await apiClient.get("/api/institucion-actualizados/segunda-matriz", { params: { periodo, tipo: 2 } });
   const matrices =
     Array.isArray(data?.matrices) ? normalizeMatrices(data.matrices)
       : Array.isArray(data?.MATRICES) ? normalizeMatrices(data.MATRICES)
@@ -482,8 +481,7 @@ const fetchSegundaMatriz = async (periodo) => {
 };
 
 const fetchInstME_MC_MCE = async (periodo, categoria) => {
-  const { data } = await axios.get("/api/reportes-actualizados/matriz-evaluacion-riesgos-inst", {
-    headers: headers(),
+  const { data } = await apiClient.get("/api/reportes-actualizados/matriz-evaluacion-riesgos-inst", {
     params: { periodo, categoria }
   });
   return data; // {propiedades, valores, institucion:[{NOMBRE, TIPO}]}
@@ -652,9 +650,9 @@ export default function InformeAnual({ titulo = "Informe anual" }) {
   useEffect(() => {
     const obtenerCatalogos = async () => {
       try {
-        const { data } = await axios.get(
+        const { data } = await apiClient.get(
           "/api/riesgos-variables-actualizados/obtener-info-inicial-vista-riesgos",
-          { headers: headers() }
+          {}
         );
         setPeriodos(safeArr(data?.periodos));
       } catch (err) {
@@ -709,9 +707,7 @@ export default function InformeAnual({ titulo = "Informe anual" }) {
     try {
       setSaving(true);
       const body = serializeForApi(periodo, secciones);
-      await axios.post("/api/institucion-actualizados/informe-anual", body, {
-        headers: { ...headers(), "Content-Type": "application/json" }
-      });
+      await apiClient.post("/api/institucion-actualizados/informe-anual", body);
       openSnack("Informe guardado correctamente.", "success");
     } catch (e) {
       console.error("Error guardando el informe", e);
@@ -724,8 +720,7 @@ export default function InformeAnual({ titulo = "Informe anual" }) {
   const cargarInforme = async (periodoToLoad) => {
     try {
       setLoadingInforme(true);
-      const { data } = await axios.get("/api/institucion-actualizados/informe-anual", {
-        headers: headers(),
+      const { data } = await apiClient.get("/api/institucion-actualizados/informe-anual", {
         params: { periodo: periodoToLoad }
       });
       let hs = [];

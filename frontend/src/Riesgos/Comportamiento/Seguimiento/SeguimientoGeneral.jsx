@@ -14,7 +14,7 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
-import axios from "axios";
+import apiClient from "api/apiClient";
 import {
     Box, Card, CardHeader, CardContent, Typography, Select, MenuItem, Stack,
     LinearProgress, Alert, Button, Divider, Grid, Paper, IconButton, Tooltip, Snackbar
@@ -85,8 +85,6 @@ export default function SeguimientoGeneral() {
     /**
      * Genera encabezados HTTP con autenticación para las consultas generales.
      */
-    const headers = () => ({ "x-access-token": localStorage.getItem("token") });
-
     useEffect(() => {
         (async () => {
             try {
@@ -100,9 +98,9 @@ export default function SeguimientoGeneral() {
                  * @route GET /api/riesgos-variables-actualizados/obtener-info-inicial-vista-riesgos
                  * @returns {200|500} `{ userInfo, periodos }`.
                  */
-                const { data } = await axios.get(
+                const { data } = await apiClient.get(
                     "/api/riesgos-variables-actualizados/obtener-info-inicial-vista-riesgos",
-                    { headers: headers() }
+                    {}
                 );
                 const { userInfo, periodos } = data || {};
                 if (userInfo) {
@@ -146,15 +144,14 @@ export default function SeguimientoGeneral() {
                  * @query `codigo_entidad`, `codigo_periodo`
                  * @returns {200|500} `{ datos:[...riesgos...] }`.
                  */
-                const { data } = await axios.get(
+                const { data } = await apiClient.get(
                     "/api/seguimientos-actualizados/obtener-relaciones-general",
                     {
                         params: {
                             codigo_entidad: Number(codigoEntidad),
                             codigo_periodo: Number(periodo),
                         },
-                        headers: headers(),
-                    }
+                            }
                 );
                 const datos = Array.isArray(data?.datos) ? data.datos.slice() : [];
                 datos.sort((a, b) => {
@@ -197,10 +194,9 @@ export default function SeguimientoGeneral() {
                  * @query `codigo_periodo`
                  * @returns {200|500} `{ meses:[1,3,5,...] }`.
                  */
-                const { data } = await axios.get("/api/seguimientos-actualizados", {
+                const { data } = await apiClient.get("/api/seguimientos-actualizados", {
                     params: { codigo_periodo: Number(periodo) },
-                    headers: headers(),
-                });
+                    });
                 const meses = Array.isArray(data?.meses) ? data.meses : [];
                 const limpios = meses
                     .map((m) => Number(m))
@@ -231,9 +227,8 @@ export default function SeguimientoGeneral() {
              * @query `codigo_periodo`, `mes`
              * @returns {200|404|500} `{ ok, seccion1, seccion2, seccion3, seccion4, subtitulo, organo, viceministerio }`.
              */
-            const { data } = await axios.get("/api/seguimientos-actualizados/periodo-mes", {
+            const { data } = await apiClient.get("/api/seguimientos-actualizados/periodo-mes", {
                 params: { codigo_periodo: Number(periodo), mes: Number(mes) },
-                headers: headers(),
             });
             if (data?.ok) {
                 setPrefill({
@@ -323,10 +318,9 @@ export default function SeguimientoGeneral() {
                                             (async () => {
                                                 try {
                                                     setLoadingMeses(true);
-                                                    const { data } = await axios.get("/api/seguimientos-actualizados", {
+                                                    const { data } = await apiClient.get("/api/seguimientos-actualizados", {
                                                         params: { codigo_periodo: Number(periodo) },
-                                                        headers: headers(),
-                                                    });
+                                                                                            });
                                                     const meses = Array.isArray(data?.meses) ? data.meses : [];
                                                     const limpios = meses
                                                         .map((m) => Number(m))

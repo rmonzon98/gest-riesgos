@@ -14,7 +14,7 @@ import {
     DialogActions, TextField, Stack, CircularProgress
 } from '@mui/material';
 import AlertaMensaje from '../Alerta F/AlertaMensaje';
-import axios from 'axios';
+import apiClient from 'api/apiClient';
 
 import { ReportePrimeraMatrizInst } from './Institucionales/ReportePrimeraMatrizInst';
 import { ReporteSegundaMatrizInst } from './Institucionales/ReporteSegundaMatrizInst';
@@ -56,8 +56,6 @@ function ReportesInstitucionalesCard({ periodos = [], logoBase64, institucion = 
     const [supPuesto, setSupPuesto] = useState('');
     const [loadingSup, setLoadingSup] = useState(false);
     const [confirmingPDF, setConfirmingPDF] = useState(false);
-
-    const headers = () => ({ 'x-access-token': localStorage.getItem('token') });
     const mostrarAlerta = (mensaje, tipo = 'warning') => setAlerta({ open: true, tipo, mensaje });
 
     /**
@@ -216,8 +214,7 @@ function ReportesInstitucionalesCard({ periodos = [], logoBase64, institucion = 
      * @returns {Promise<{ matrices: Array, institucion: any }>}
      */
     const fetchPrimeraMatriz = async (p) => {
-        const { data } = await axios.get('/api/institucion-actualizados/primera-matriz', {
-            headers: headers(),
+        const { data } = await apiClient.get('/api/institucion-actualizados/primera-matriz', {
             params: { periodo: p, tipo: 1 }
         });
         const arr =
@@ -237,8 +234,7 @@ function ReportesInstitucionalesCard({ periodos = [], logoBase64, institucion = 
      * @returns {Promise<{ matrices: Array, institucion: any }>}
      */
     const fetchSegundaMatriz = async (p) => {
-        const { data } = await axios.get('/api/institucion-actualizados/segunda-matriz', {
-            headers: headers(),
+        const { data } = await apiClient.get('/api/institucion-actualizados/segunda-matriz', {
             params: { periodo: p, tipo: 2 }
         });
         const arr =
@@ -260,8 +256,7 @@ function ReportesInstitucionalesCard({ periodos = [], logoBase64, institucion = 
      * @returns {Promise<Object>} Payload con {propiedades, valores, institucion}.
      */
     const fetchInstME_MC_MCE = async (categoria) => {
-        const { data } = await axios.get('/api/reportes-actualizados/matriz-evaluacion-riesgos-inst', {
-            headers: headers(),
+        const { data } = await apiClient.get('/api/reportes-actualizados/matriz-evaluacion-riesgos-inst', {
             params: { periodo, categoria }
         });
         return data;
@@ -278,7 +273,7 @@ function ReportesInstitucionalesCard({ periodos = [], logoBase64, institucion = 
     const fetchSuperior = async () => {
         setLoadingSup(true);
         try {
-            const { data } = await axios.get('/api/reportes-actualizados/obtener-superior', { headers: headers() });
+            const { data } = await apiClient.get('/api/reportes-actualizados/obtener-superior');
             // API devuelve { nombre, puesto }
             if (data?.nombre) setSupNombre(String(data.nombre));
             if (data?.puesto) setSupPuesto(String(data.puesto));

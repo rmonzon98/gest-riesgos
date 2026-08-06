@@ -15,7 +15,7 @@
  */
 
 import React, { useEffect, useState, useCallback } from 'react';
-import axios from 'axios';
+import apiClient from 'api/apiClient';
 import {
     Box, Card, CardHeader, CardContent, Typography, FormControl, InputLabel, Select, MenuItem, Stack, Alert,
     Table, TableHead, TableRow, TableCell, TableBody, Divider, IconButton, Tooltip,
@@ -43,11 +43,17 @@ const getUnidadId = (e) => Number(e?.CODIGO_ENTIDAD ?? e?.CODIGO_DIRECCION ?? e?
 const getUnidadDesc = (e) => e?.DESCRIPCION ?? e?.NOMBRE ?? `Unidad ${getUnidadId(e)}`;
 
 const MAX_RAZON = 250;
-const headers = { 'x-access-token': localStorage.getItem('token') };
 
 const statusInfo = (estadoNum) => {
     const v = Number(estadoNum);
-    if (v === 1) return { label: 'Aprobado', color: 'success' };
+    if (v === 1) return { label: 'Recibido', color: 'success' };
+    if (v === 2) return { label: 'Se necesita revisión', color: 'error' };
+    return { label: 'Revisión pendiente', color: 'warning' };
+};
+
+const statusInfoSuperior = (estadoNum) => {
+    const v = Number(estadoNum);
+    if (v === 1) return { label: 'Aceptado', color: 'success' };
     if (v === 2) return { label: 'Rechazado', color: 'error' };
     return { label: 'Revisión pendiente', color: 'warning' };
 };
@@ -128,6 +134,14 @@ function RiesgosRevision({ tipo = '', titulo = '' }) {
     const [entidad, setEntidad] = useState('');
     const [periodo, setPeriodo] = useState('');
 
+    // FILTROS MOSTRAR APROBADOS POR SUPERIOR
+    const FILTRO = {
+        APROBADOS_SUPERIOR: 1,
+        TODOS: 2,
+    };
+
+    const [mostrar, setMostrar] = useState(FILTRO.TODOS);
+
     const [alerta, setAlerta] = useState(null);
     const [alertaTipo, setAlertaTipo] = useState('info');
 
@@ -151,8 +165,8 @@ function RiesgosRevision({ tipo = '', titulo = '' }) {
         (async () => {
             try {
                 const [entRes, perRes] = await Promise.all([
-                    axios.get('/api/direcciones-actualizados', { headers }),
-                    axios.get('/api/periodos-actualizados', { headers })
+                    apiClient.get('/api/direcciones-actualizados'),
+                    apiClient.get('/api/periodos-actualizados')
                 ]);
                 const entArr = Array.isArray(entRes.data?.result) ? entRes.data.result : (entRes.data ?? []);
                 const perArr = Array.isArray(perRes.data?.result) ? perRes.data.result : (perRes.data ?? []);
@@ -176,8 +190,7 @@ function RiesgosRevision({ tipo = '', titulo = '' }) {
         setCargandoRiesgos(true);
         setAlerta(null);
         try {
-            const { data } = await axios.get('/api/riesgos-variables-actualizados/unidad-periodo', {
-                headers,
+            const { data } = await apiClient.get('/api/riesgos-variables-actualizados/unidad-periodo', {
                 params: { codigo_entidad: entidad, periodo, tipo: tipo }
             });
             const arr = Array.isArray(data?.riesgos) ? data.riesgos : [];
@@ -195,11 +208,22 @@ function RiesgosRevision({ tipo = '', titulo = '' }) {
     }, [entidad, periodo, tipo]);
 
     useEffect(() => { fetchRiesgos(); }, [fetchRiesgos]);
+    const riesgosFiltrados = riesgos.filter((r) => {
+        // Mostrar todos
+        if (Number(mostrar) === 2) return true;
 
+        // Mostrar solo aprobados por Superior
+        if (Number(mostrar) === 1) {
+            return Number(r.ESTADO_SUPERIOR) === 1;
+        }
+
+        // Valor por defecto (cuando aún no se ha seleccionado nada)
+        return true;
+    });
     // Agrupar por "Área evaluada"
     const grupos = (() => {
         const map = new Map();
-        riesgos.forEach((r) => {
+        riesgosFiltrados.forEach((r) => {
             const nombre_area = r['Área evaluada'] || 'Sin área';
             if (!map.has(nombre_area)) map.set(nombre_area, []);
             map.get(nombre_area).push(r);
@@ -225,14 +249,14 @@ function RiesgosRevision({ tipo = '', titulo = '' }) {
     };
 
     const enviarRevision = async ({ riesgo, estado, comentario }) => {
-        await axios.put('/api/riesgos-variables-actualizados/revision', {
+        await apiClient.put('/api/riesgos-variables-actualizados/revision', {
             comentario: comentario ?? "",
             codigo_riesgo: Number(riesgo.CODIGO_RIESGO),
             estado: Number(estado),
             periodo: Number(periodo),
             codigo_entidad: Number(entidad),
             tipo: tipo
-        }, { headers });
+        });
     };
 
     /**
@@ -250,11 +274,11 @@ function RiesgosRevision({ tipo = '', titulo = '' }) {
             setProcesandoAccion(true);
             await enviarRevision({ riesgo: r, estado: 1, comentario: "" });
             setAlertaTipo('success');
-            setAlerta('Riesgo marcado como aprobado.');
+            setAlerta('Riesgo marcado como recibido.');
             await fetchRiesgos();
         } catch {
             setAlertaTipo('error');
-            setAlerta('No fue posible marcar como aprobado.');
+            setAlerta('No fue posible marcar como recibido.');
         } finally {
             setProcesandoAccion(false);
         }
@@ -271,11 +295,11 @@ function RiesgosRevision({ tipo = '', titulo = '' }) {
             setRechazoOpen(false);
             setSeleccionAccion(null);
             setAlertaTipo('success');
-            setAlerta('Riesgo rechazado.');
+            setAlerta('Riesgo marcado con revisión.');
             await fetchRiesgos();
         } catch {
             setAlertaTipo('error');
-            setAlerta('No fue posible rechazar el riesgo.');
+            setAlerta('No fue posible marcar con revisión el riesgo.');
         } finally {
             setProcesandoAccion(false);
         }
@@ -328,6 +352,24 @@ function RiesgosRevision({ tipo = '', titulo = '' }) {
                                 ))}
                             </Select>
                         </FormControl>
+
+                        <FormControl fullWidth>
+                            <InputLabel id="mostrar-label">Filtrar</InputLabel>
+                            <Select
+                                labelId="periodo-label"
+                                value={mostrar}
+                                label="vista"
+                                onChange={(e) => setMostrar(e.target.value)}
+                            >
+                                <MenuItem value={FILTRO.APROBADOS_SUPERIOR}>
+                                    Solo aprobados por superior
+                                </MenuItem>
+
+                                <MenuItem value={FILTRO.TODOS}>
+                                    Ver todo
+                                </MenuItem>
+                            </Select>
+                        </FormControl>
                     </Stack>
 
                     {alerta && (
@@ -342,7 +384,7 @@ function RiesgosRevision({ tipo = '', titulo = '' }) {
                 <Card sx={{ borderRadius: 2 }}>
                     <CardHeader
                         title="Riesgos de la unidad"
-                        subheader={cargandoRiesgos ? 'Cargando…' : `${riesgos.length} registro(s)`}
+                        subheader={cargandoRiesgos ? 'Cargando…' : `${riesgosFiltrados.length} registro(s)`}
                         action={cargandoRiesgos ? <CircularProgress size={20} sx={{ mr: 2 }} /> : null}
                     />
                     <CardContent>
@@ -362,8 +404,8 @@ function RiesgosRevision({ tipo = '', titulo = '' }) {
                                 <Stack spacing={1.25}>
                                     {g.items.map((r, idx) => {
                                         const riskKey = `${g.nombre_area}-${r.CODIGO_RIESGO ?? idx}`;
-                                        const estado = r.ESTADO ?? 0;
-                                        const si = statusInfo(estado);
+                                        const si = statusInfo(r.ESTADO_SUPERVISOR ?? 0);
+                                        const ss = statusInfoSuperior(r.ESTADO_SUPERIOR ?? 0);
                                         const expanded = expandIds.has(riskKey);
 
                                         // Tabla (predefinidas numéricas)
@@ -401,6 +443,15 @@ function RiesgosRevision({ tipo = '', titulo = '' }) {
                                         const extrasMap = parseExtrasToMap(r.EXTRAS);
                                         const showAdicionales = extraLabels.length > 0;
 
+                                        const idRiesgo = Number(
+                                            Object.keys(riesgos).find(
+                                                id => safeGet(riesgos[id], 'Ref.') === safeGet(r, 'Ref.')
+                                            )
+                                        );
+
+                                        const comentarioSupervisor = safeGet(riesgos[idRiesgo], 'Comentario supervisor')
+                                        const comentarioSuperior = safeGet(riesgos[idRiesgo], 'Comentario superior')
+
                                         return (
                                             <Paper
                                                 key={riskKey}
@@ -410,12 +461,29 @@ function RiesgosRevision({ tipo = '', titulo = '' }) {
                                             >
                                                 {/* Header compacto */}
                                                 <Stack direction="row" alignItems="center" justifyContent="space-between">
-                                                    <Stack direction="row" alignItems="center" spacing={1}>
+                                                    <Stack direction="row" alignItems="center" spacing={2}>
+
+                                                        {/* Ref */}
                                                         <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
                                                             {safeGet(r, 'Ref.') || '—'}
                                                         </Typography>
-                                                        <Chip size="small" color={si.color} label={si.label} />
+                                                        {/* Estado Superior */}
+                                                        <Stack direction="row" alignItems="center" spacing={1}>
+                                                            <Typography variant="body2">
+                                                                Estado Superior
+                                                            </Typography>
+                                                            <Chip size="small" color={ss.color} label={ss.label} />
+                                                        </Stack>
+                                                        {/* Estado Supervisor */}
+                                                        <Stack direction="row" alignItems="center" spacing={1}>
+                                                            <Typography variant="body2">
+                                                                Estado Supervisor
+                                                            </Typography>
+                                                            <Chip size="small" color={si.color} label={si.label} />
+                                                        </Stack>
+
                                                     </Stack>
+
                                                     <Tooltip title={expanded ? 'Ocultar detalles' : 'Ver detalles'}>
                                                         <IconButton size="small">
                                                             {expanded ? <ExpandLessRounded fontSize="small" /> : <ExpandMoreRounded fontSize="small" />}
@@ -550,6 +618,39 @@ function RiesgosRevision({ tipo = '', titulo = '' }) {
                                                         </Box>
                                                     )}
 
+                                                    <Grid container spacing={2} mt={2} ml={1}>
+                                                        {(comentarioSuperior || comentarioSupervisor) && <Grid item xs={12}>
+                                                            <Divider sx={{ mb: 2 }}>
+                                                                <Typography variant="subtitle2" color="text.secondary">
+                                                                    Observaciones y comentarios
+                                                                </Typography>
+                                                            </Divider>
+                                                        </Grid>}
+                                                        {comentarioSuperior &&
+                                                            <Grid item xs={12} md={4}>
+                                                                <Typography variant="caption">Comentario Superior</Typography>
+                                                                <Paper
+                                                                    variant="outlined"
+                                                                    sx={{ p: 1.2, mt: 0.5, whiteSpace: 'pre-wrap' }}
+                                                                >
+                                                                    {comentarioSuperior ?? '—'}
+                                                                </Paper>
+                                                            </Grid>
+                                                        }
+
+                                                        {comentarioSupervisor &&
+                                                            <Grid item xs={12} md={4}>
+                                                                <Typography variant="caption">Comentario Supervisor</Typography>
+                                                                <Paper
+                                                                    variant="outlined"
+                                                                    sx={{ p: 1.2, mt: 0.5, whiteSpace: 'pre-wrap' }}
+                                                                >
+                                                                    {comentarioSupervisor ?? '—'}
+                                                                </Paper>
+                                                            </Grid>
+                                                        }
+                                                    </Grid>
+
                                                     {/* Propiedades adicionales */}
                                                     {showAdicionales ? (
                                                         <Box sx={{ mt: 1 }}>
@@ -582,7 +683,7 @@ function RiesgosRevision({ tipo = '', titulo = '' }) {
                                                             onClick={(e) => { e.stopPropagation(); solicitarRechazo(r); }}
                                                             disabled={procesandoAccion}
                                                         >
-                                                            Rechazar
+                                                            Se necesita revisión
                                                         </Button>
                                                         <Button
                                                             variant="contained"
@@ -590,7 +691,7 @@ function RiesgosRevision({ tipo = '', titulo = '' }) {
                                                             onClick={(e) => { e.stopPropagation(); aprobar(r); }}
                                                             disabled={procesandoAccion}
                                                         >
-                                                            {procesandoAccion ? 'Procesando…' : 'Marcar como aprobado'}
+                                                            {procesandoAccion ? 'Procesando…' : 'Marcar como recibido'}
                                                         </Button>
                                                     </Stack>
                                                 </Collapse>
@@ -608,7 +709,7 @@ function RiesgosRevision({ tipo = '', titulo = '' }) {
 
             {/* Modal de rechazo */}
             <Dialog open={rechazoOpen} onClose={() => setRechazoOpen(false)} maxWidth="sm" fullWidth>
-                <DialogTitle>Motivo de rechazo</DialogTitle>
+                <DialogTitle>Motivo por el cual Se necesita revisión</DialogTitle>
                 <DialogContent dividers>
                     <TextField
                         label="Escribe la razón (máx. 250)"
@@ -630,7 +731,7 @@ function RiesgosRevision({ tipo = '', titulo = '' }) {
                         color="error"
                         disabled={procesandoAccion || razon.trim().length === 0 || razon.trim().length > MAX_RAZON}
                     >
-                        {procesandoAccion ? 'Procesando…' : 'Rechazar'}
+                        {procesandoAccion ? 'Procesando…' : 'Marcar que se necesita revisión'}
                     </Button>
                 </DialogActions>
             </Dialog>

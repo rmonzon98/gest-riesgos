@@ -8,7 +8,7 @@
  */
 
 import React, { useEffect, useState, useCallback, useMemo } from "react";
-import axios from "axios";
+import apiClient from "api/apiClient";
 import {
   Box,
   Stack,
@@ -69,7 +69,6 @@ const Section = ({ title, subtitle, children, disabled }) => (
 );
 
 /* ================= Helpers comunes ================= */
-const headers = () => ({ "x-access-token": localStorage.getItem("token") });
 
 const MESES = [
   null,
@@ -119,6 +118,26 @@ const formatFecha = (dateLike) => {
 
 const countArray = (v) => (Array.isArray(v) ? v.length : 0);
 
+const numOrNull = (value, fallback = null) => {
+  if (value === null || value === undefined || value === "") return fallback;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+};
+
+const getPeriodoRaiz = (row, fallback = null) =>
+  numOrNull(
+    row?.periodo_raiz ??
+    row?.["Periodo raíz"] ??
+    row?.PERIODO_RAIZ ??
+    row?.periodo ??
+    row?.Periodo ??
+    row?.CODIGO_PERIODO,
+    fallback
+  );
+
+const getPeriodoLabelSimple = (per) => per || "—";
+
+
 /* ======= helpers de tipo para previsualización (por extensión) ======= */
 const isImageName = (name = "") => ["png", "jpg", "jpeg", "gif", "webp", "bmp", "svg"].includes(extName(name));
 const isPDFName = (name = "") => extName(name) === "pdf";
@@ -157,8 +176,7 @@ export default function SeguimientoDetalleModal({
     setDocsError("");
     setDocsLoading(true);
     try {
-      const resp = await axios.get("/api/seguimientos-actualizados/documentos", {
-        headers: headers(),
+      const resp = await apiClient.get("/api/seguimientos-actualizados/documentos", {
         params: {
           codigo_entidad: row.codigo_entidad,
           codigo_periodo: row.codigo_periodo,
@@ -193,13 +211,12 @@ export default function SeguimientoDetalleModal({
     if (!row || !doc?.codigo_doc) return;
     try {
       const url = `/api/seguimientos-actualizados/documentos/${doc.codigo_doc}/descargar`;
-      const response = await axios.get(url, {
+      const response = await apiClient.get(url, {
         params: {
           codigo_entidad: row.codigo_entidad,
           codigo_periodo: row.codigo_periodo,
           mes: row.mes,
         },
-        headers: headers(),
         responseType: "blob",
       });
 
@@ -270,13 +287,12 @@ export default function SeguimientoDetalleModal({
 
   const fetchBlob = async (doc, as = "blob") => {
     const url = `/api/seguimientos-actualizados/documentos/${doc.codigo_doc}/descargar`;
-    const resp = await axios.get(url, {
+    const resp = await apiClient.get(url, {
       params: {
         codigo_entidad: row.codigo_entidad,
         codigo_periodo: row.codigo_periodo,
         mes: row.mes,
       },
-      headers: headers(),
       responseType: as, // "blob" | "arraybuffer"
     });
     return resp.data;
@@ -390,17 +406,20 @@ export default function SeguimientoDetalleModal({
     resetPreview();
   };
 
-  // ===== agrupación ligera por período (solo para encabezados de tablas) =====
+  // ===== agrupación por período raíz / arrastre =====
   const gruposPorPeriodo = useMemo(() => {
     const s1 = Array.isArray(row?.seccion1) ? row.seccion1 : [];
+    const s2 = Array.isArray(row?.seccion2) ? row.seccion2 : [];
+    const s3 = Array.isArray(row?.seccion3) ? row.seccion3 : [];
+
     const periods = new Set(
       [
-        ...s1.map((r) => Number(r.periodo)).filter(Boolean),
-        ...(Array.isArray(row?.seccion2) ? row.seccion2 : []).map((r) => Number(r.periodo)).filter(Boolean),
-        ...(Array.isArray(row?.seccion3) ? row.seccion3 : []).map((b) => Number(b.periodo)).filter(Boolean),
-        Number(row?.codigo_periodo || 0),
+        ...s1.map((r) => getPeriodoRaiz(r)).filter(Boolean),
+        ...s2.map((r) => getPeriodoRaiz(r)).filter(Boolean),
+        ...s3.map((b) => getPeriodoRaiz(b)).filter(Boolean),
       ].filter(Boolean)
     );
+
     return [...periods].sort((a, b) => a - b);
   }, [row]);
 
@@ -431,14 +450,14 @@ export default function SeguimientoDetalleModal({
             {/* Sección 1 */}
             <Section
               title="1. Riesgos reportados para mitigar"
-              subtitle="Listado de riesgos y atributos tal como se definieron en la matriz."
+              subtitle="Listado de riesgos agrupados por período raíz / arrastre."
             >
               {countArray(row.seccion1) === 0 ? (
                 <Alert severity="info">Sin registros.</Alert>
               ) : (
                 <Stack spacing={3}>
                   {gruposPorPeriodo.map((per) => {
-                    const rows = row.seccion1.filter((r) => Number(r.periodo) === per || !r.periodo);
+                    const rows = row.seccion1.filter((r) => getPeriodoRaiz(r) === per || !getPeriodoRaiz(r));
                     if (rows.length === 0) return null;
                     return (
                       <Stack key={`s1-${per}`} spacing={1}>
@@ -492,12 +511,12 @@ export default function SeguimientoDetalleModal({
               ) : (
                 <Stack spacing={3}>
                   {gruposPorPeriodo.map((per) => {
-                    const rows = row.seccion2.filter((r) => Number(r.periodo) === per || !r.periodo);
+                    const rows = row.seccion2.filter((r) => getPeriodoRaiz(r) === per || !getPeriodoRaiz(r));
                     if (rows.length === 0) return null;
                     return (
                       <Stack key={`s2-${per}`} spacing={1}>
                         <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-                          Acciones — {per}
+                          Acciones — Período {per}
                         </Typography>
                         <TableContainer component={Paper}>
                           <Table size="small">
@@ -533,7 +552,7 @@ export default function SeguimientoDetalleModal({
             {/* Sección 3 */}
             <Section
               title="3. Seguimiento y continuidad"
-              subtitle="Estatus por período y resultados principales declarados para el mes."
+              subtitle="Estatus por período raíz y resultados principales declarados para el mes."
             >
               {countArray(row.seccion3) === 0 ? (
                 <Alert severity="info">Sin registros.</Alert>
@@ -542,7 +561,7 @@ export default function SeguimientoDetalleModal({
                   {row.seccion3.map((bloque, idx) => (
                     <Stack key={`s3-${idx}`} spacing={1}>
                       <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
-                        Estatus — Período del 1 de enero al 31 de diciembre de {bloque.periodo ?? row.codigo_periodo ?? "—"}
+                        Estatus — Período {getPeriodoLabelSimple(getPeriodoRaiz(bloque, row.codigo_periodo))}
                       </Typography>
 
                       <TableContainer component={Paper}>

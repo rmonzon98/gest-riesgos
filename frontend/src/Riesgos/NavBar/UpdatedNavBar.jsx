@@ -4,161 +4,151 @@ import {
     List, ListItemButton, ListItemText, useTheme, useMediaQuery,
     Stack, Slide
 } from '@mui/material';
+
 import MenuIcon from '@mui/icons-material/Menu';
 import ExpandMoreRounded from '@mui/icons-material/ExpandMoreRounded';
 import ArrowForwardIosRounded from '@mui/icons-material/ArrowForwardIosRounded';
 import ArrowBackRounded from '@mui/icons-material/ArrowBackRounded';
 import CloseRounded from '@mui/icons-material/CloseRounded';
 import ChevronRightRounded from '@mui/icons-material/ChevronRightRounded';
-import { useState, useEffect, useMemo } from 'react';
-import Axios from 'axios';
+
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
+
+import apiClient from 'api/apiClient';
+import { useAuth } from 'context/AuthContext';
+
 import logoSis from 'images/logo2.png';
 
 const NAV_COLOR = '#192854';
 
 const StyledToolbar = styled(Toolbar)({
-    display: "flex",
-    justifyContent: "space-between",
+    display: 'flex',
+    justifyContent: 'space-between',
     gap: 8
 });
 
 const Icons = styled(Box)({
     display: 'flex',
     gap: '12px',
-    alignItems: 'center',
+    alignItems: 'center'
 });
 
 const UserBox = styled(Box)({
     display: 'flex',
     gap: '10px',
-    alignItems: 'center',
+    alignItems: 'center'
 });
 
 const UpdatedNavBar = () => {
     const theme = useTheme();
+    const navigate = useNavigate();
+    const location = useLocation();
+    const { logout } = useAuth();
+
     const isMobile = useMediaQuery(theme.breakpoints.down('md'));
     const CONTRAST = useMemo(() => theme.palette.getContrastText(NAV_COLOR), [theme]);
 
     const [roles, setRoles] = useState([]);
     const [userAnchor, setUserAnchor] = useState(null);
     const [drawerOpen, setDrawerOpen] = useState(false);
-    const [logo, setLogo] = useState('');
-    const [fotoPerfil, setFotoPerfil] = useState('');   // <<-- NUEVO
+    const [logo, setLogo] = useState(logoSis);
+    const [fotoPerfil, setFotoPerfil] = useState('');
 
-    // Menús desktop
     const [groupAnchor, setGroupAnchor] = useState(null);
     const [openGroup, setOpenGroup] = useState(null);
 
     const [moduleAnchor, setModuleAnchor] = useState(null);
     const [openModule, setOpenModule] = useState(null);
 
-    // Mobile
     const [mobileStage, setMobileStage] = useState('sections');
     const [selectedSection, setSelectedSection] = useState(null);
 
-    // Modal "Acerca de..."
-    const [displayConfirmationModal, setDisplayConfirmationModal] = useState(false);
-    const hideConfirmationModal = () => setDisplayConfirmationModal(false);
-
-    // PATH actual
-    const [currentPath, setCurrentPath] = useState(
-        () => (window.location?.pathname || '/').replace(/\/{2,}/g, '/')
+    const currentPath = useMemo(
+        () => (location.pathname || '/').replace(/\/{2,}/g, '/'),
+        [location.pathname]
     );
-
-    useEffect(() => {
-        const onPop = () => {
-            setCurrentPath((window.location?.pathname || '/').replace(/\/{2,}/g, '/'));
-        };
-        window.addEventListener('popstate', onPop);
-        return () => window.removeEventListener('popstate', onPop);
-    }, []);
 
     const norm = (s) => String(s ?? '').trim();
 
-    function getPosition(string, subString, index) {
-        return string.split(subString, index).join(subString).length;
-    }
+    const logOut = useCallback(async () => {
+        try {
+            await logout();
+        } finally {
+            setUserAnchor(null);
+            navigate('/', { replace: true });
+        }
+    }, [logout, navigate]);
 
-    const logOut = () => {
-        localStorage.clear();
-        window.location = String(window.location.href).substring(
-            0,
-            getPosition(window.location.href, '/', 3)
-        );
-    };
+    const refreshLogo = useCallback(async () => {
+        try {
+            const response = await apiClient.get('/descargar/obtener-logo-barra');
+            setLogo(response.data?.logo || logoSis);
+        } catch (err) {
+            if (err?.response?.status === 401) {
+                await logOut();
+                return;
+            }
 
-    const refreshLogo = () => {
-        Axios.get('/descargar/obtener-logo-barra', {
-            headers: { 'x-access-token': localStorage.getItem('token') }
-        })
-            .then((response) => setLogo(response.data.logo))
-            .catch(() => setLogo(logoSis));
-    };
+            setLogo(logoSis);
+        }
+    }, [logOut]);
 
-    // <<-- NUEVO: cargar foto de perfil para la barra
-    const refreshFotoPerfil = () => {
-        Axios.get('/descargar/obtener-foto-perfil', {
-            headers: { 'x-access-token': localStorage.getItem('token') }
-        })
-            .then((response) => {
-                const foto = response.data?.foto; // "data:image/jpeg;base64,...."
-                setFotoPerfil(foto || '');
-            })
-            .catch((e) => {
-                if (e.response?.status === 401) {
-                    logOut();
-                } else {
-                    setFotoPerfil('');
+    const refreshFotoPerfil = useCallback(async () => {
+        try {
+            const response = await apiClient.get('/descargar/obtener-foto-perfil');
+            setFotoPerfil(response.data?.foto || '');
+        } catch (err) {
+            if (err?.response?.status === 401) {
+                await logOut();
+                return;
+            }
+
+            setFotoPerfil('');
+        }
+    }, [logOut]);
+
+    const obtenerRoles = useCallback(async () => {
+        try {
+            const response = await apiClient.get('/api/roles-actualizados', {
+                params: {
+                    codigo_aplicacion: 1
                 }
             });
-    };
 
-    const obtenerRoles = () => {
-        Axios.get('/api/roles-actualizados', {
-            headers: { 'x-access-token': localStorage.getItem('token') },
-            params: { codigo_aplicacion: 1 }
-        })
-            .then((response) => {
-                if (response.data.auth === false) {
-                    localStorage.clear();
-                    window.location = String(window.location.href).substring(
-                        0,
-                        getPosition(window.location.href, '/', 3)
-                    );
-                } else {
-                    setRoles(response.data.result || []);
-                    const path = String(window.location.href).substring(
-                        getPosition(window.location.href, '/', 3)
-                    );
-                    if (
-                        path === '/' ||
-                        (response.data.result.find((value) => value.URL === path) ||
-                            path !== 'matrizcontinuidad')
-                    ) {
-                    } else {
-                        window.location = String(window.location.href).substring(
-                            0,
-                            getPosition(window.location.href, '/', 3)
-                        );
-                    }
-                }
-            })
-            .catch((e) => {
-                if (e.response?.status === 401) logOut();
-            });
-    };
+            const data = response?.data || {};
+
+            if (data.auth === false) {
+                await logOut();
+                return;
+            }
+
+            setRoles(data.result || []);
+        } catch (err) {
+            if (err?.response?.status === 401) {
+                await logOut();
+                return;
+            }
+
+            console.error('[NAVBAR][ROLES]', err);
+            setRoles([]);
+        }
+    }, [logOut]);
 
     useEffect(() => {
         setLogo(logoSis);
         obtenerRoles();
         refreshLogo();
-        refreshFotoPerfil(); // <<-- NUEVO
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+        refreshFotoPerfil();
+    }, [obtenerRoles, refreshLogo, refreshFotoPerfil]);
 
-    // ===== Secciones (módulos) =====
     const secciones = {
-        'Módulo de Administración': ['Administración', 'Administración por dirección', 'Logs', 'Métricas'],
+        'Módulo de Administración': [
+            'Administración',
+            'Administración por dirección',
+            'Logs',
+            'Métricas'
+        ],
         'Módulo de Control Interno y Gobernanza': [
             'Consolidado de documentos de evaluación de la eficiencia del control interno y gobernanza',
             'Consolidado de evaluación de la eficiencia del control interno y gobernanza',
@@ -179,21 +169,21 @@ const UpdatedNavBar = () => {
             'Consolidado de documentos de evaluación y gestión de riesgos',
             'Entrada de evaluación y gestión de riesgos',
             'Revisión de evaluación y gestión de riesgos',
-            'Revisión de supuerior de evaluación y gestión de riesgos',
+            'Revisión de superior de evaluación y gestión de riesgos',
             'Consolidado de riesgos'
         ],
         'Módulo de Mapa de Riesgos': [
             'Consolidado de documentos de mapa de riesgos',
             'Entrada de mapa de Riesgos',
             'Revisión de mapa de riesgos',
-            'Revisión de supuerior de mapa de riesgos',
+            'Revisión de superior de mapa de riesgos',
             'Consolidado de riesgos'
         ],
         'Módulo de Continuidad y Monitoreo': [
             'Consolidado de documentos de continuidad y monitoreo',
             'Entrada de continuidad y monitoreo',
             'Revision de continuidad y monitoreo',
-            'Revisión de supuerior de continuidad y monitoreo',
+            'Revisión de superior de continuidad y monitoreo',
             'Consolidado de riesgos'
         ],
         'Módulo de Informe Anual': ['Informe Anual'],
@@ -232,7 +222,6 @@ const UpdatedNavBar = () => {
         'Otros'
     ];
 
-    // ===== Grupos =====
     const gruposDesktop = {
         'Administración': [
             'Módulo de Administración',
@@ -260,19 +249,23 @@ const UpdatedNavBar = () => {
     const uniqueRoles = useMemo(() => {
         const seen = new Set();
         const out = [];
+
         for (const r of roles) {
             const key = `${norm(r.NOMBRE)}|${norm(r.URL)}`;
+
             if (seen.has(key)) continue;
+
             seen.add(key);
             out.push(r);
         }
+
         return out;
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [roles]);
 
-    // Agrupación por sección
     const agrupado = useMemo(() => {
         const out = {};
+
         ordenSecciones.forEach((sec) => {
             out[sec] = [];
         });
@@ -289,11 +282,14 @@ const UpdatedNavBar = () => {
         for (const item of uniqueRoles) {
             const etiqueta = norm(item.NOMBRE);
             const itemKey = `${norm(item.NOMBRE)}|${norm(item.URL)}`;
+
             if (usedKeys.has(itemKey)) continue;
 
             let placed = false;
+
             for (const sec of ordenSecciones) {
                 const etiquetas = etiquetasPorSeccion.get(sec) || [];
+
                 if (etiquetas.includes(etiqueta)) {
                     out[sec].push(item);
                     usedKeys.add(itemKey);
@@ -303,17 +299,20 @@ const UpdatedNavBar = () => {
             }
 
             if (!placed) {
-                out['Otros'].push(item);
+                out.Otros.push(item);
                 usedKeys.add(itemKey);
             }
         }
 
         for (const sec of ordenSecciones) {
             const seen = new Set();
+
             out[sec] = (out[sec] || [])
                 .filter((it) => {
                     const k = `${norm(it.NOMBRE)}|${norm(it.URL)}`;
+
                     if (seen.has(k)) return false;
+
                     seen.add(k);
                     return true;
                 })
@@ -326,30 +325,38 @@ const UpdatedNavBar = () => {
 
     const buildHref = (url = '') => {
         const clean = norm(url);
+
         if (!clean) return '/riesgos';
+
         const withSlash = clean.startsWith('/') ? clean : `/${clean}`;
+
         return `/riesgos${withSlash}`.replace(/\/{2,}/g, '/');
     };
 
     const activeSection = useMemo(() => {
         const path = (currentPath || '/').replace(/\/+$/, '');
+
         for (const sec of ordenSecciones) {
             for (const item of (agrupado[sec] || [])) {
                 const href = buildHref(item.URL).replace(/\/+$/, '');
+
                 if (path === href || path.startsWith(`${href}/`)) {
                     return sec;
                 }
             }
         }
+
         return null;
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [currentPath, agrupado]);
 
     const activeGroup = useMemo(() => {
         if (!activeSection) return null;
+
         for (const [grupo, secs] of Object.entries(gruposDesktop)) {
             if (secs.includes(activeSection)) return grupo;
         }
+
         return null;
     }, [activeSection]);
 
@@ -377,11 +384,100 @@ const UpdatedNavBar = () => {
         setOpenModule(null);
     };
 
+    const TOOLBAR_MOBILE = 56;
+    const TOOLBAR_DESKTOP = 64;
+
+    const renderGroupMenuContent = () => {
+        if (!openGroup) return <MenuItem disabled>(Sin opciones)</MenuItem>;
+
+        if (openGroup === 'Otros') {
+            const items = agrupado.Otros || [];
+
+            if (!items.length) return <MenuItem disabled>(Sin opciones)</MenuItem>;
+
+            return items.map((item, idx) => {
+                const href = buildHref(item.URL);
+                const isActiveItem =
+                    currentPath === href || currentPath.startsWith(`${href}/`);
+
+                return (
+                    <MenuItem
+                        key={`otros-${norm(item.NOMBRE)}-${idx}`}
+                        component={RouterLink}
+                        to={href}
+                        onClick={handleCloseGroupMenu}
+                        selected={isActiveItem}
+                    >
+                        {item.NOMBRE}
+                    </MenuItem>
+                );
+            });
+        }
+
+        const seccionesGrupo = gruposDesktop[openGroup] || [];
+        const modulesWithItems = seccionesGrupo.filter(
+            (sec) => (agrupado[sec] || []).length > 0
+        );
+
+        if (!modulesWithItems.length) {
+            return <MenuItem disabled>(Sin opciones)</MenuItem>;
+        }
+
+        return modulesWithItems.map((sec) => (
+            <MenuItem
+                key={`${openGroup}-${sec}`}
+                onClick={(e) => handleOpenModuleMenu(e, sec)}
+                sx={{ justifyContent: 'space-between', gap: 2 }}
+            >
+                <Box
+                    component="span"
+                    sx={{ opacity: 0.8, fontWeight: 600, fontSize: 13 }}
+                >
+                    {sec}
+                </Box>
+
+                <ChevronRightRounded fontSize="small" />
+            </MenuItem>
+        ));
+    };
+
+    const renderModuleMenuContent = () => {
+        if (!openModule) return <MenuItem disabled>(Sin opciones)</MenuItem>;
+
+        const items = agrupado[openModule] || [];
+
+        if (!items.length) return <MenuItem disabled>(Sin opciones)</MenuItem>;
+
+        return items.map((item, idx) => {
+            const href = buildHref(item.URL);
+            const isActiveItem =
+                currentPath === href || currentPath.startsWith(`${href}/`);
+
+            return (
+                <MenuItem
+                    key={`${openModule}-${norm(item.NOMBRE)}-${idx}`}
+                    component={RouterLink}
+                    to={href}
+                    onClick={() => {
+                        handleCloseModuleMenu();
+                        handleCloseGroupMenu();
+                    }}
+                    selected={isActiveItem}
+                >
+                    {item.NOMBRE}
+                </MenuItem>
+            );
+        });
+    };
+
     const MobileDrawerContent = () => {
         const SectionsView = (
             <Box sx={{ p: 2 }}>
                 <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
-                    <Typography variant="h6" sx={{ fontWeight: 700 }}>Menú</Typography>
+                    <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                        Menú
+                    </Typography>
+
                     <IconButton aria-label="Cerrar" onClick={() => setDrawerOpen(false)}>
                         <CloseRounded />
                     </IconButton>
@@ -411,11 +507,11 @@ const UpdatedNavBar = () => {
                                     primary={sec}
                                     primaryTypographyProps={{
                                         sx: {
-                                            textDecoration:
-                                                sec === activeSection ? 'underline' : 'none'
+                                            textDecoration: sec === activeSection ? 'underline' : 'none'
                                         }
                                     }}
                                 />
+
                                 <ArrowForwardIosRounded fontSize="small" />
                             </ListItemButton>
                         )
@@ -431,10 +527,12 @@ const UpdatedNavBar = () => {
                         <IconButton onClick={() => setMobileStage('sections')} aria-label="Atrás">
                             <ArrowBackRounded />
                         </IconButton>
+
                         <Typography variant="h6" sx={{ fontWeight: 700 }}>
                             {selectedSection}
                         </Typography>
                     </Stack>
+
                     <IconButton aria-label="Cerrar" onClick={() => setDrawerOpen(false)}>
                         <CloseRounded />
                     </IconButton>
@@ -442,10 +540,12 @@ const UpdatedNavBar = () => {
 
                 <List disablePadding>
                     <Divider />
+
                     {(agrupado[selectedSection] || []).map((item, idx) => {
                         const href = buildHref(item.URL);
                         const isActiveItem =
                             currentPath === href || currentPath.startsWith(`${href}/`);
+
                         return (
                             <Box
                                 component="li"
@@ -453,8 +553,8 @@ const UpdatedNavBar = () => {
                                 sx={{ listStyle: 'none' }}
                             >
                                 <ListItemButton
-                                    component={MLink}
-                                    href={href}
+                                    component={RouterLink}
+                                    to={href}
                                     onClick={() => setDrawerOpen(false)}
                                     selected={isActiveItem}
                                     sx={{
@@ -471,12 +571,12 @@ const UpdatedNavBar = () => {
                                         primary={item.NOMBRE}
                                         primaryTypographyProps={{
                                             sx: {
-                                                textDecoration:
-                                                    isActiveItem ? 'underline' : 'none'
+                                                textDecoration: isActiveItem ? 'underline' : 'none'
                                             }
                                         }}
                                     />
                                 </ListItemButton>
+
                                 <Divider />
                             </Box>
                         );
@@ -497,6 +597,7 @@ const UpdatedNavBar = () => {
                         {SectionsView}
                     </Box>
                 </Slide>
+
                 <Slide
                     in={mobileStage === 'options'}
                     direction="left"
@@ -509,87 +610,6 @@ const UpdatedNavBar = () => {
                 </Slide>
             </Box>
         );
-    };
-
-    const TOOLBAR_MOBILE = 56;
-    const TOOLBAR_DESKTOP = 64;
-
-    const renderGroupMenuContent = () => {
-        if (!openGroup) return <MenuItem disabled>(Sin opciones)</MenuItem>;
-
-        if (openGroup === 'Otros') {
-            const items = agrupado['Otros'] || [];
-            if (!items.length) return <MenuItem disabled>(Sin opciones)</MenuItem>;
-            return items.map((item, idx) => {
-                const href = buildHref(item.URL);
-                const isActiveItem =
-                    currentPath === href || currentPath.startsWith(`${href}/`);
-                return (
-                    <MenuItem
-                        key={`otros-${norm(item.NOMBRE)}-${idx}`}
-                        component={MLink}
-                        href={href}
-                        onClick={handleCloseGroupMenu}
-                        selected={isActiveItem}
-                    >
-                        {item.NOMBRE}
-                    </MenuItem>
-                );
-            });
-        }
-
-        const seccionesGrupo = gruposDesktop[openGroup] || [];
-        const modulesWithItems = seccionesGrupo.filter(
-            (sec) => (agrupado[sec] || []).length > 0
-        );
-        if (!modulesWithItems.length) {
-            return <MenuItem disabled>(Sin opciones)</MenuItem>;
-        }
-
-        return modulesWithItems.map((sec) => (
-            <MenuItem
-                key={`${openGroup}-${sec}`}
-                onClick={(e) => handleOpenModuleMenu(e, sec)}
-                sx={{ justifyContent: 'space-between', gap: 2 }}
-            >
-                <Box
-                    component="span"
-                    sx={{ opacity: 0.8, fontWeight: 600, fontSize: 13 }}
-                >
-                    {/* YA NO RECORTA EL NOMBRE */}
-                    {sec}
-                </Box>
-                <ChevronRightRounded fontSize="small" />
-            </MenuItem>
-        ));
-    };
-
-    // ===== Contenido submenú módulo  =====
-    const renderModuleMenuContent = () => {
-        if (!openModule) return <MenuItem disabled>(Sin opciones)</MenuItem>;
-
-        const items = agrupado[openModule] || [];
-        if (!items.length) return <MenuItem disabled>(Sin opciones)</MenuItem>;
-
-        return items.map((item, idx) => {
-            const href = buildHref(item.URL);
-            const isActiveItem =
-                currentPath === href || currentPath.startsWith(`${href}/`);
-            return (
-                <MenuItem
-                    key={`${openModule}-${norm(item.NOMBRE)}-${idx}`}
-                    component={MLink}
-                    href={href}
-                    onClick={() => {
-                        handleCloseModuleMenu();
-                        handleCloseGroupMenu();
-                    }}
-                    selected={isActiveItem}
-                >
-                    {item.NOMBRE}
-                </MenuItem>
-            );
-        });
     };
 
     return (
@@ -611,6 +631,7 @@ const UpdatedNavBar = () => {
                                 sx={{ width: { xs: 60 }, mr: 1 }}
                             />
                         )}
+
                         {isMobile && (
                             <IconButton
                                 sx={{ color: CONTRAST }}
@@ -636,17 +657,17 @@ const UpdatedNavBar = () => {
                     >
                         <Typography
                             variant="h6"
-                            component={MLink}
-                            href="/"
-                            underline="none"
+                            component={RouterLink}
+                            to="/riesgos"
                             sx={{
                                 color: CONTRAST,
                                 fontWeight: 700,
                                 letterSpacing: 0.5,
+                                textDecoration: 'none',
                                 '&:hover': { textDecoration: 'underline' }
                             }}
                         >
-                            Gestión de riesgos
+                            -SIGERI-
                         </Typography>
                     </Box>
 
@@ -661,9 +682,8 @@ const UpdatedNavBar = () => {
                     >
                         <Typography
                             variant="h6"
-                            component={MLink}
-                            href="/"
-                            underline="none"
+                            component={RouterLink}
+                            to="/riesgos"
                             sx={{
                                 fontSize: { md: 18, lg: 20 },
                                 color: CONTRAST,
@@ -671,13 +691,13 @@ const UpdatedNavBar = () => {
                                 lineHeight: 1,
                                 mt: 2,
                                 mb: 1,
+                                textDecoration: 'none',
                                 '&:hover': { textDecoration: 'underline' }
                             }}
                         >
-                            Sistema de Gestión de Riesgos MAGA
+                            Sistema de Gestión de Riesgos Institucionales -SIGERI-
                         </Typography>
 
-                        {/* Nivel 1: grupos */}
                         <Box
                             sx={{
                                 height: '37px',
@@ -715,6 +735,7 @@ const UpdatedNavBar = () => {
                                     const hasItems = seccionesGrupo.some(
                                         (sec) => (agrupado[sec] || []).length > 0
                                     );
+
                                     if (!hasItems) return null;
 
                                     const isActive = grupo === activeGroup;
@@ -751,13 +772,10 @@ const UpdatedNavBar = () => {
                                                     height: 4,
                                                     borderRadius: 2,
                                                     backgroundColor: CONTRAST,
-                                                    transform: isActive
-                                                        ? 'scaleX(1)'
-                                                        : 'scaleX(0)',
+                                                    transform: isActive ? 'scaleX(1)' : 'scaleX(0)',
                                                     opacity: isActive ? 1 : 0,
                                                     transformOrigin: 'center',
-                                                    transition:
-                                                        'transform 200ms ease, opacity 150ms ease'
+                                                    transition: 'transform 200ms ease, opacity 150ms ease'
                                                 },
                                                 '&:hover::after': {
                                                     transform: 'scaleX(1)',
@@ -773,7 +791,6 @@ const UpdatedNavBar = () => {
                         </Box>
                     </Box>
 
-                    {/* Derecha: perfil */}
                     <Icons>
                         <UserBox
                             onClick={(e) => setUserAnchor(e.currentTarget)}
@@ -781,14 +798,13 @@ const UpdatedNavBar = () => {
                         >
                             <Avatar
                                 sx={{ width: 40, height: 40 }}
-                                src={fotoPerfil || undefined}   // <<-- AQUÍ SE USA LA FOTO
+                                src={fotoPerfil || undefined}
                             />
                         </UserBox>
                     </Icons>
                 </StyledToolbar>
             </AppBar>
 
-            {/* Menú grupos (nivel 1) */}
             <Menu
                 anchorEl={groupAnchor}
                 open={Boolean(groupAnchor)}
@@ -801,7 +817,6 @@ const UpdatedNavBar = () => {
                 {renderGroupMenuContent()}
             </Menu>
 
-            {/* Submenú módulos (nivel 2 lateral) */}
             <Menu
                 anchorEl={moduleAnchor}
                 open={Boolean(moduleAnchor)}
@@ -814,7 +829,6 @@ const UpdatedNavBar = () => {
                 {renderModuleMenuContent()}
             </Menu>
 
-            {/* Menú usuario */}
             <Menu
                 anchorEl={userAnchor}
                 open={Boolean(userAnchor)}
@@ -822,14 +836,21 @@ const UpdatedNavBar = () => {
                 anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
                 transformOrigin={{ vertical: 'top', horizontal: 'right' }}
             >
-                <MenuItem component={MLink} href="/riesgos/perfil">
+                <MenuItem
+                    component={RouterLink}
+                    to="/riesgos/perfil"
+                    onClick={() => setUserAnchor(null)}
+                >
                     Perfil
                 </MenuItem>
+
                 <Divider />
-                <MenuItem onClick={logOut}>Cerrar sesión</MenuItem>
+
+                <MenuItem onClick={logOut}>
+                    Cerrar sesión
+                </MenuItem>
             </Menu>
 
-            {/* Drawer mobile */}
             <Drawer
                 anchor="top"
                 open={drawerOpen}

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import axios from "axios";
+import apiClient from "api/apiClient";
 import {
     Box,
     Typography,
@@ -20,7 +20,6 @@ import SearchIcon from "@mui/icons-material/Search";
 import FormOrgano from "./FormOrgano";
 import AlertaMensaje from "../Alerta F/AlertaMensaje";
 
-const headers = () => ({ "x-access-token": localStorage.getItem("token") });
 
 export default function OrganosMain() {
     const [alerta, setAlerta] = useState({
@@ -40,8 +39,7 @@ export default function OrganosMain() {
 
     const obtenerOrganos = async (q = "") => {
         try {
-            const { data } = await axios.get("/api/organos", {
-                headers: headers(),
+            const { data } = await apiClient.get("/api/organos", {
                 params: q ? { q } : {},
             });
             setLista(Array.isArray(data?.organos) ? data.organogos ?? data.organos : []);

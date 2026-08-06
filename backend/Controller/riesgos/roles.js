@@ -36,21 +36,21 @@ exports.obtenerRoles = async (req, res) => {
             smu.URL,
             smu.NOMBRE
         FROM 
-            seguridad.seguridad_menu_rol_usuario smru
+            gestion_riesgos.seguridad_menu_rol_usuario smru
         LEFT JOIN 
-            seguridad.seguridad_menu_rol smr
+            gestion_riesgos.seguridad_menu_rol smr
         ON 
             smru.CODIGO_CIA = smr.CODIGO_CIA
             AND smru.CODIGO_ROL = smr.CODIGO_ROL
             AND smru.codigo_aplicacion = smr.codigo_aplicacion
         LEFT JOIN 
-            seguridad.seguridad_menu_rol_url smrur
+            gestion_riesgos.seguridad_menu_rol_url smrur
         ON 
             smrur.CODIGO_CIA = smru.CODIGO_CIA
             AND smrur.CODIGO_ROL = smru.CODIGO_ROL
             AND smrur.codigo_aplicacion = smru.codigo_aplicacion
         LEFT JOIN 
-            seguridad.seguridad_menu_urls smu
+            gestion_riesgos.seguridad_menu_urls smu
         ON 
             smrur.CODIGO_URL = smu.CODIGO_URL
             AND smru.CODIGO_APLICACION = smu.CODIGO_APLICACION
@@ -84,7 +84,7 @@ exports.obtenerUrls = async (req, res, next) => {
         SELECT 
             CODIGO_URL, NOMBRE, URL
         FROM 
-            seguridad.seguridad_menu_urls
+            gestion_riesgos.seguridad_menu_urls
         WHERE
             codigo_aplicacion = 1
         ORDER BY NOMBRE ASC
@@ -122,14 +122,14 @@ exports.obtenerRolesInfo = async (req, res) => {
             smu.NOMBRE AS NOMBRE_URL,
             smu.URL
         FROM 
-            seguridad.seguridad_menu_rol smr
+            gestion_riesgos.seguridad_menu_rol smr
         LEFT JOIN 
-            seguridad.seguridad_menu_rol_url smru
+            gestion_riesgos.seguridad_menu_rol_url smru
         ON 
             smr.CODIGO_CIA = smru.CODIGO_CIA
             AND smr.CODIGO_ROL = smru.CODIGO_ROL
         LEFT JOIN
-            seguridad.seguridad_menu_urls smu
+            gestion_riesgos.seguridad_menu_urls smu
         ON 
             smru.CODIGO_URL = smu.CODIGO_URL
         WHERE 
@@ -195,14 +195,14 @@ exports.obtenerRolesInfoDireccion = async (req, res) => {
             smu.NOMBRE AS NOMBRE_URL,
             smu.URL
         FROM 
-            seguridad.seguridad_menu_rol smr
+            gestion_riesgos.seguridad_menu_rol smr
         LEFT JOIN 
-            seguridad.seguridad_menu_rol_url smru
+            gestion_riesgos.seguridad_menu_rol_url smru
         ON 
             smr.CODIGO_CIA = smru.CODIGO_CIA
             AND smr.CODIGO_ROL = smru.CODIGO_ROL
         LEFT JOIN
-            seguridad.seguridad_menu_urls smu
+            gestion_riesgos.seguridad_menu_urls smu
         ON 
             smru.CODIGO_URL = smu.CODIGO_URL
         WHERE 
@@ -269,7 +269,7 @@ exports.obtenerRolPorId = async (req, res) => {
         SELECT 
             smr.CODIGO_ROL, smr.NOMBRE
         FROM 
-            seguridad.seguridad_menu_rol smr
+            gestion_riesgos.seguridad_menu_rol smr
         WHERE 
             smr.CODIGO_CIA = ?
             AND smr.CODIGO_ROL = ?
@@ -286,9 +286,9 @@ exports.obtenerRolPorId = async (req, res) => {
             smu.NOMBRE AS NOMBRE_URL,
             smu.URL    AS URL
         FROM 
-            seguridad.seguridad_menu_rol_url smru
+            gestion_riesgos.seguridad_menu_rol_url smru
         LEFT JOIN 
-            seguridad.seguridad_menu_urls smu
+            gestion_riesgos.seguridad_menu_urls smu
         ON  
             smru.CODIGO_APLICACION = smu.CODIGO_APLICACION
             AND smru.CODIGO_URL        = smu.CODIGO_URL
@@ -341,7 +341,7 @@ exports.actualizarRolConUrls = async (req, res) => {
         await conn.execute(
             `
             UPDATE 
-                \`seguridad\`.\`seguridad_menu_rol\`
+                \`gestion_riesgos\`.\`seguridad_menu_rol\`
             SET 
                 NOMBRE = ?, USUARIO_MODIFICACION = ?, FECHA_MODIFICACION = NOW()
             WHERE 
@@ -352,7 +352,7 @@ exports.actualizarRolConUrls = async (req, res) => {
         await conn.execute(
             `
             DELETE FROM 
-                \`seguridad\`.\`seguridad_menu_rol_url\`
+                \`gestion_riesgos\`.\`seguridad_menu_rol_url\`
             WHERE 
                 CODIGO_CIA = ? AND CODIGO_APLICACION = ? AND CODIGO_ROL = ?`,
             [codigo_cia, codigo_aplicacion, codigo_rol]
@@ -361,7 +361,7 @@ exports.actualizarRolConUrls = async (req, res) => {
         for (const codigo_url of urls) {
             await conn.execute(
                 `
-            INSERT INTO \`seguridad\`.\`seguridad_menu_rol_url\`
+            INSERT INTO \`gestion_riesgos\`.\`seguridad_menu_rol_url\`
             (CODIGO_APLICACION, CODIGO_CIA, CODIGO_ROL, CODIGO_URL)
             VALUES (?, ?, ?, ?)`,
                 [codigo_aplicacion, codigo_cia, codigo_rol, codigo_url]
@@ -395,7 +395,7 @@ exports.cambiarGeneral = async (req, res) => {
     const { general } = req.body;
     try {
         await pool.query(
-            "UPDATE seguridad.seguridad_menu_rol SET GENERAL = ? WHERE CODIGO_ROL = ? AND codigo_cia = ? AND codigo_aplicacion = ?",
+            "UPDATE gestion_riesgos.seguridad_menu_rol SET GENERAL = ? WHERE CODIGO_ROL = ? AND codigo_cia = ? AND codigo_aplicacion = ?",
             [general, id, req.codigo_cia, 1]
         );
         res.json({ ok: true });
@@ -432,14 +432,14 @@ exports.crearRolConUrls = async (req, res) => {
 
         const [maxRows] = await conn.execute(
             `SELECT COALESCE(MAX(CODIGO_ROL), 0) AS maxRol
-         FROM \`seguridad\`.\`seguridad_menu_rol\`
+         FROM \`gestion_riesgos\`.\`seguridad_menu_rol\`
         WHERE CODIGO_CIA = ? AND CODIGO_APLICACION = ?`,
             [codigo_cia, codigo_aplicacion]
         );
         const codigo_rol = (maxRows[0]?.maxRol ?? 0) + 1;
 
         await conn.execute(
-            `INSERT INTO \`seguridad\`.\`seguridad_menu_rol\`
+            `INSERT INTO \`gestion_riesgos\`.\`seguridad_menu_rol\`
          (CODIGO_APLICACION, CODIGO_CIA, CODIGO_ROL, NOMBRE, ACTIVO,
           USUARIO_CREACION, USUARIO_MODIFICACION, FECHA_CREACION, FECHA_MODIFICACION)
        VALUES (?, ?, ?, ?, 1, ?, ?, NOW(), NOW())`,
@@ -448,7 +448,7 @@ exports.crearRolConUrls = async (req, res) => {
 
         for (const codigo_url of urls) {
             await conn.execute(
-                `INSERT INTO \`seguridad\`.\`seguridad_menu_rol_url\`
+                `INSERT INTO \`gestion_riesgos\`.\`seguridad_menu_rol_url\`
            (CODIGO_APLICACION, CODIGO_CIA, CODIGO_ROL, CODIGO_URL)
          VALUES (?, ?, ?, ?)`,
                 [codigo_aplicacion, codigo_cia, codigo_rol, codigo_url]
@@ -493,14 +493,14 @@ exports.obtenerPersonasRoles = async (req, res) => {
             smru.CODIGO_ROL,
             smr.NOMBRE AS NOMBRE_ROL
         FROM 
-            \`seguridad\`.\`seguridad_menu_rol_usuario\` smru
+            \`gestion_riesgos\`.\`seguridad_menu_rol_usuario\` smru
         LEFT JOIN 
-            \`seguridad\`.\`seguridad_persona\` sp
+            \`gestion_riesgos\`.\`seguridad_persona\` sp
         ON 
             sp.CODIGO_CIA = smru.CODIGO_CIA
             AND sp.CODIGO_COLABORADOR = smru.CODIGO_COLABORADOR
         LEFT JOIN 
-            \`seguridad\`.\`seguridad_menu_rol\` smr
+            \`gestion_riesgos\`.\`seguridad_menu_rol\` smr
         ON 
             smr.CODIGO_CIA = smru.CODIGO_CIA
             AND smr.CODIGO_ROL = smru.CODIGO_ROL
@@ -568,14 +568,14 @@ exports.obtenerPersonasRolesDireccion = async (req, res) => {
             smru.CODIGO_ROL,
             smr.NOMBRE AS NOMBRE_ROL
         FROM 
-            \`seguridad\`.\`seguridad_menu_rol_usuario\` smru
+            \`gestion_riesgos\`.\`seguridad_menu_rol_usuario\` smru
         LEFT JOIN 
-            \`seguridad\`.\`seguridad_persona\` sp
+            \`gestion_riesgos\`.\`seguridad_persona\` sp
         ON 
             sp.CODIGO_CIA = smru.CODIGO_CIA
             AND sp.CODIGO_COLABORADOR = smru.CODIGO_COLABORADOR
         LEFT JOIN 
-            \`seguridad\`.\`seguridad_menu_rol\` smr
+            \`gestion_riesgos\`.\`seguridad_menu_rol\` smr
         ON 
             smr.CODIGO_CIA = smru.CODIGO_CIA
             AND smr.CODIGO_ROL = smru.CODIGO_ROL
@@ -643,9 +643,9 @@ exports.obtenerPersonasRolesUnico = async (req, res) => {
             smru.CODIGO_ROL,
             smr.NOMBRE AS NOMBRE_ROL
         FROM 
-            \`seguridad\`.\`seguridad_menu_rol_usuario\` smru
+            \`gestion_riesgos\`.\`seguridad_menu_rol_usuario\` smru
         LEFT JOIN 
-            \`seguridad\`.\`seguridad_menu_rol\` smr
+            \`gestion_riesgos\`.\`seguridad_menu_rol\` smr
             ON smr.CODIGO_CIA = smru.CODIGO_CIA
             AND smr.CODIGO_ROL = smru.CODIGO_ROL
             AND smr.CODIGO_APLICACION = smru.CODIGO_APLICACION
@@ -692,7 +692,7 @@ exports.actualizarPersonasRoles = async (req, res) => {
             await conn.execute(
                 `
             DELETE FROM 
-                \`seguridad\`.\`seguridad_menu_rol_usuario\`
+                \`gestion_riesgos\`.\`seguridad_menu_rol_usuario\`
             WHERE 
                 CODIGO_CIA = ?
                 AND CODIGO_APLICACION = ?
@@ -702,7 +702,7 @@ exports.actualizarPersonasRoles = async (req, res) => {
 
             for (const codigo_rol of roles) {
                 await conn.execute(
-                    `INSERT INTO \`seguridad\`.\`seguridad_menu_rol_usuario\`
+                    `INSERT INTO \`gestion_riesgos\`.\`seguridad_menu_rol_usuario\`
             (CODIGO_APLICACION, CODIGO_CIA, CODIGO_COLABORADOR, CODIGO_ROL)
             VALUES (?, ?, ?, ?)`,
                     [codigo_aplicacion, codigo_cia, codigo_colaborador, codigo_rol]
@@ -755,7 +755,7 @@ exports.crearPersonasRoles = async (req, res) => {
 
         const placeholders = values.map(() => '(?, ?, ?, ?)').join(', ');
         const sql = `
-        INSERT IGNORE INTO \`seguridad\`.\`seguridad_menu_rol_usuario\`
+        INSERT IGNORE INTO \`gestion_riesgos\`.\`seguridad_menu_rol_usuario\`
             (CODIGO_APLICACION, CODIGO_CIA, CODIGO_COLABORADOR, CODIGO_ROL)
         VALUES ${placeholders}
          `;

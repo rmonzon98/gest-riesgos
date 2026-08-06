@@ -14,7 +14,7 @@ import { useState, useEffect } from "react";
 import { Stack, Typography, Box, Tabs, Tab } from "@mui/material";
 import ResponablesMain from "./ResponsablesMain";
 import RolesUsuarios from "./RolesUsuarios";
-import axios from "axios";
+import apiClient from "api/apiClient";
 
 /**
  * Vista principal de administración de colaboradores y roles por dirección.
@@ -39,7 +39,7 @@ function AdminDireccion() {
      */
     const obtenerUnidad = async () => {
         try {
-            const res = await axios.get('/api/responsables-actualizados/obtener-mi-unidad', { headers: { "x-access-token": localStorage.getItem("token") } });
+            const res = await apiClient.get('/api/responsables-actualizados/obtener-mi-unidad');
             const u = res.data.data;
             setUnidad(u.NOMBRE + (u.SIGLAS ? ' (' + u.SIGLAS + ')' : ''));
         } catch { setUnidad(''); }

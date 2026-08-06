@@ -29,7 +29,7 @@ exports.obtenerEntidades = async (req, res) => {
 
         const sql = `
         SELECT codigo_entidad "CODIGO_ENTIDAD", nombre "NOMBRE"
-        FROM seguridad.seguridad_entidad
+        FROM gestion_riesgos.seguridad_entidad
         WHERE estado = ? AND codigo_cia = ?
         ORDER BY nombre ASC
         `;

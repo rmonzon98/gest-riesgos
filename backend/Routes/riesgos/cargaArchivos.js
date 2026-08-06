@@ -33,7 +33,7 @@ const upload = multer({
         if (ok) return cb(null, true);
         return cb(new Error('FILE_TYPE_NOT_ALLOWED'));
     },
-    limits: { fileSize: 20 * 1024 * 1024 }, // Opcional: 50MB
+    limits: { fileSize: 50 * 1024 * 1024 }, // Opcional: 50MB
 });
 
 const { verifyJWT } = require('../../services/verifyJWTUpd');

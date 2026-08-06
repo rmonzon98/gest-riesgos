@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import axios from "axios";
+import apiClient from "api/apiClient";
 import {
     Dialog, DialogTitle, DialogContent, DialogActions,
     TextField, Button, Grid
@@ -10,9 +10,8 @@ function FormPeriodo({ showModal, id, onClose, onSuccess, onError }) {
 
     const obtenerUno = async () => {
         try {
-            const res = await axios.get("/api/periodos-actualizados/obtener-periodo", {
-                params: { codigo: id },
-                headers: { "x-access-token": localStorage.getItem("token") }
+            const res = await apiClient.get("/api/periodos-actualizados/obtener-periodo", {
+                params: { codigo: id }
             });
             const data = res.data.result?.[0];
             if (data) {
@@ -70,11 +69,10 @@ function FormPeriodo({ showModal, id, onClose, onSuccess, onError }) {
         try {
             const method = id ? "put" : "post";
             const url = "/api/periodos-actualizados";
-            await axios({
+            await apiClient({
                 method,
                 url,
-                data: payload,
-                headers: { "x-access-token": localStorage.getItem("token") }
+                data: payload
             });
             onSuccess();
         } catch (err) {

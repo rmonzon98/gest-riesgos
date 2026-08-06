@@ -17,7 +17,7 @@ import {
     TextField,
     Box
 } from '@mui/material';
-import axios from 'axios';
+import apiClient from "api/apiClient";
 
 /**
  * Formulario modal controlado para alta y edición de áreas.
@@ -28,14 +28,13 @@ function FormArea({ showModal, id, onClose, onSuccess }) {
     const [descripcion, setDescripcion] = useState('');
     const [abreviatura, setAbreviatura] = useState('');
 
-    const MAX_DESC = 200;
-    const MAX_ABR = 10;
+    const MAX_DESC = 250;
+    const MAX_ABR = 20;
 
     // Cargar datos si es edición
     useEffect(() => {
         if (id && showModal) {
-            axios.get(`/api/areas-actualizados/obtener-area`, {
-                headers: { "x-access-token": localStorage.getItem('token') },
+            apiClient.get(`/api/areas-actualizados/obtener-area`, {
                 params: { area: parseInt(id) }
             }).then((res) => {
                 const area = res.data.result[0];
@@ -63,13 +62,9 @@ function FormArea({ showModal, id, onClose, onSuccess }) {
         }
         try {
             if (id) {
-                await axios.put(`/api/areas-actualizados/`, payload, {
-                    headers: { "x-access-token": localStorage.getItem('token') }
-                });
+                await apiClient.put(`/api/areas-actualizados/`, payload);
             } else {
-                await axios.post(`/api/areas-actualizados`, payload, {
-                    headers: { "x-access-token": localStorage.getItem('token') }
-                });
+                await apiClient.post(`/api/areas-actualizados`, payload);
             }
 
             if (onSuccess) {

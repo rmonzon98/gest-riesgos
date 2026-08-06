@@ -109,6 +109,7 @@ export default function Anexo1ExcelIO({
      */
     const handleExportExcel = async () => {
         if (!periodo || !Array.isArray(matrices) || matrices.length === 0) return;
+        console.log(matrices)
         try {
             setBusy(true);
             setBusyText('Preparando…');
@@ -129,6 +130,7 @@ export default function Anexo1ExcelIO({
             wsInstr.addRow(['- No modificar los encabezados (fila 1) ni las etiquetas de fila (columna 1).']);
             wsInstr.addRow(['- Solo debe ingresar información en las celdas habilitadas (en blanco).']);
             wsInstr.addRow(['- Cada hoja corresponde a una matriz; respete su estructura.']);
+            wsInstr.addRow(['- Llenar con N/A las celdas sin información aplicable.']);
             wsInstr.addRow([]);
 
             wsInstr.addRow(['Contenido de este archivo:']).font = { bold: true };

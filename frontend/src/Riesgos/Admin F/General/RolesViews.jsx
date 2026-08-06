@@ -12,7 +12,7 @@ import {
     Button, Typography, Box, Table, TableHead, TableRow,
     TableCell, TableBody, Paper, Switch, Tooltip
 } from "@mui/material";
-import axios from "axios";
+import apiClient from "api/apiClient";
 import AddIcon from "@mui/icons-material/Add";
 import EditIcon from "@mui/icons-material/Edit";
 import AlertaMensaje from "../../Alerta F/AlertaMensaje";
@@ -38,22 +38,11 @@ function RolesMain() {
     });
 
     /**
-     * Devuelve los encabezados comunes de autenticación para las peticiones HTTP.
-     *
-     * @returns {{headers: Object}} Objeto de configuración para Axios.
-     */
-    const headers = () => ({
-        "x-access-token": localStorage.getItem("token"),
-    });
-
-    /**
      * Carga desde el backend la lista de roles generales y el catálogo de URLs.
      */
     const obtenerInformacion = async () => {
         try {
-            const response = await axios.get("/api/roles-actualizados/informacion-roles", {
-                headers: headers(),
-            });
+            const response = await apiClient.get("/api/roles-actualizados/informacion-roles");
             setLista(response.data.roles);
             setListaUrls(response.data.urls);
         } catch (err) {
@@ -111,10 +100,9 @@ function RolesMain() {
     const cambiarGeneral = async (rol) => {
         try {
             const nuevoValor = rol.general === 1 ? 0 : 1;
-            await axios.put(
+            await apiClient.put(
                 `/api/roles-actualizados/cambiar-general/${rol.codigo_rol}`,
-                { general: nuevoValor },
-                { headers: headers() }
+                { general: nuevoValor }
             );
             mostrarAlerta("success", `Rol actualizado correctamente (${nuevoValor ? "General" : "No general"})`);
             obtenerInformacion();

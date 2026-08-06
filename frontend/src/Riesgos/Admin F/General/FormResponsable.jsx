@@ -14,7 +14,7 @@ import {
     Typography
 } from "@mui/material";
 import { useEffect, useState } from "react";
-import axios from "axios";
+import apiClient from "api/apiClient";
 import { apiErrorMessage } from "funciones/errors";
 
 /**
@@ -43,8 +43,7 @@ function FormResponsable({ showModal, onClose, onSuccess, onError, colaborador, 
      */
     const fetchResponsable = async () => {
         try {
-            const res = await axios.get("/api/responsables-actualizados/obtener-responsable", {
-                headers: { "x-access-token": localStorage.getItem("token") },
+            const res = await apiClient.get("/api/responsables-actualizados/obtener-responsable", {
                 params: { codigo: colaborador }
             });
 
@@ -120,9 +119,7 @@ function FormResponsable({ showModal, onClose, onSuccess, onError, colaborador, 
         try {
             const endpoint = "/api/responsables-actualizados";
             const method = colaborador ? "put" : "post";
-            const result = await axios[method](endpoint, formData, {
-                headers: { "x-access-token": localStorage.getItem("token") }
-            });
+            const result = await apiClient[method](endpoint, formData);
             if (result.data.contra) {
                 mostrarTemporalmente(result.data.contra)
             }

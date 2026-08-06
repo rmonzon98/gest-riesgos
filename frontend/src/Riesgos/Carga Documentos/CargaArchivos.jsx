@@ -7,7 +7,7 @@
  * @author Equipo
  */
 import React, { useEffect, useRef, useState, useCallback } from "react";
-import axios from "axios";
+import apiClient from "api/apiClient";
 import {
     Box, Card, CardHeader, CardContent, Stack, Button, LinearProgress, Typography, Alert,
     IconButton, List, ListItem, ListItemText, Chip, Dialog, DialogTitle, DialogContent,
@@ -35,10 +35,6 @@ export default function CargaArchivos({
     maxMB = 20,
     onUploaded
 }) {
-    /**
-     * Devuelve los encabezados HTTP con el token de autenticación.
-     */
-    const headers = () => ({ "x-access-token": localStorage.getItem("token") });
     const inputRef = useRef(null);
 
     const [file, setFile] = useState(null);
@@ -188,8 +184,7 @@ export default function CargaArchivos({
             fd.append("nombre_real", file.name);
             fd.append("categoria", flag);
 
-            await axios.post(`${baseUrl}`, fd, {
-                headers: { ...headers(), "Content-Type": "multipart/form-data" },
+            await apiClient.post(`${baseUrl}`, fd, {
                 onUploadProgress: (evt) => {
                     if (!evt.total) return;
                     const pct = Math.round((evt.loaded * 100) / evt.total);
@@ -249,8 +244,7 @@ export default function CargaArchivos({
         if (!showList || !listVisible || !normFlag) return;
         try {
             setLoadingList(true);
-            const res = await axios.get(`${baseUrl}/${normFlag}`, {
-                headers: headers(),
+            const res = await apiClient.get(`${baseUrl}/${normFlag}`, {
                 params: { periodo },
             });
             const arr = Array.isArray(res.data) ? res.data : [];
@@ -269,8 +263,7 @@ export default function CargaArchivos({
 
     const fetchBlobArrayBuffer = async (item) => {
         const normFlag = normalizeFlag(flag);
-        const res = await axios.get(`${baseUrl}/${normFlag}/${item.id}/download`, {
-            headers: headers(),
+        const res = await apiClient.get(`${baseUrl}/${normFlag}/${item.id}/download`, {
             params: { periodo },
             responseType: "arraybuffer",
         });
@@ -364,8 +357,7 @@ export default function CargaArchivos({
     const handleDownload = async (item) => {
         const normFlag = normalizeFlag(flag);
         try {
-            const res = await axios.get(`${baseUrl}/${normFlag}/${item.id}/download`, {
-                headers: headers(),
+            const res = await apiClient.get(`${baseUrl}/${normFlag}/${item.id}/download`, {
                 params: { periodo },
                 responseType: "blob",
             });
@@ -400,10 +392,9 @@ export default function CargaArchivos({
         setToggling((m) => ({ ...m, [id]: true }));
 
         try {
-            await axios.post(
+            await apiClient.post(
                 `${baseUrl}/${normFlag}/final`,
-                { id, periodo, categoria, final: newVal },
-                { headers: headers() }
+                { id, periodo, categoria, final: newVal }
             );
         } catch (err) {
             setItems(prevItems);
@@ -430,10 +421,9 @@ export default function CargaArchivos({
 
         try {
             setBusy(true);
-            await axios.put(
+            await apiClient.put(
                 `${baseUrl}/${normFlag}/${item.id}`,
-                { periodo, flagN: flag },
-                { headers: headers() }
+                { periodo, flagN: flag }
             );
 
             setItems((arr) => arr.filter((x) => x.id !== item.id));

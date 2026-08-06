@@ -16,7 +16,7 @@
  */
 
 import { useEffect, useState, useCallback } from "react";
-import axios from "axios";
+import apiClient from "api/apiClient";
 import {
     Box, Card, CardHeader, CardContent, Typography, Stack, Select, MenuItem, LinearProgress, Alert, Button,
     Dialog, DialogTitle, DialogContent, DialogActions, CircularProgress, TextField, Snackbar
@@ -91,8 +91,6 @@ function IngresoRiesgos({ tipo, titulo }) {
     const closeSnack = () =>
         setSnack((prev) => ({ ...prev, open: false }));
 
-    const headers = () => ({ "x-access-token": localStorage.getItem("token") });
-
     // Helpers de normalización
     const safeArr = (a) => (Array.isArray(a) ? a : []);
 
@@ -101,7 +99,7 @@ function IngresoRiesgos({ tipo, titulo }) {
         tiposObjetivo: safeArr(data?.tipoObjetivos).map((x) => ({ CODIGO: x.CODIGO_TIPO_OBJETIVO, DESCRIPCION: x.DESCRIPCION })),
         probabilidad: safeArr(data?.probabilidad).map((x) => ({ CODIGO: x.CODIGO, DESCRIPCION: x.DESCRIPCION })),
         severidad: safeArr(data?.severidad).map((x) => ({ CODIGO: x.CODIGO, DESCRIPCION: x.DESCRIPCION })),
-        capacidadMitigacion: safeArr(data?.capacidadMitigacion).map((x) => ({ CODIGO: x.CODIGO, DESCRIPCION: x.DESCRIPCION })),
+        capacidadMitigacion: safeArr(data?.mitigacion).map((x) => ({ CODIGO: x.CODIGO, DESCRIPCION: x.DESCRIPCION })),
         tolerancia: safeArr(data?.tolerancia).map((x) => ({ CODIGO: x.CODIGO, DESCRIPCION: x.DESCRIPCION })),
         frecuencia: safeArr(data?.frecuencia).map((x) => ({ CODIGO: x.CODIGO_FRECUENCIA, DESCRIPCION: x.DESCRIPCION })),
 
@@ -116,8 +114,8 @@ function IngresoRiesgos({ tipo, titulo }) {
     const obtenerCatalogos = async () => {
         try {
             const [initRes, objetivosRes] = await Promise.all([
-                axios.get("/api/riesgos-variables-actualizados/obtener-info-inicial-vista-riesgos", { headers: headers() }),
-                axios.get("/api/riesgos-variables-actualizados/lista-objetivos", { headers: headers() }),
+                apiClient.get("/api/riesgos-variables-actualizados/obtener-info-inicial-vista-riesgos"),
+                apiClient.get("/api/riesgos-variables-actualizados/lista-objetivos"),
             ]);
 
             const init = initRes.data || {};
@@ -161,9 +159,9 @@ function IngresoRiesgos({ tipo, titulo }) {
 
     const cargarListaRiesgos = async (codigoPeriodo) => {
         try {
-            const { data } = await axios.get(
+            const { data } = await apiClient.get(
                 "/api/riesgos-variables-actualizados/obtener-lista",
-                { headers: headers(), params: { periodo: codigoPeriodo, tipo: tipo } }
+                { params: { periodo: codigoPeriodo, tipo: tipo } }
             );
             setRiesgos(Array.isArray(data?.riesgos) ? data.riesgos : []);
         } catch (err) {
@@ -185,9 +183,9 @@ function IngresoRiesgos({ tipo, titulo }) {
 
     const obtenerPropiedades = async (p) => {
         try {
-            const { data } = await axios.get(
+            const { data } = await apiClient.get(
                 "/api/riesgos-variables-actualizados/obtener-propiedades",
-                { headers: headers(), params: { periodo: p, tipo: tipo === 'ME' ? 1 : tipo === 'MC' ? 2 : 3 } }
+                { params: { periodo: p, tipo: tipo === 'ME' ? 1 : tipo === 'MC' ? 2 : 3 } }
             );
             setPropiedades(Array.isArray(data?.data) ? data.data : []);
         } catch (err) {
@@ -208,8 +206,7 @@ function IngresoRiesgos({ tipo, titulo }) {
         setReportError("");
         setLoadingReportData(true);
         try {
-            const { data } = await axios.get('/api/reportes-actualizados/informacion-riesgos', {
-                headers: { 'x-access-token': localStorage.getItem('token') },
+            const { data } = await apiClient.get('/api/reportes-actualizados/informacion-riesgos', {
                 params: { periodo, categoria: tipo, unidad: 'propia' }
             });
 
@@ -285,8 +282,7 @@ function IngresoRiesgos({ tipo, titulo }) {
         setErrorDetalle("");
         setLoadingDetalle(true);
         try {
-            const { data } = await axios.get("/api/riesgos-variables-actualizados/riesgo-por-id", {
-                headers: headers(),
+            const { data } = await apiClient.get("/api/riesgos-variables-actualizados/riesgo-por-id", {
                 params: { periodo, riesgo: row.CODIGO_RIESGO, tipo: tipo },
             });
             setEditing(data?.riesgo ?? null);
@@ -311,9 +307,9 @@ function IngresoRiesgos({ tipo, titulo }) {
         payload.tipo = tipo;
         try {
             if (isEdit) {
-                await axios.put("/api/riesgos-variables-actualizados", payload, { headers: headers() });
+                await apiClient.put("/api/riesgos-variables-actualizados", payload);
             } else {
-                await axios.post("/api/riesgos-variables-actualizados", payload, { headers: headers() });
+                await apiClient.post("/api/riesgos-variables-actualizados", payload);
             }
             await handleSaved();
             openSnack(isEdit ? "Riesgo actualizado correctamente." : "Riesgo creado correctamente.", "success");
@@ -329,10 +325,9 @@ function IngresoRiesgos({ tipo, titulo }) {
     const handleDeleteRiesgo = async (row) => {
         if (!window.confirm("¿Seguro que deseas eliminar este riesgo?")) return;
         try {
-            await axios.put(
+            await apiClient.put(
                 "/api/riesgos-variables-actualizados/eliminar",
-                { codigo_riesgo: row.CODIGO_RIESGO, periodo, tipo },
-                { headers: headers() }
+                { codigo_riesgo: row.CODIGO_RIESGO, periodo, tipo }
             );
             await cargarLista(periodo);
             openSnack("Riesgo eliminado correctamente.", "success");
@@ -345,10 +340,9 @@ function IngresoRiesgos({ tipo, titulo }) {
     const handleRestoreRiesgo = async (row) => {
         if (!window.confirm("¿Deseas restablecer este riesgo eliminado?")) return;
         try {
-            await axios.put(
+            await apiClient.put(
                 "/api/riesgos-variables-actualizados/restablecer",
-                { codigo_riesgo: row.CODIGO_RIESGO, periodo, tipo },
-                { headers: headers() }
+                { codigo_riesgo: row.CODIGO_RIESGO, periodo, tipo }
             );
             await cargarLista(periodo);
             openSnack("Riesgo restablecido correctamente.", "success");

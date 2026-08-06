@@ -12,7 +12,7 @@
  */
 
 import { useEffect, useState } from "react";
-import axios from "axios";
+import apiClient from "api/apiClient";
 import { Box, Card, CardHeader, CardContent, Typography, Select, MenuItem, Stack, LinearProgress, Alert, Chip, } from "@mui/material";
 import SeguimientoModal from "./SeguimientoModal";
 
@@ -47,8 +47,6 @@ export default function Seguimiento() {
         codigo_periodo: null,
     });
 
-    const headers = () => ({ "x-access-token": localStorage.getItem("token") });
-    
     /**
      * nivelResidual
      *
@@ -98,9 +96,8 @@ export default function Seguimiento() {
         try {
             setLoading(true);
             setError("");
-            const { data } = await axios.get(
-                "/api/riesgos-variables-actualizados/obtener-info-inicial-vista-riesgos",
-                { headers: headers() }
+            const { data } = await apiClient.get(
+                "/api/riesgos-variables-actualizados/obtener-info-inicial-vista-riesgos"
             );
             const { userInfo, periodos } = data || {};
             if (userInfo) setEntidad(`${userInfo.NOMBRE} (${userInfo.SIGLAS})`);
@@ -135,9 +132,9 @@ export default function Seguimiento() {
         try {
             setLoading(true);
             setError("");
-            const { data } = await axios.get(
+            const { data } = await apiClient.get(
                 "/api/riesgos-variables-actualizados/obtener-lista-riesgos-detalle",
-                { params: { periodo }, headers: headers() }
+                { params: { periodo } }
             );
 
             const lista = Array.isArray(data?.valores) ? data.valores : [];
@@ -302,7 +299,6 @@ export default function Seguimiento() {
                 codigo_riesgo={modalData.codigo_riesgo}
                 codigo_entidad={modalData.codigo_entidad}
                 codigo_periodo={modalData.codigo_periodo}
-                getHeaders={headers}
             />
         </Box>
     );

@@ -1,6 +1,6 @@
 // src/RIESGOS/VisualizacionArchivosInstitucionales.jsx
 import React, { useEffect, useState, useCallback } from "react";
-import axios from "axios";
+import apiClient from "api/apiClient";
 import {
     Box,
     Card,
@@ -106,16 +106,11 @@ const normalizeItem = (r, idx) => {
 };
 
 // ================== API ==================
-const headersAuth = () => ({
-    "x-access-token": localStorage.getItem("token"),
-});
-
 const api = {
     periodos: () =>
-        axios.get("/api/periodos-actualizados", { headers: headersAuth() }),
+        apiClient.get("/api/periodos-actualizados"),
     listarArchivosInstitucionales: ({ codigo_periodo }) =>
-        axios.get("/api/carga-archivos/listar-archivos-insti-periodo", {
-            headers: headersAuth(),
+        apiClient.get("/api/carga-archivos/listar-archivos-insti-periodo", {
             params: { codigo_periodo },
         }),
 };
@@ -312,7 +307,7 @@ export default function VisualizacionArchivosInstitucionales() {
         if (!doc?.ruta) return;
         try {
             const url = buildFileUrl(doc.ruta);
-            const res = await axios.get(url, {
+            const res = await apiClient.get(url, {
                 responseType: "blob",
             });
 
@@ -375,7 +370,7 @@ export default function VisualizacionArchivosInstitucionales() {
     };
 
     const fetchAs = async (url, type) => {
-        const res = await axios.get(url, { responseType: type });
+        const res = await apiClient.get(url, { responseType: type });
         return res.data;
     };
 

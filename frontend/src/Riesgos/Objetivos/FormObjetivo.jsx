@@ -3,7 +3,7 @@ import {
     Dialog, DialogTitle, DialogContent, DialogActions,
     TextField, Button, Stack
 } from "@mui/material";
-import axios from "axios";
+import apiClient from "api/apiClient";
 
 function FormObjetivo({ open, onClose, onSuccess, tipo, id }) {
     const [formData, setFormData] = useState({
@@ -15,9 +15,8 @@ function FormObjetivo({ open, onClose, onSuccess, tipo, id }) {
         if (id) {
             const fetchData = async () => {
                 try {
-                    const res = await axios.get("/api/objetivos-actualizados/obtener-objetivo", {
-                        params: { tipoObjetivo: tipo, id },
-                        headers: { "x-access-token": localStorage.getItem("token") }
+                    const res = await apiClient.get("/api/objetivos-actualizados/obtener-objetivo", {
+                        params: { tipoObjetivo: tipo, id }
                     });
 
                     const objetivo = res.data?.result?.[0];
@@ -59,9 +58,7 @@ function FormObjetivo({ open, onClose, onSuccess, tipo, id }) {
                 : "/api/objetivos-actualizados";
             const method = id ? "put" : "post";
 
-            await axios[method](endpoint, payload, {
-                headers: { "x-access-token": localStorage.getItem("token") }
-            });
+            await apiClient[method](endpoint, payload);
 
             onSuccess();
         } catch (err) {

@@ -8,7 +8,7 @@
  */
 
 import React, { useEffect, useRef, useState } from "react";
-import axios from "axios";
+import apiClient from "api/apiClient";
 import {
     Card, CardHeader, CardContent, Stack, Divider, Chip, Button, Tooltip,
     Typography, IconButton, TextField, Collapse, Box, Snackbar,
@@ -42,7 +42,6 @@ Quill.register(Size, true);
 const newId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
 const safeArr = (a) => (Array.isArray(a) ? a : []);
 
-const headers = () => ({ "x-access-token": localStorage.getItem("token") });
 
 const DOCX_STYLES = {
     paragraphStyles: [
@@ -277,7 +276,7 @@ const catalogRank = (title) => {
  * Permite filtrar, agrupar y exportar los datos de seguimiento.
  * 
  * Props:
- * - periodo: number|string  (requerido para llamadas axios)
+ * - periodo: number|string  (requerido para llamadas al API)
  *
  * @component
  */
@@ -307,12 +306,12 @@ export default function SeguimientoReportes({ periodo }) {
     // UI
     const [snack, setSnack] = useState({ open: false, msg: "", severity: "info" });
 
-    // ===== axios: helpers =====
+    // ===== API: helpers =====
     const fetchLista = async () => {
         if (!periodo) return;
         try {
             setLoadingList(true);
-            const { data } = await axios.get("/api/seguimientos-actualizados/lista-periodo", { params: { periodo }, headers: headers() });
+            const { data } = await apiClient.get("/api/seguimientos-actualizados/lista-periodo", { params: { periodo } });
             setDocs(Array.isArray(data?.data) ? data.data : []);
         } catch (e) {
             console.error(e);
@@ -327,8 +326,8 @@ export default function SeguimientoReportes({ periodo }) {
         if (!periodo || !codigo) return;
         try {
             setLoadingDoc(true);
-            const { data } = await axios.get("/api/seguimientos-actualizados/obtener-informacion", {
-                params: { periodo, codigo }, headers: headers()
+            const { data } = await apiClient.get("/api/seguimientos-actualizados/obtener-informacion", {
+                params: { periodo, codigo }
             });
             const info = data?.data || {};
             setTituloDocumento(info?.titulo || "");
@@ -355,7 +354,7 @@ export default function SeguimientoReportes({ periodo }) {
         try {
             setSaving(true);
             const payload = { periodo, titulo: tituloDocumento || "Reporte", informacion: sanitizeInfo() };
-            const { data } = await axios.post("/api/seguimientos-actualizados/crear-reporte", payload, { headers: headers() });
+            const { data } = await apiClient.post("/api/seguimientos-actualizados/crear-reporte", payload);
             if (!data?.ok) throw new Error("Respuesta inválida");
             setIsNew(false);
             setDocSel(String(data.codigo));
@@ -377,7 +376,7 @@ export default function SeguimientoReportes({ periodo }) {
         try {
             setSaving(true);
             const payload = { periodo, codigo: docSel, titulo: tituloDocumento || "Reporte", informacion: sanitizeInfo() };
-            const { data } = await axios.put("/api/seguimientos-actualizados/actualizar-reporte", payload, { headers: headers() });
+            const { data } = await apiClient.put("/api/seguimientos-actualizados/actualizar-reporte", payload);
             if (!data?.ok) throw new Error("Respuesta inválida");
             setSnack({ open: true, msg: "Reporte actualizado correctamente.", severity: "success" });
             await fetchLista();

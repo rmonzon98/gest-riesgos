@@ -8,7 +8,7 @@
  */
 
 import { useState, useEffect } from "react";
-import axios from "axios";
+import apiClient from "api/apiClient";
 import {
     Box,
     Typography,
@@ -48,9 +48,7 @@ function AreasMain() {
      */
     const obtenerAreas = async () => {
         try {
-            const response = await axios.get('/api/areas-actualizados', {
-                headers: { "x-access-token": localStorage.getItem('token') }
-            });
+            const response = await apiClient.get('/api/areas-actualizados');
             setListaAreas(response.data.result);
         } catch (error) {
             console.error('Error al obtener áreas:', error);

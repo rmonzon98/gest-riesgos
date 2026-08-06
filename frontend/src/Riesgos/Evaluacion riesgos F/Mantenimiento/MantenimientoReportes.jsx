@@ -18,7 +18,7 @@
  */
 
 import React, { useEffect, useState } from "react";
-import axios from "axios";
+import apiClient from "api/apiClient";
 import {
     Box, Card, CardHeader, CardContent, Typography, Stack, Button, Chip, Alert, CircularProgress, TextField,
     Checkbox, IconButton, Paper, MenuItem, Select, FormControl, InputLabel
@@ -39,9 +39,6 @@ const REPORT_IDS = {
     MAPA: "mapa_calor_riesgo_residual",
     CONTINUIDAD: "matriz_continuidad_evaluacion",
 };
-
-/** headers con token */
-const headers = () => ({ "x-access-token": localStorage.getItem("token") });
 
 const PROPIEDADES_PREDEFINIDAS = [
     { key: "VARIABLE_MITIGACION", label: "A mitigar", source: "predefinida" },
@@ -252,8 +249,7 @@ export default function MantenimientoReportes({ periodo }) {
         }));
 
     const loadExtrasDefectoPeriodo = async () => {
-        const { data } = await axios.get(`${API_BASE}/propiedades-riesgos-defecto`, {
-            headers: headers(),
+        const { data } = await apiClient.get(`${API_BASE}/propiedades-riesgos-defecto`, {
             params: { periodo },
         });
         const rows = Array.isArray(data?.data) ? data.data : [];
@@ -270,8 +266,7 @@ export default function MantenimientoReportes({ periodo }) {
     };
 
     const loadVersionesReportes = async () => {
-        const { data } = await axios.get(`${API_BASE}/versiones-propiedades-reportes`, {
-            headers: headers(),
+        const { data } = await apiClient.get(`${API_BASE}/versiones-propiedades-reportes`, {
             params: { periodo },
         });
         const rows = Array.isArray(data?.data) ? data.data : [];
@@ -307,8 +302,7 @@ export default function MantenimientoReportes({ periodo }) {
         if (!periodo || !codigoVersion) return;
         try {
             setLoadingDetalle(true);
-            const { data } = await axios.get(`${API_BASE}/versiones-propiedades-reportes`, {
-                headers: headers(),
+            const { data } = await apiClient.get(`${API_BASE}/versiones-propiedades-reportes`, {
                 params: { periodo, codigo_version: codigoVersion },
             });
             const row = Array.isArray(data?.data) ? data.data[0] : null;
@@ -409,7 +403,7 @@ export default function MantenimientoReportes({ periodo }) {
                     [REPORT_IDS.CONTINUIDAD]: buildReportPayload(selContinuidad),
                 },
             };
-            await axios.post(`${API_BASE}/versiones-propiedades-reportes`, payload, { headers: headers() });
+            await apiClient.post(`${API_BASE}/versiones-propiedades-reportes`, payload);
             setModo("none");
             setVersionSeleccionada("");
             setSelMatriz([]); setSelMapa([]); setSelContinuidad([]);
@@ -428,10 +422,9 @@ export default function MantenimientoReportes({ periodo }) {
         try {
             setEstableciendo(true);
             setError(""); setOkMsg("");
-            await axios.put(
+            await apiClient.put(
                 `${API_BASE}/versiones-establecer-defecto-reportes`,
-                { periodo, codigo_version: Number(versionSeleccionada) },
-                { headers: headers() }
+                { periodo, codigo_version: Number(versionSeleccionada) }
             );
             await loadVersionesReportes();
             setOkMsg("Versión establecida como defecto.");
@@ -447,10 +440,9 @@ export default function MantenimientoReportes({ periodo }) {
         try {
             setCopiando(true);
             setError(""); setOkMsg("");
-            await axios.post(
+            await apiClient.post(
                 `${API_BASE}/defecto-pasado-reportes`,
-                { periodo },
-                { headers: headers() }
+                { periodo }
             );
             await loadVersionesReportes();
             setOkMsg("Se copió la versión por defecto del año pasado.");
@@ -735,7 +727,7 @@ export default function MantenimientoReportes({ periodo }) {
                                         : <StarBorderRounded />)
                             }
                         >
-                            {estableciendo ? "Estableciendo…" : "Establecer como defecto"}
+                            {estableciendo ? "Estableciendo…" : "Establecer por defecto"}
                         </Button>
                     </Stack>
                 </CardContent>

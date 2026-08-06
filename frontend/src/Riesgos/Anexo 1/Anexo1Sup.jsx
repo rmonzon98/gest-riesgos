@@ -8,7 +8,7 @@
  */
 
 import React, { useEffect, useMemo, useState } from 'react';
-import axios from 'axios';
+import apiClient from 'api/apiClient';
 import {
     Box, Card, CardHeader, CardContent, Typography,
     FormControl, InputLabel, Select, MenuItem,
@@ -74,15 +74,14 @@ function Anexo1Sup() {
         () => window.matchMedia(`(max-width: ${theme.breakpoints.values.md}px)`).matches,
         [theme]
     );
-    const headers = { 'x-access-token': localStorage.getItem('token') };
 
     /**
      * Mapea el estado del formulario de Anexo 1 a un Chip con color y etiqueta.
      */
     const chipDeEstado = (v) => {
         const map = {
-            A: { label: 'Aceptado', color: 'success' },
-            R: { label: 'Rechazado', color: 'error' },
+            A: { label: 'Recibido', color: 'success' },
+            R: { label: 'Se necesita revisión', color: 'error' },
             P: { label: 'Pendiente', color: 'warning' },
             I: { label: 'Ingresado', color: 'info' },
             M: { label: 'Modificado', color: 'info' },
@@ -91,6 +90,24 @@ function Anexo1Sup() {
         const meta = map[v] || map.null;
         return <Chip label={meta.label} color={meta.color} size="small" />;
     };
+
+    const chipEstadoForm = (v) => {
+        const map = {
+            R: { label: 'Rechazado', color: 'error' }, A: { label: 'Aceptado', color: 'success' },
+            M: { label: 'Modificado', color: 'info' }, I: { label: 'Ingresado', color: 'default' }
+        };
+        const meta = map[v] || { label: v || '—', color: 'default' };
+        return <Chip label={meta.label} color={meta.color} size="small" />;
+    };
+
+    const chipEstadoFormConsolidador = (v) => {
+            const map = {
+                R: { label: 'Se necesita revisión', color: 'error' }, A: { label: 'Recibido', color: 'success' },
+                M: { label: 'Modificado', color: 'info' }, I: { label: 'Ingresado', color: 'default' }
+            };
+            const meta = map[v] || { label: v || '—', color: 'default' };
+            return <Chip label={meta.label} color={meta.color} size="small" />;
+        };
 
     const [printFilter, setPrintFilter] = useState('all');   // 'all' | 'complete' | 'indices'
     const [printIndices, setPrintIndices] = useState('');    // "1,3,5"
@@ -135,8 +152,8 @@ function Anexo1Sup() {
         (async () => {
             try {
                 const [entRes, perRes] = await Promise.all([
-                    axios.get('/api/direcciones-actualizados', { headers }),
-                    axios.get('/api/periodos-actualizados', { headers })
+                    apiClient.get('/api/direcciones-actualizados'),
+                    apiClient.get('/api/periodos-actualizados')
                 ]);
                 setEntidades(entRes.data.result ?? entRes.data ?? []);
                 setPeriodos(perRes.data.result ?? perRes.data ?? []);
@@ -150,7 +167,7 @@ function Anexo1Sup() {
     useEffect(() => {
         (async () => {
             try {
-                const { data } = await axios.get('/api/reportes-actualizados/obtener-logo', { headers });
+                const { data } = await apiClient.get('/api/reportes-actualizados/obtener-logo');
                 setLogo('data:image/png;base64,' + (data.logo ?? ''));
             } catch (e) {
                 console.error('Error cargando logo', e);
@@ -164,9 +181,8 @@ function Anexo1Sup() {
         setRespPuesto('');
         if (!unidadId) return;
         try {
-            const { data } = await axios.get('/api/responsables-actualizados/obtener-superior', {
-                headers,
-                params: { entidad: unidadId }
+            const { data } = await apiClient.get('/api/responsables-actualizados/obtener-superior', {
+                                params: { entidad: unidadId }
             });
             const nom = data?.data?.NOMBRE_SUPERIOR || '';
             const pue = data?.data?.PUESTO_SUPERIOR || '';
@@ -185,8 +201,8 @@ function Anexo1Sup() {
         if (!selEntidad || !selPeriodo) return;
         setCargandoEstado(true);
         try {
-            const { data } = await axios.get('/api/primera-matriz-actualizados/estado-historial', {
-                headers, params: { periodo: selPeriodo, entidad: selEntidad }
+            const { data } = await apiClient.get('/api/primera-matriz-actualizados/estado-historial', {
+                params: { periodo: selPeriodo, entidad: selEntidad }
             });
 
             const lista = Array.isArray(data?.historial) ? data.historial : [];
@@ -257,11 +273,11 @@ function Anexo1Sup() {
         if (!entidad || !periodo) { setAlerta('Seleccione entidad y periodo antes de guardar.'); return; }
         if (!histIdSel) { setAlerta('Seleccione una versión del historial.'); return; }
 
-        if (estado === 'R' && !(observacion || '').trim()) { setAlerta('Ingrese comentario si rechazará.'); return; }
+        if (estado === 'R' && !(observacion || '').trim()) { setAlerta('Ingrese comentario si Se necesita revisión.'); return; }
 
         try {
             setGuardando(true);
-            await axios.put(
+            await apiClient.put(
                 '/api/primera-matriz-actualizados/estado-actualizar',
                 {
                     entidad,
@@ -271,8 +287,7 @@ function Anexo1Sup() {
                     comentario: comentarioBloqueado
                         ? (histSel?.COMENTARIO_SUPERVISOR ?? null)
                         : ((observacion || '').trim() || null)
-                },
-                { headers }
+                }
             );
 
             setAlerta(`Decisión guardada para #${histIdSel}: ${estado === 'R' ? 'Rechazado' : 'Aceptado'}.`);
@@ -412,10 +427,31 @@ function Anexo1Sup() {
                                     <Table size="small" stickyHeader sx={{ minWidth: 700 }}>
                                         <TableHead>
                                             <TableRow>
+                                                <TableCell colSpan={2}></TableCell>
+                                                <TableCell
+                                                    align="center"
+                                                    colSpan={3}
+                                                    style={{ fontWeight: 700, backgroundColor: "#f5f5f5" }}
+                                                >
+                                                    Superior
+                                                </TableCell>
+                                                <TableCell
+                                                    align="center"
+                                                    colSpan={3}
+                                                    style={{ fontWeight: 700, backgroundColor: "#f5f5f5" }}
+                                                >
+                                                    Encargado de supervisar
+                                                </TableCell>                                              
+                                            </TableRow>
+                                            <TableRow>
                                                 <TableCell style={{ fontWeight: 700 }}>Usuario que ingresó</TableCell>
                                                 <TableCell style={{ fontWeight: 700 }}>Fecha</TableCell>
-                                                <TableCell style={{ fontWeight: 700 }}>Usuario que revisó</TableCell>
-                                                <TableCell style={{ fontWeight: 700 }}>Comentario revisión</TableCell>
+                                                <TableCell style={{ fontWeight: 700 }}>Estado</TableCell>
+                                                <TableCell style={{ fontWeight: 700 }}>Nombre Superior</TableCell>
+                                                <TableCell style={{ fontWeight: 700 }}>Comentario</TableCell>
+                                                <TableCell style={{ fontWeight: 700 }}>Estado</TableCell>
+                                                <TableCell style={{ fontWeight: 700 }}>Nombre Supervisor</TableCell>
+                                                <TableCell style={{ fontWeight: 700 }}>Comentario</TableCell>
                                             </TableRow>
                                         </TableHead>
                                         <TableBody>
@@ -436,12 +472,28 @@ function Anexo1Sup() {
                                                         >
                                                             <TableCell>{usrH || '—'}</TableCell>
                                                             <TableCell>{fechaH || '—'}</TableCell>
+                                                            <TableCell>
+                                                                {
+                                                                    chipEstadoForm(h.ESTADO_SUPERIOR)
+                                                                }
+                                                            </TableCell>
+                                                            <TableCell>{h.NOMBRE_USUARIO_SUPERIOR ?? '—'}</TableCell>
+                                                            <TableCell>
+                                                                <Typography variant="body2">
+                                                                    {h.COMENTARIO_SUPERIOR ?? '—'}
+                                                                </Typography>
+                                                            </TableCell>
+                                                            <TableCell>
+                                                                {
+                                                                    chipEstadoFormConsolidador(h.ESTADO)
+                                                                }
+                                                            </TableCell>
                                                             <TableCell>{h.NOMBRE_USUARIO_MODIFICACION ?? '—'}</TableCell>
                                                             <TableCell>
                                                                 <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
                                                                     {h.COMENTARIO_SUPERVISOR ?? '—'}
                                                                 </Typography>
-                                                            </TableCell>
+                                                            </TableCell>                                                          
                                                         </TableRow>
                                                     );
                                                 }
@@ -682,14 +734,14 @@ function Anexo1Sup() {
                                     value={estado}
                                     onChange={(e) => setEstado(e.target.value)}
                                 >
-                                    <MenuItem value="A">Aceptar</MenuItem>
-                                    <MenuItem value="R">Rechazar</MenuItem>
+                                    <MenuItem value="A">Recibir</MenuItem>
+                                    <MenuItem value="R">Se necesita revisión</MenuItem>
                                 </Select>
                             </FormControl>
 
                             <TextField
                                 label="Comentario del revisor"
-                                placeholder="Explique el motivo de aceptación/rechazo…"
+                                placeholder="Explique el motivo de recepción o si necesita revisión…"
                                 value={observacion}
                                 onChange={(e) => setObservacion(e.target.value)}
                                 multiline

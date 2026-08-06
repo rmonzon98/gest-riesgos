@@ -9,7 +9,7 @@
  */
 
 import React, { useEffect, useMemo, useState } from "react";
-import axios from "axios";
+import apiClient from "api/apiClient";
 import {
     Box, Card, CardHeader, CardContent, CardActions,
     Grid, Stack, Select, MenuItem,
@@ -26,7 +26,6 @@ import CloseRounded from "@mui/icons-material/CloseRounded";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { PDFDocument } from "pdf-lib";
 
-const headers = () => ({ "x-access-token": localStorage.getItem("token") });
 
 /**
  * fmtBytes
@@ -80,6 +79,27 @@ const normalizeUrlKey = (url) => {
     }
 };
 
+
+const getApiBaseUrl = () => {
+    const baseUrl = apiClient?.defaults?.baseURL || process.env.REACT_APP_API_URL || "";
+    return String(baseUrl).replace(/\/$/, "");
+};
+
+const buildFileUrl = (url = "") => {
+    if (!url) return "";
+    const cleanUrl = String(url);
+
+    if (/^https?:\/\//i.test(cleanUrl)) {
+        return cleanUrl;
+    }
+
+    const baseUrl = getApiBaseUrl();
+    const path = cleanUrl.startsWith("/") ? cleanUrl : `/${cleanUrl}`;
+
+    return `${baseUrl}${path}`;
+};
+
+
 /**
  * ConsolidacionReporteModulos
  *
@@ -120,9 +140,8 @@ export default function ConsolidacionReporteModulos({ categoria = "", titulo }) 
                  * @route GET /api/riesgos-variables-actualizados/obtener-info-inicial-vista-riesgos
                  * @returns {200|500} `{ userInfo, periodos }`.
                  */
-                const { data } = await axios.get(
-                    "/api/riesgos-variables-actualizados/obtener-info-inicial-vista-riesgos",
-                    { headers: headers() }
+                const { data } = await apiClient.get(
+                    "/api/riesgos-variables-actualizados/obtener-info-inicial-vista-riesgos"
                 );
                 setPeriodos(Array.isArray(data?.periodos) ? data.periodos : []);
                 if (data?.userInfo) {
@@ -151,9 +170,8 @@ export default function ConsolidacionReporteModulos({ categoria = "", titulo }) 
                  * @route GET /api/carga-archivos/consolidados
                  * @returns {200|400|500} `{ data: [{ filename, url, size, createdAt, ... }] }`.
                  */
-                const { data } = await axios.get("/api/carga-archivos/consolidados", {
+                const { data } = await apiClient.get("/api/carga-archivos/consolidados", {
                     params: { periodo, categoria },
-                    headers: headers(),
                 });
                 const arr = Array.isArray(data?.data) ? data.data : [];
                 const normalized = arr.map((it, idx) => ({
@@ -247,7 +265,7 @@ export default function ConsolidacionReporteModulos({ categoria = "", titulo }) 
                 return;
             }
             const payload = { items: orderedSelected.map(it => ({ url: it.url, filename: it.filename })) };
-            const { data } = await axios.post("/api/carga-archivos/descargar-lote", payload, { headers: headers() });
+            const { data } = await apiClient.post("/api/carga-archivos/descargar-lote", payload);
             if (!data?.ok) throw new Error(data?.msg || "Fallo al descargar el lote de PDFs.");
 
             const serverFiles = Array.isArray(data.files) ? data.files : [];
@@ -400,13 +418,13 @@ export default function ConsolidacionReporteModulos({ categoria = "", titulo }) 
                                                                                     <IconButton
                                                                                         size="small"
                                                                                         title="Previsualizar"
-                                                                                        onClick={() => handlePreview(process.env.REACT_APP_API_URL + it.url, it.filename)}
+                                                                                        onClick={() => handlePreview(buildFileUrl(it.url), it.filename)}
                                                                                     >
                                                                                         <OpenInNewRounded fontSize="small" />
                                                                                     </IconButton>
                                                                                     <IconButton
                                                                                         component="a"
-                                                                                        href={it.url}
+                                                                                        href={buildFileUrl(it.url)}
                                                                                         download
                                                                                         size="small"
                                                                                         title="Descargar"

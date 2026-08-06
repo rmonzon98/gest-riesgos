@@ -142,7 +142,7 @@ exports.obtenerVersionUnica = async (req, res) => {
             TITULO: r.TITULO,
             COLUMNAS: typeof r.COLUMNAS === 'string' ? r.COLUMNAS : JSON.stringify(r.COLUMNAS ?? null),
             FILAS: typeof r.FILAS === 'string' ? r.FILAS : JSON.stringify(r.FILAS ?? null),
-            OBLIGATORIO: r.OBLIGATORIO
+            OBLIGATORIO: tryParseJSON(r.OBLIGATORIO)
         }));
 
         return res.json({
@@ -236,7 +236,7 @@ exports.crearVersion = async (req, res) => {
                     m.titulo ?? null,
                     asJSON(m.columnas),
                     asJSON(m.filas),
-                    m.direcciones ? m.direcciones : []
+                    m.direcciones ? asJSON(m.direcciones) : '[]'
                 ]);
             }
         }
@@ -570,13 +570,13 @@ exports.obtenerEstadoEHistorial = async (req, res) => {
                 ) AS NOMBRE_USUARIO_SUPERIOR
             FROM 
                 gestion_riesgos.riesgos_primera_matriz_his h
-                LEFT JOIN seguridad.seguridad_persona p1
+                LEFT JOIN gestion_riesgos.seguridad_persona p1
                     ON p1.CODIGO_CIA = h.CODIGO_CIA
                     AND p1.CODIGO_COLABORADOR = h.USUARIO_CREACION
-                LEFT JOIN seguridad.seguridad_persona p2
+                LEFT JOIN gestion_riesgos.seguridad_persona p2
                     ON p2.CODIGO_CIA = h.CODIGO_CIA
                     AND p2.CODIGO_COLABORADOR = h.USUARIO_MODIFICACION
-                LEFT JOIN seguridad.seguridad_persona p3
+                LEFT JOIN gestion_riesgos.seguridad_persona p3
                     ON p3.CODIGO_CIA = h.CODIGO_CIA
                     AND p3.CODIGO_COLABORADOR = h.USUARIO_SUPERIOR
             WHERE 
@@ -927,13 +927,13 @@ exports.obtenerUltimaVersion = async (req, res) => {
                 ) AS NOMBRE_USUARIO_SUPERIOR
             FROM 
                 gestion_riesgos.riesgos_primera_matriz_his h
-                LEFT JOIN seguridad.seguridad_persona p1
+                LEFT JOIN gestion_riesgos.seguridad_persona p1
                     ON p1.CODIGO_CIA = h.CODIGO_CIA
                     AND p1.CODIGO_COLABORADOR = h.USUARIO_CREACION
-                LEFT JOIN seguridad.seguridad_persona p2
+                LEFT JOIN gestion_riesgos.seguridad_persona p2
                     ON p2.CODIGO_CIA = h.CODIGO_CIA
                     AND p2.CODIGO_COLABORADOR = h.USUARIO_MODIFICACION
-                LEFT JOIN seguridad.seguridad_persona p3
+                LEFT JOIN gestion_riesgos.seguridad_persona p3
                     ON p3.CODIGO_CIA = h.CODIGO_CIA
                     AND p3.CODIGO_COLABORADOR = h.USUARIO_SUPERIOR
             WHERE 

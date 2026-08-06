@@ -15,7 +15,7 @@ const pool = require('../../bd/mySQLConnection');
  * Devuelve los datos básicos (NOMBRE, TIPO) de la institución de la sesión.
  *
  * - Lee `codigo_cia` desde `req.user` | `req.codigo_cia` | `req.query.codigo_cia`.
- * - Ejecuta `SELECT ... FROM seguridad.seguridad_institucion WHERE CODIGO_CIA = ?`.
+ * - Ejecuta `SELECT ... FROM gestion_riesgos.seguridad_institucion WHERE CODIGO_CIA = ?`.
  * - Responde 400 si falta `codigo_cia`, 404 si no hay registro, 200 con `{ result }` si existe.
  *
  * @route GET /general
@@ -30,7 +30,7 @@ exports.obtenerGeneral = async (req, res) => {
     try {
         const sql = `
         SELECT NOMBRE, TIPO, CORREO_SOPORTE
-        FROM seguridad.seguridad_institucion
+        FROM gestion_riesgos.seguridad_institucion
         WHERE CODIGO_CIA = ?
         LIMIT 1
         `;
@@ -50,7 +50,7 @@ exports.obtenerGeneral = async (req, res) => {
  * Actualiza el `NOMBRE` y `TIPO` de la institución.
  *
  * - Valida que existan `codigo_cia`, `nombre` y `tipo`.
- * - Ejecuta `UPDATE seguridad.seguridad_institucion SET ... WHERE CODIGO_CIA = ?`.
+ * - Ejecuta `UPDATE gestion_riesgos.seguridad_institucion SET ... WHERE CODIGO_CIA = ?`.
  * - Responde 404 si no hubo filas afectadas, 200 si se actualiza.
  *
  * @route PUT /general
@@ -68,7 +68,7 @@ exports.actualizarGeneral = async (req, res) => {
 
     try {
         const sql = `
-      UPDATE seguridad.seguridad_institucion
+      UPDATE gestion_riesgos.seguridad_institucion
          SET NOMBRE = ?, TIPO = ?, CORREO_SOPORTE = ?, usuario_modificacion = ?, fecha_modificacion = now()
        WHERE CODIGO_CIA = ?
       LIMIT 1
@@ -145,7 +145,7 @@ exports.obtenerLogsPorTabla = async (req, res) => {
                 nombre_tabla,
                 accion,
                 informacion
-            FROM ${prefijo === 'riesgos' ? 'gestion_riesgos' : 'seguridad'}.${logsTable}
+            FROM gestion_riesgos.${logsTable}
             WHERE nombre_tabla = ?
               AND codigo_cia IN (?, 0, -1)
             ORDER BY fecha_creacion DESC, codigo_log DESC

@@ -19,7 +19,7 @@ import {
     Snackbar,
     Alert,
 } from "@mui/material";
-import axios from "axios";
+import apiClient from "api/apiClient";
 
 /**
  * Formulario controlado para editar nombre, tipo e información de contacto de la institución.
@@ -48,14 +48,9 @@ function GeneralDetalle() {
             });
         } else {
             try {
-                await axios.put(
+                await apiClient.put(
                     "/api/administracion-actualizados/general",
-                    { nombre, tipo, correo: correoSoporte },
-                    {
-                        headers: {
-                            "x-access-token": localStorage.getItem("token"),
-                        },
-                    }
+                    { nombre, tipo, correo: correoSoporte }
                 );
                 setSnack({
                     open: true,
@@ -77,9 +72,7 @@ function GeneralDetalle() {
      */
     const obtenerGeneral = async () => {
         try {
-            const resp = await axios.get("/api/administracion-actualizados/general", {
-                headers: { "x-access-token": localStorage.getItem("token") },
-            });
+            const resp = await apiClient.get("/api/administracion-actualizados/general");
             const data = resp.data.result[0];
             setNombre(data.NOMBRE || "");
             setTipo(data.TIPO || "");

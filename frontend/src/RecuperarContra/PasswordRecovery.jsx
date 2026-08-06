@@ -1,5 +1,5 @@
 /**
- * @fileoverview 
+ * @fileoverview
  * Pantalla de recuperación de contraseña del sistema de Gestión de Riesgos.
  * Permite solicitar una contraseña temporal enviándola al correo del usuario.
  *
@@ -10,12 +10,22 @@
 
 import React, { useState } from "react";
 import {
-    Box, Container, Card, CardHeader, CardContent, TextField, Typography, Button, Alert, Stack, CircularProgress,
+    Box,
+    Container,
+    Card,
+    CardHeader,
+    CardContent,
+    TextField,
+    Typography,
+    Button,
+    Alert,
+    Stack,
+    CircularProgress,
 } from "@mui/material";
 import LockResetRounded from "@mui/icons-material/LockResetRounded";
 import ArrowBackRounded from "@mui/icons-material/ArrowBackRounded";
 import { useNavigate } from "react-router-dom";
-import axios from "axios";
+import apiClient from "../api/apiClient";
 
 /**
  * PasswordRecovery: Componente de UI para recuperar el acceso.
@@ -38,22 +48,25 @@ export default function PasswordRecovery({ onBack, initialEmail = "" }) {
     const [successMsg, setSuccessMsg] = useState("");
     const [errorMsg, setErrorMsg] = useState("");
 
-  /**
-   * Maneja el envío del formulario:
-   * - Limpia mensajes previos.
-   * - Valida el correo.
-   * - Invoca el endpoint y muestra feedback según respuesta.
-   * - Garantiza liberar el estado de carga en finally.
-   *
-   * @param {React.FormEvent<HTMLFormElement>} e
-   * @returns {Promise<void>}
-   */
+    /**
+     * Maneja el envío del formulario:
+     * - Limpia mensajes previos.
+     * - Valida el correo.
+     * - Invoca el endpoint y muestra feedback según respuesta.
+     * - Garantiza liberar el estado de carga en finally.
+     *
+     * @param {React.FormEvent<HTMLFormElement>} e
+     * @returns {Promise<void>}
+     */
     const handleSubmit = async (e) => {
         e.preventDefault();
+
         setSuccessMsg("");
         setErrorMsg("");
 
-        const isValid = /.+@.+\..+/.test(email);
+        const correoNormalizado = email.trim().toLowerCase();
+        const isValid = /.+@.+\..+/.test(correoNormalizado);
+
         if (!isValid) {
             setErrorMsg("Ingresa un correo válido.");
             return;
@@ -62,18 +75,20 @@ export default function PasswordRecovery({ onBack, initialEmail = "" }) {
         try {
             setLoading(true);
 
-            const { data } = await axios.put(
+            const { data } = await apiClient.put(
                 "/api/responsables-actualizados/actualizar-contrasena",
-                { correo: email }
+                { correo: correoNormalizado }
             );
 
             setSuccessMsg(
                 data?.message ||
+                data?.msg ||
                 "Generamos una contraseña temporal y la enviamos a tu correo. Inicia sesión y cámbiala de inmediato."
             );
         } catch (err) {
             setErrorMsg(
                 err?.response?.data?.message ||
+                err?.response?.data?.msg ||
                 "No se pudo generar la contraseña temporal. Inténtalo de nuevo."
             );
         } finally {
@@ -81,15 +96,17 @@ export default function PasswordRecovery({ onBack, initialEmail = "" }) {
         }
     };
 
-  /**
-   * Regresa a la vista anterior o, si no se provee `onBack`, redirige al inicio.
-   */
+    /**
+     * Regresa a la vista anterior o, si no se provee `onBack`, redirige al inicio.
+     */
     const handleBack = () => {
-        if (typeof onBack === "function") onBack();
-        else navigate("/");
+        if (typeof onBack === "function") {
+            onBack();
+        } else {
+            navigate("/");
+        }
     };
 
-  // Render principal (layout centrado, encabezado, formulario y acciones)
     return (
         <Box sx={{ minHeight: "100vh", display: "flex", alignItems: "center" }}>
             <Container maxWidth="sm">
@@ -99,16 +116,18 @@ export default function PasswordRecovery({ onBack, initialEmail = "" }) {
                             display: "inline-flex",
                             p: 1.5,
                             borderRadius: 2,
-                            bgcolor: (t) => t.palette.primary.main + "20",
+                            bgcolor: (theme) => `${theme.palette.primary.main}20`,
                             color: "primary.main",
                         }}
                     >
                         <LockResetRounded fontSize="large" />
                     </Box>
+
                     <Box textAlign="center">
                         <Typography variant="h4" fontWeight={800}>
                             ¿Olvidaste tu contraseña?
                         </Typography>
+
                         <Typography color="text.secondary" sx={{ mt: 1 }}>
                             Generaremos una <strong>contraseña temporal</strong> y te la enviaremos por correo.
                         </Typography>
@@ -121,6 +140,7 @@ export default function PasswordRecovery({ onBack, initialEmail = "" }) {
                         titleTypographyProps={{ variant: "h6" }}
                         title="Recuperar acceso"
                     />
+
                     <CardContent>
                         <Alert severity="info" sx={{ mb: 2 }}>
                             Por seguridad, la contraseña anterior quedará inválida. Cámbiala inmediatamente después de iniciar sesión.
@@ -135,7 +155,7 @@ export default function PasswordRecovery({ onBack, initialEmail = "" }) {
                                 autoComplete="email"
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
-                                error={!!errorMsg}
+                                error={Boolean(errorMsg)}
                                 helperText={errorMsg || ""}
                                 disabled={loading}
                                 fullWidth
@@ -147,10 +167,15 @@ export default function PasswordRecovery({ onBack, initialEmail = "" }) {
                                 </Alert>
                             )}
 
-                            <Button type="submit" variant="contained" size="large" disabled={loading}>
+                            <Button
+                                type="submit"
+                                variant="contained"
+                                size="large"
+                                disabled={loading}
+                            >
                                 {loading ? (
                                     <Stack direction="row" alignItems="center" spacing={1}>
-                                        <CircularProgress size={20} />
+                                        <CircularProgress size={20} color="inherit" />
                                         <span>Generando…</span>
                                     </Stack>
                                 ) : (

@@ -17,7 +17,7 @@ import {
     Button, Typography, Box, Table, TableHead, TableRow,
     TableCell, TableBody, Paper
 } from "@mui/material";
-import axios from "axios";
+import apiClient from "api/apiClient";
 import AddIcon from "@mui/icons-material/Add";
 import EditIcon from "@mui/icons-material/Edit";
 import AlertaMensaje from "../../Alerta F/AlertaMensaje";
@@ -52,9 +52,7 @@ function RolesMain() {
      */
     const obtenerInformacion = async () => {
         try {
-            const response = await axios.get('/api/roles-actualizados/informacion-roles-direccion', {
-                headers: { "x-access-token": localStorage.getItem("token") }
-            });
+            const response = await apiClient.get('/api/roles-actualizados/informacion-roles-direccion');
             setLista(response.data.roles);
             setListaUrls(response.data.urls);
         } catch (err) {

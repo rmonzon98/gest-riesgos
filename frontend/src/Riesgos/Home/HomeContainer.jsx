@@ -1,4 +1,4 @@
-import UpdatedNavBar from '../NavBar/UpdatedNavBar'
+import UpdatedNavBar from 'Riesgos/NavBar/UpdatedNavBar';
 import { Outlet } from 'react-router-dom';
 
 function HomeContainer() {

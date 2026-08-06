@@ -8,7 +8,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react';
-import axios from 'axios';
+import apiClient from 'api/apiClient';
 import {
     Box,
     Card,
@@ -254,13 +254,12 @@ export default function Anexo2Institucional() {
 
     const theme = useTheme();
     const isMobile = useMediaQuery(`(max-width:${theme.breakpoints.values.md}px)`);
-    const headersReq = { 'x-access-token': localStorage.getItem('token') };
 
     // Init
     useEffect(() => {
         (async () => {
             try {
-                const { data } = await axios.get('/api/periodos-actualizados', { headers: headersReq });
+                const { data } = await apiClient.get('/api/periodos-actualizados');
                 setPeriodos(data.result ?? data ?? []);
             } catch {
                 setPeriodos([]);
@@ -269,9 +268,7 @@ export default function Anexo2Institucional() {
 
         (async () => {
             try {
-                const { data } = await axios.get('/api/reportes-actualizados/obtener-logo', {
-                    headers: headersReq,
-                });
+                const { data } = await apiClient.get('/api/reportes-actualizados/obtener-logo');
                 setLogo('data:image/png;base64,' + (data.logo ?? ''));
                 setInstitucion(data.nombre ?? '');
             } catch {
@@ -287,7 +284,7 @@ export default function Anexo2Institucional() {
     const obtenerSuperior = async () => {
         try {
             setLoadingSup(true);
-            const { data } = await axios.get(API_SUP, { headers: headersReq });
+            const { data } = await apiClient.get(API_SUP);
             if (data?.nombre) setSupNombre(String(data.nombre));
             if (data?.puesto) setSupPuesto(String(data.puesto));
         } catch (e) {
@@ -380,8 +377,7 @@ export default function Anexo2Institucional() {
         if (!p) return;
         try {
             setCargandoDefecto(true);
-            const { data } = await axios.get(API_DEFECTO, {
-                headers: headersReq,
+            const { data } = await apiClient.get(API_DEFECTO, {
                 params: { periodo: p },
             });
             const arr = Array.isArray(data?.matrices) ? normalizeMatrices(data.matrices) : [];
@@ -407,8 +403,7 @@ export default function Anexo2Institucional() {
         try {
             setCargando(true);
             setAlerta(null);
-            const { data } = await axios.get(API_VERSION, {
-                headers: headersReq,
+            const { data } = await apiClient.get(API_VERSION, {
                 params: { periodo: p, tipo: TIPO_MATRIZ },
             });
             const apiMatrices = Array.isArray(data?.matrices)
@@ -437,8 +432,7 @@ export default function Anexo2Institucional() {
     // Cargar sugerencias de Direcciones
     const cargarDireccionesInfo = async (p) => {
         try {
-            const { data } = await axios.get(API_DIR_INFO, {
-                headers: headersReq,
+            const { data } = await apiClient.get(API_DIR_INFO, {
                 params: { periodo: p },
             });
             const { map, siglasSet, nombresSet } = normalizeDireccionesInfo(data ?? {});
@@ -658,7 +652,7 @@ export default function Anexo2Institucional() {
 
         try {
             setGuardando(true);
-            await axios.post(API_VERSION, payload, { headers: headersReq });
+            await apiClient.post(API_VERSION, payload);
             setSnack({ open: true, msg: 'Guardado exitoso', sev: 'success' });
             await cargarUltimaOVersionDefecto(periodo);
         } catch {

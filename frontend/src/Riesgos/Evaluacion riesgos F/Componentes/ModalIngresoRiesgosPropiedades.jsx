@@ -8,7 +8,7 @@
  */
 
 import { useEffect, useState } from "react";
-import axios from "axios";
+import apiClient from "api/apiClient";
 import {
     Dialog, DialogTitle, DialogContent, DialogActions,
     TextField, Grid, Button, Stack, Alert, IconButton, Snackbar,
@@ -122,9 +122,9 @@ function ModalIngresoRiesgosPropiedades({
         if (!tipoCodigo) { setObjetivos([]); return; }
         setLoadingObj(true);
         try {
-            const { data } = await axios.get(
+            const { data } = await apiClient.get(
                 "/api/objetivos-actualizados",
-                { params: { tipoObjetivo: tipoCodigo }, headers: { "x-access-token": localStorage.getItem("token") } }
+                { params: { tipoObjetivo: tipoCodigo } }
             );
             const list = Array.isArray(data?.result) ? data.result : [];
             setObjetivos(list);
@@ -393,7 +393,6 @@ function ModalIngresoRiesgosPropiedades({
     const handleFetchRiesgoPeriodoAnterior = async () => {
         try {
             setPrevLoading(true);
-            const token = localStorage.getItem("token");
 
             const params = {
                 periodo: periodoAnterior ?? 0,
@@ -411,11 +410,10 @@ function ModalIngresoRiesgosPropiedades({
                 return;
             }
 
-            const { data } = await axios.get(
+            const { data } = await apiClient.get(
                 "/api/riesgos-variables-actualizados/riesgo-por-id-periodo-anterior",
                 {
                     params,
-                    headers: { "x-access-token": token }
                 }
             );
 
@@ -621,8 +619,8 @@ function ModalIngresoRiesgosPropiedades({
                                         value={form.DESCRIPCION}
                                         onChange={(e) => setForm((s) => ({ ...s, DESCRIPCION: e.target.value }))}
                                         fullWidth size="small" multiline minRows={2}
-                                        inputProps={{ maxLength: 300 }}
-                                        helperText={helper(form.DESCRIPCION, 300)}
+                                        inputProps={{ maxLength: 999 }}
+                                        helperText={helper(form.DESCRIPCION, 999)}
                                         error={fieldError((form.DESCRIPCION || "").trim().length < 5)}
                                     />
                                 </Grid>
@@ -676,7 +674,7 @@ function ModalIngresoRiesgosPropiedades({
                                         >
                                             {(cats.capacidadMitigacion || []).map((it) => (
                                                 <MenuItem key={it.CODIGO} value={it.CODIGO}>
-                                                    {it.DESCRIPCION} (valor {it.CODIGO - 1})
+                                                    {it.DESCRIPCION} (nivel {it.CODIGO})
                                                 </MenuItem>
                                             ))}
                                         </Select>
@@ -769,8 +767,8 @@ function ModalIngresoRiesgosPropiedades({
                                         value={form.SEVERIDAD_NARRACION}
                                         onChange={(e) => setForm((s) => ({ ...s, SEVERIDAD_NARRACION: e.target.value }))}
                                         fullWidth size="small" multiline minRows={2}
-                                        inputProps={{ maxLength: 500 }}
-                                        helperText={helper(form.SEVERIDAD_NARRACION, 500)}
+                                        inputProps={{ maxLength: 999 }}
+                                        helperText={helper(form.SEVERIDAD_NARRACION, 999)}
                                         error={fieldError(!form.SEVERIDAD_NARRACION)}
                                     />
                                 </Grid>
@@ -784,8 +782,8 @@ function ModalIngresoRiesgosPropiedades({
                                         value={form.EVENTO}
                                         onChange={(e) => setForm((s) => ({ ...s, EVENTO: e.target.value }))}
                                         fullWidth size="small" multiline minRows={2}
-                                        inputProps={{ maxLength: 255 }}
-                                        helperText={helper(form.EVENTO, 255)}
+                                        inputProps={{ maxLength: 999 }}
+                                        helperText={helper(form.EVENTO, 999)}
                                         error={fieldError(!form.EVENTO)}
                                     />
                                 </Grid>
@@ -799,8 +797,8 @@ function ModalIngresoRiesgosPropiedades({
                                         value={form.CONTROL}
                                         onChange={(e) => setForm((s) => ({ ...s, CONTROL: e.target.value }))}
                                         fullWidth size="small" multiline minRows={2}
-                                        inputProps={{ maxLength: 500 }}
-                                        helperText={helper(form.CONTROL, 500)}
+                                        inputProps={{ maxLength: 999 }}
+                                        helperText={helper(form.CONTROL, 999)}
                                         error={fieldError(!form.CONTROL)}
                                     />
                                 </Grid>
@@ -814,8 +812,8 @@ function ModalIngresoRiesgosPropiedades({
                                         value={form.MONITOREO}
                                         onChange={(e) => setForm((s) => ({ ...s, MONITOREO: e.target.value }))}
                                         fullWidth size="small" multiline minRows={2}
-                                        inputProps={{ maxLength: 250 }}
-                                        helperText={helper(form.MONITOREO, 250)}
+                                        inputProps={{ maxLength: 999 }}
+                                        helperText={helper(form.MONITOREO, 999)}
                                         error={fieldError(!form.MONITOREO)}
                                     />
                                 </Grid>
@@ -893,8 +891,8 @@ function ModalIngresoRiesgosPropiedades({
                                     value={form.OBSERVACIONES}
                                     onChange={(e) => setForm((s) => ({ ...s, OBSERVACIONES: e.target.value }))}
                                     fullWidth size="small"
-                                    inputProps={{ maxLength: 100 }}
-                                    helperText={helper(form.OBSERVACIONES, 100)}
+                                    inputProps={{ maxLength: 999 }}
+                                    helperText={helper(form.OBSERVACIONES, 999)}
                                 />
                             </Grid>
                         </Grid>

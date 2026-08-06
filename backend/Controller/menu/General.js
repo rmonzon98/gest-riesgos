@@ -33,9 +33,9 @@ exports.obtenerAplicaciones = async (req, res) => {
         SELECT 
             b.NOMBRE, b.URL_BASE, IMAGEN
         FROM 
-            seguridad.seguridad_institucion_acceso_app a
+            gestion_riesgos.seguridad_institucion_acceso_app a
         LEFT JOIN
-            seguridad.seguridad_aplicacion b
+            gestion_riesgos.seguridad_aplicacion b
         ON
             a.codigo_aplicacion = b.codigo_aplicacion
         WHERE 
@@ -67,7 +67,7 @@ exports.obtenerAplicaciones = async (req, res) => {
  */
 exports.checkApp = async (req, res) => {
     try {
-        const app = String(req.query.app || '').trim().toLowerCase();
+        const app = String(req.query.app || '').trim().toLowerCase().replace(/^\/+/, '');
         const codigo_cia = req.codigo_cia
 
         if (!app) {
@@ -80,14 +80,14 @@ exports.checkApp = async (req, res) => {
         const sql = `
         SELECT 
             b.NOMBRE, b.URL_BASE, b.IMAGEN
-        FROM seguridad.seguridad_institucion_acceso_app a
-        LEFT JOIN seguridad.seguridad_aplicacion b
+        FROM gestion_riesgos.seguridad_institucion_acceso_app a
+        LEFT JOIN gestion_riesgos.seguridad_aplicacion b
             ON a.codigo_aplicacion = b.codigo_aplicacion
         WHERE 
             a.CODIGO_CIA = ?
             AND a.vigente = 1
             AND (a.fecha_vigencia > NOW() OR a.fecha_vigencia IS NULL)
-            AND b.url_base = ?
+            AND LOWER(TRIM(LEADING '/' FROM TRIM(b.url_base))) = ?
         ORDER BY b.NOMBRE
         LIMIT 1
         `;

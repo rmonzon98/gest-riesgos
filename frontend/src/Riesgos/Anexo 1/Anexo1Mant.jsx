@@ -8,7 +8,7 @@
  */
 
 import React, { useEffect, useMemo, useState } from 'react';
-import axios from 'axios';
+import apiClient from 'api/apiClient';
 import {
     Box, FormControl, InputLabel, Select, MenuItem,
     Typography, Card, CardHeader, CardContent,
@@ -55,7 +55,6 @@ function Anexo1Mant() {
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
-    const headers = { 'x-access-token': localStorage.getItem('token') };
 
     // helper: parsea JSON si viene como string
     const parseJSON = (val) => {
@@ -82,7 +81,7 @@ function Anexo1Mant() {
             try {
                 setLoadingDirs(true);
                 setErrorDirs('');
-                const { data } = await axios.get('/api/direcciones-actualizados', { headers });
+                const { data } = await apiClient.get('/api/direcciones-actualizados');
                 const list = Array.isArray(data?.result) ? data.result : [];
                 const cat = list.map(d => ({
                     id: Number(d.CODIGO_ENTIDAD),
@@ -106,7 +105,7 @@ function Anexo1Mant() {
          */
         const fetchPeriodos = async () => {
             try {
-                const { data } = await axios.get('/api/periodos-actualizados', { headers });
+                const { data } = await apiClient.get('/api/periodos-actualizados');
                 setPeriodos(data.result ?? data);
             } catch (err) {
                 console.error('Error al cargar periodos', err);
@@ -122,9 +121,8 @@ function Anexo1Mant() {
         const fetchVersiones = async () => {
             if (!periodo) return;
             try {
-                const { data } = await axios.get('/api/primera-matriz-actualizados', {
-                    headers,
-                    params: { periodo }
+                const { data } = await apiClient.get('/api/primera-matriz-actualizados', {
+                                        params: { periodo }
                 });
                 setVersiones(data || []);
                 setVersion('');
@@ -148,9 +146,8 @@ function Anexo1Mant() {
     const loadMatrices = async (pPeriodo = periodo, pVersion = version) => {
         if (!pPeriodo || !pVersion) return;
         try {
-            const { data } = await axios.get('/api/primera-matriz-actualizados/obtener-unico', {
-                headers,
-                params: { periodo: pPeriodo, version: pVersion }
+            const { data } = await apiClient.get('/api/primera-matriz-actualizados/obtener-unico', {
+                                params: { periodo: pPeriodo, version: pVersion }
             });
             setMatrices(Array.isArray(data.matrices) ? data.matrices : []);
             setActivePreview(0);
@@ -166,8 +163,8 @@ function Anexo1Mant() {
     const reloadVersiones = async () => {
         if (!periodo) return;
         try {
-            const { data } = await axios.get('/api/primera-matriz-actualizados', {
-                headers, params: { periodo }
+            const { data } = await apiClient.get('/api/primera-matriz-actualizados', {
+                params: { periodo }
             });
             setVersiones(data || []);
         } catch (err) {
@@ -181,10 +178,9 @@ function Anexo1Mant() {
     const handleSetDefault = async () => {
         if (!periodo || !version) return;
         try {
-            await axios.put(
+            await apiClient.put(
                 '/api/primera-matriz-actualizados/establecer-defecto',
-                { periodo, version },
-                { headers }
+                { periodo, version }
             );
         } catch (err) {
             console.error('Error al establecer matriz por defecto', err);
@@ -207,10 +203,9 @@ function Anexo1Mant() {
     const handleLoadSystemDefault = async () => {
         if (!periodo) return;
         try {
-            await axios.post(
+            await apiClient.post(
                 `/api/primera-matriz-actualizados`,
-                { periodo, matrices: anexo1DefaultSistema },
-                { headers }
+                { periodo, matrices: anexo1DefaultSistema }
             );
             await reloadVersiones();
         } catch (err) {
@@ -513,10 +508,9 @@ function Anexo1Mant() {
                                     disabled={!periodo}
                                     onClick={async () => {
                                         try {
-                                            await axios.post(
+                                            await apiClient.post(
                                                 '/api/primera-matriz-actualizados/copiar-defecto-anio-pasado',
-                                                { periodo },
-                                                { headers }
+                                                { periodo }
                                             );
                                             reloadVersiones();
                                         } catch (err) {

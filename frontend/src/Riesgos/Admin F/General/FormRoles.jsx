@@ -12,7 +12,7 @@ import {
     Dialog, DialogTitle, DialogContent, DialogActions,
     TextField, Button, Grid, Autocomplete, Chip
 } from "@mui/material";
-import axios from "axios";
+import apiClient from "api/apiClient";
 
 /**
  * Formulario modal controlado para crear o editar roles generales.
@@ -28,8 +28,7 @@ function FormRoles({ showModal, id, onClose, onSuccess, onError, listaUrls }) {
      */
     useEffect(() => {
         if (id) {
-            axios.get('/api/roles-actualizados/obtener-rol', {
-                headers: { "x-access-token": localStorage.getItem("token") },
+            apiClient.get('/api/roles-actualizados/obtener-rol', {
                 params: { id }
             })
                 .then((response) => {
@@ -90,11 +89,10 @@ function FormRoles({ showModal, id, onClose, onSuccess, onError, listaUrls }) {
         try {
             const method = id ? "put" : "post";
             const url = "/api/roles-actualizados";
-            await axios({
+            await apiClient({
                 method,
                 url,
                 data: payload,
-                headers: { "x-access-token": localStorage.getItem("token") }
             });
             onSuccess();
         } catch (err) {

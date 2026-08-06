@@ -1,29 +1,73 @@
 /**
  * @fileoverview
- * Modal para relacionar riesgos entre sí y gestionar dependencias.
+ * Modal para relacionar un riesgo actual con un riesgo del período anterior.
+ *
+ * Compatibilidad:
+ * - Deshabilita riesgos anteriores que ya estén usados por otro riesgo del período actual.
+ * - El servicio también valida esta regla para evitar duplicados en producción.
  *
  * @module Riesgos/Comportamiento/Relaciones riesgos/ModalRelacionarRiesgo.jsx
- * @version 1.0
- * @author Equipo de Desarrollo
+ * @version 1.1
  */
 
 import { useEffect, useMemo, useState } from "react";
 import {
-    Dialog, DialogTitle, DialogContent, DialogActions,
-    Button, Checkbox, List, ListItem, ListItemText,
-    LinearProgress, Alert, Typography, Snackbar
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogActions,
+    Button,
+    Checkbox,
+    List,
+    ListItem,
+    ListItemText,
+    LinearProgress,
+    Alert,
+    Typography,
+    Snackbar,
+    Chip,
+    Stack,
+    Box
 } from "@mui/material";
 import MuiAlert from "@mui/material/Alert";
-import axios from "axios";
+import apiClient from "api/apiClient";
 
-/**
- * Se utiliza para relacionar un riesgo con otros riesgos.
- *
- * Se utiliza para gestionar dependencias y agrupar riesgos relacionados.
- *
- * @component
- */
-export default function ModalRelacionarRiesgo({ open, onClose, riesgo, periodo }) {
+const API_SEGUIMIENTOS = "/api/seguimientos-actualizados";
+
+const getCodigoRiesgo = (riesgo) => {
+    const valor =
+        riesgo?.CODIGO_RIESGO ??
+        riesgo?.codigo_riesgo ??
+        riesgo?.codigo ??
+        riesgo?.id ??
+        null;
+
+    const n = Number(valor);
+    return Number.isInteger(n) ? n : null;
+};
+
+const getRef = (riesgo) => {
+    return riesgo?.["Ref."] ?? riesgo?.REF ?? riesgo?.Ref ?? riesgo?.ref ?? "Sin referencia";
+};
+
+const getDescripcion = (riesgo) => {
+    return riesgo?.["Descripción del riesgo"] ?? riesgo?.DESCRIPCION ?? riesgo?.descripcion ?? "Sin descripción";
+};
+
+const limpiarExtras = (obj) =>
+    Object.fromEntries(
+        Object.entries(obj || {}).filter(
+            ([, v]) => v != null && v !== "" && !(Array.isArray(v) && v.length === 0)
+        )
+    );
+
+export default function ModalRelacionarRiesgo({
+    open,
+    onClose,
+    riesgo,
+    periodo,
+    relacionesDetalle = []
+}) {
     const [riesgosPasados, setRiesgosPasados] = useState([]);
     const [seleccionado, setSeleccionado] = useState(null);
     const [loading, setLoading] = useState(false);
@@ -32,48 +76,76 @@ export default function ModalRelacionarRiesgo({ open, onClose, riesgo, periodo }
     const [snack, setSnack] = useState({
         open: false,
         msg: "",
-        severity: /** @type {"success" | "warning" | "error" | "info"} */ ("success"),
+        severity: "success",
         autoclose: 3000
     });
 
-    const headers = () => ({ "x-access-token": localStorage.getItem("token") });
+    const codigoRiesgoActual = getCodigoRiesgo(riesgo);
+
     const periodoAnterior = useMemo(() => {
         const p = parseInt(periodo, 10);
-        return isNaN(p) ? null : p - 1;
+        return Number.isInteger(p) ? p - 1 : null;
     }, [periodo]);
 
-    /* ===== Cargar riesgos del período anterior ===== */
+    const riesgosAnterioresUsados = useMemo(() => {
+        const usados = new Map();
+
+        relacionesDetalle.forEach((item) => {
+            const anterior = item?.anterior;
+            if (!anterior?.codigo_riesgo) return;
+
+            const codigoAnterior = Number(anterior.codigo_riesgo);
+            const codigoActualRelacionado = Number(item.codigo_riesgo);
+
+            if (!usados.has(codigoAnterior)) {
+                usados.set(codigoAnterior, []);
+            }
+
+            usados.get(codigoAnterior).push({
+                codigo_riesgo: codigoActualRelacionado,
+                ref: item.ref,
+                descripcion: item.descripcion
+            });
+        });
+
+        return usados;
+    }, [relacionesDetalle]);
+
     const fetchRiesgosPasados = async () => {
         if (!periodoAnterior || periodoAnterior <= 0) {
             setError("No se pudo determinar el período anterior.");
             return;
         }
+
         try {
             setLoading(true);
             setError("");
 
-            const { data } = await axios.get(
+            const { data } = await apiClient.get(
                 "/api/riesgos-variables-actualizados/obtener-lista-riesgos-detalle",
-                { params: { periodo: periodoAnterior }, headers: headers() }
+                { params: { periodo: periodoAnterior } }
             );
 
             const lista = Array.isArray(data?.valores) ? data.valores : [];
 
-            const limpiar = (obj) =>
-                Object.fromEntries(
-                    Object.entries(obj || {}).filter(
-                        ([, v]) => v != null && v !== "" && !(Array.isArray(v) && v.length === 0)
-                    )
-                );
-
             const normalizados = lista.map((r) => ({
                 ...r,
-                ...(limpiar(r.EXTRAS_ME)),
-                ...(limpiar(r.EXTRAS_MCE)),
-                ...(limpiar(r.EXTRAS_MC))
+                ...(limpiarExtras(r.EXTRAS_ME)),
+                ...(limpiarExtras(r.EXTRAS_MCE)),
+                ...(limpiarExtras(r.EXTRAS_MC))
             }));
 
             setRiesgosPasados(normalizados);
+
+            const relacionActual = relacionesDetalle.find(
+                (item) => Number(item?.codigo_riesgo) === Number(codigoRiesgoActual)
+            );
+
+            if (relacionActual?.anterior?.codigo_riesgo) {
+                setSeleccionado(Number(relacionActual.anterior.codigo_riesgo));
+            } else {
+                setSeleccionado(null);
+            }
         } catch (err) {
             console.error(err);
             setError("No se pudieron cargar los riesgos del año pasado.");
@@ -85,9 +157,16 @@ export default function ModalRelacionarRiesgo({ open, onClose, riesgo, periodo }
     useEffect(() => {
         if (open && periodo) {
             setSeleccionado(null);
+            setError("");
             fetchRiesgosPasados();
         }
-    }, [open, periodo]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [open, periodo, codigoRiesgoActual]);
+
+    const getUsoAnterior = (codigoAnterior) => {
+        const lista = riesgosAnterioresUsados.get(Number(codigoAnterior)) || [];
+        return lista.filter((x) => Number(x.codigo_riesgo) !== Number(codigoRiesgoActual));
+    };
 
     const handleGuardar = async () => {
         try {
@@ -95,90 +174,89 @@ export default function ModalRelacionarRiesgo({ open, onClose, riesgo, periodo }
             setError("");
 
             const riesgoAnteriorSel = riesgosPasados.find(
-                (r) => r["CODIGO_RIESGO"] === seleccionado
+                (r) => Number(getCodigoRiesgo(r)) === Number(seleccionado)
             );
 
+            const usos = getUsoAnterior(seleccionado);
+            if (usos.length > 0) {
+                setError("Este riesgo del año anterior ya está relacionado con otro riesgo del período actual.");
+                return;
+            }
+
             const payload = {
-                codigo_entidad: riesgo?.CODIGO_ENTIDAD ?? null,
+                codigo_entidad: riesgo?.CODIGO_ENTIDAD ?? riesgo?.codigo_entidad ?? null,
                 codigo_periodo_actual: Number(periodo) || null,
                 riesgo_actual: {
-                    codigo_riesgo: riesgo?.CODIGO_RIESGO ?? null,
-                    ref: riesgo?.["Ref."] ?? null,
-                    descripcion: riesgo?.["Descripción del riesgo"] ?? null
+                    codigo_riesgo: codigoRiesgoActual,
+                    ref: getRef(riesgo),
+                    descripcion: getDescripcion(riesgo)
                 },
                 riesgo_anterior: {
-                    codigo_riesgo: riesgoAnteriorSel?.["CODIGO_RIESGO"] ?? null,
-                    ref: riesgoAnteriorSel?.["Ref."] ?? null,
-                    descripcion: riesgoAnteriorSel?.["Descripción del riesgo"] ?? null,
+                    codigo_riesgo: getCodigoRiesgo(riesgoAnteriorSel),
+                    ref: getRef(riesgoAnteriorSel),
+                    descripcion: getDescripcion(riesgoAnteriorSel),
                     codigo_periodo: periodoAnterior
                 }
             };
 
-            // Validaciones mínimas
             if (
                 !payload.codigo_entidad ||
                 !payload.codigo_periodo_actual ||
                 !payload.riesgo_actual.codigo_riesgo ||
-                !payload.riesgo_anterior.codigo_riesgo ||
-                !payload.riesgo_anterior.codigo_periodo
+                !payload.riesgo_anterior.codigo_riesgo
             ) {
-                setSnack({
-                    open: true,
-                    msg: "Faltan datos para realizar la relación.",
-                    severity: "warning",
-                    autoclose: 4000
-                });
-                setLoading(false);
+                setError("Faltan datos para guardar la relación.");
                 return;
             }
 
-            const resp = await axios.put(
-                "/api/seguimientos-actualizados/relacionar-riesgo-anterior-periodo",
+            const resp = await apiClient.put(
+                `${API_SEGUIMIENTOS}/relacionar-riesgo-anterior-periodo`,
                 payload,
-                { headers: headers(), validateStatus: () => true }
+                { validateStatus: () => true }
             );
 
-            // Respuestas del backend
-            if (resp.status === 200 && resp.data?.mensaje === "Riesgo actualizado correctamente") {
+            const msg =
+                resp.data?.message ||
+                resp.data?.mensaje ||
+                resp.data?.error ||
+                "Operación realizada.";
+
+            if (resp.status >= 200 && resp.status < 300) {
                 setSnack({
                     open: true,
-                    msg: resp.data.mensaje,
+                    msg: msg || "Riesgo relacionado correctamente.",
                     severity: "success",
-                    autoclose: 2000
+                    autoclose: 1800
                 });
-            } else if (resp.status === 404 && resp.data?.error === "Riesgo no encontrado") {
-                setError(resp.data.error);
-                setSnack({
-                    open: true,
-                    msg: "Riesgo no encontrado.",
-                    severity: "warning",
-                    autoclose: 4000
-                });
-            } else if (resp.status >= 400) {
-                const msg = resp.data?.error || "Error al actualizar riesgo";
-                setError(msg);
-                setSnack({
-                    open: true,
-                    msg: "Ocurrió un error al guardar.",
-                    severity: "error",
-                    autoclose: 4000
-                });
-            } else {
-                setSnack({
-                    open: true,
-                    msg: resp.data?.mensaje || "Relación guardada.",
-                    severity: "success",
-                    autoclose: 2000
-                });
+                return;
             }
-        } catch (err) {
-            console.error(err);
-            setError("Error de red o del servidor.");
+
+            if (resp.status === 409) {
+                setError(msg || "La relación no se puede guardar porque genera duplicidad.");
+                setSnack({
+                    open: true,
+                    msg: msg || "La relación no se puede guardar porque genera duplicidad.",
+                    severity: "warning",
+                    autoclose: 5000
+                });
+                return;
+            }
+
+            setError(msg || "No se pudo guardar la relación.");
             setSnack({
                 open: true,
-                msg: "No se pudo contactar al servidor.",
+                msg: "Ocurrió un error al guardar la relación.",
                 severity: "error",
-                autoclose: 4000
+                autoclose: 5000
+            });
+        } catch (err) {
+            console.error(err);
+            setError("No se pudo guardar la relación.");
+            setSnack({
+                open: true,
+                msg: "Error de red o del servidor.",
+                severity: "error",
+                autoclose: 5000
             });
         } finally {
             setLoading(false);
@@ -186,45 +264,96 @@ export default function ModalRelacionarRiesgo({ open, onClose, riesgo, periodo }
     };
 
     const handleSnackClose = () => {
-        if (snack.severity === "success") {
-            setSnack((s) => ({ ...s, open: false }));
+        const fueExito = snack.severity === "success";
+
+        setSnack((s) => ({ ...s, open: false }));
+
+        if (fueExito) {
             onClose?.({ ok: true });
-        } else {
-            setSnack((s) => ({ ...s, open: false }));
         }
     };
 
     return (
         <>
-            <Dialog open={open} onClose={() => !loading && onClose?.()} fullWidth maxWidth="sm">
-                <DialogTitle>Relacionar con un riesgo del año pasado</DialogTitle>
+            <Dialog open={open} onClose={() => !loading && onClose?.()} fullWidth maxWidth="md">
+                <DialogTitle>Relacionar con riesgo del año anterior</DialogTitle>
 
-                <DialogContent>
+                <DialogContent dividers>
                     {loading && <LinearProgress sx={{ mb: 2 }} />}
+
+                    <Alert severity="info" sx={{ mb: 2 }}>
+                        Seleccione el riesgo del período <strong>{periodoAnterior ?? "—"}</strong> que será la continuidad anterior del riesgo actual.
+                        Un riesgo del año anterior no puede quedar relacionado con dos riesgos activos del período actual.
+                    </Alert>
+
+                    {riesgo && (
+                        <Alert severity="success" sx={{ mb: 2 }}>
+                            <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                                Riesgo actual
+                            </Typography>
+                            <Typography variant="body2">
+                                {getRef(riesgo)} - {getDescripcion(riesgo)}
+                            </Typography>
+                        </Alert>
+                    )}
+
                     {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
-                    <Typography sx={{ mb: 1 }}>
-                        Seleccione el riesgo del año <strong>{periodoAnterior ?? "—"}</strong> que desea vincular:
+                    <Typography sx={{ mb: 1, fontWeight: 700 }}>
+                        Riesgos disponibles del año {periodoAnterior ?? "—"}
                     </Typography>
 
                     <List dense>
-                        {riesgosPasados.map((r, idx) => (
-                            <ListItem
-                                key={idx}
-                                secondaryAction={
-                                    <Checkbox
-                                        edge="end"
-                                        checked={seleccionado === r["CODIGO_RIESGO"]}
-                                        onChange={() => setSeleccionado(r["CODIGO_RIESGO"])}
+                        {riesgosPasados.map((r, idx) => {
+                            const codigoAnterior = getCodigoRiesgo(r);
+                            const usos = getUsoAnterior(codigoAnterior);
+                            const ocupado = usos.length > 0;
+                            const checked = Number(seleccionado) === Number(codigoAnterior);
+
+                            return (
+                                <ListItem
+                                    key={`${codigoAnterior || idx}-${getRef(r)}`}
+                                    sx={{
+                                        border: "1px solid",
+                                        borderColor: checked ? "primary.main" : "divider",
+                                        borderRadius: 2,
+                                        mb: 1,
+                                        opacity: ocupado ? 0.65 : 1
+                                    }}
+                                    secondaryAction={
+                                        <Checkbox
+                                            edge="end"
+                                            checked={checked}
+                                            disabled={ocupado || loading}
+                                            onChange={() => setSeleccionado(codigoAnterior)}
+                                        />
+                                    }
+                                >
+                                    <ListItemText
+                                        primary={
+                                            <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+                                                <Typography sx={{ fontWeight: 700 }}>
+                                                    {getRef(r)}
+                                                </Typography>
+
+                                                {ocupado && (
+                                                    <Chip
+                                                        size="small"
+                                                        color="warning"
+                                                        label={`Ya usado por: ${usos.map((x) => x.ref || `Riesgo ${x.codigo_riesgo}`).join(", ")}`}
+                                                    />
+                                                )}
+                                            </Stack>
+                                        }
+                                        secondary={
+                                            <Box component="span">
+                                                {getDescripcion(r)}
+                                            </Box>
+                                        }
                                     />
-                                }
-                            >
-                                <ListItemText
-                                    primary={r["Ref."] || "Sin referencia"}
-                                    secondary={r["Descripción del riesgo"] || "Sin descripción"}
-                                />
-                            </ListItem>
-                        ))}
+                                </ListItem>
+                            );
+                        })}
 
                         {!loading && riesgosPasados.length === 0 && (
                             <Typography color="text.secondary">
@@ -240,7 +369,7 @@ export default function ModalRelacionarRiesgo({ open, onClose, riesgo, periodo }
                     </Button>
                     <Button
                         variant="contained"
-                        disabled={!seleccionado || loading}
+                        disabled={!seleccionado || loading || getUsoAnterior(seleccionado).length > 0}
                         onClick={handleGuardar}
                     >
                         Guardar relación
@@ -254,7 +383,13 @@ export default function ModalRelacionarRiesgo({ open, onClose, riesgo, periodo }
                 onClose={handleSnackClose}
                 anchorOrigin={{ vertical: "top", horizontal: "right" }}
             >
-                <MuiAlert onClose={handleSnackClose} severity={snack.severity} elevation={6} variant="filled" sx={{ width: "100%" }}>
+                <MuiAlert
+                    onClose={handleSnackClose}
+                    severity={snack.severity}
+                    elevation={6}
+                    variant="filled"
+                    sx={{ width: "100%" }}
+                >
                     {snack.msg}
                 </MuiAlert>
             </Snackbar>

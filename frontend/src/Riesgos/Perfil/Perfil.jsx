@@ -10,10 +10,16 @@ import {
     Avatar,
     Grid,
     Tooltip,
+    Stack,
+    Divider,
+    IconButton,
 } from "@mui/material";
-import PersonRounded from "@mui/icons-material/PersonRounded";
-import axios from "axios";
+
+import { PersonRounded, EditRounded } from "@mui/icons-material";
+
+import apiClient from "api/apiClient";
 import CambiarContrasenaForm from "./CambiarContrasenaForm";
+import Seguridad2FA from "./Seguridad2FA";
 import ModificarSuperior from "./ModificarSuperior";
 
 export default function Perfil() {
@@ -31,13 +37,11 @@ export default function Perfil() {
     const [errorFoto, setErrorFoto] = useState("");
 
     const cargarDatos = async () => {
-        const headers = { "x-access-token": localStorage.getItem("token") };
-
         try {
-            const { data } = await axios.get(
-                "/api/responsables-actualizados/obtener-superior-perfil",
-                { headers }
+            const { data } = await apiClient.get(
+                "/api/responsables-actualizados/obtener-superior-perfil"
             );
+
             const informacion = data.result?.[0]?.[0];
 
             if (informacion) {
@@ -60,30 +64,23 @@ export default function Perfil() {
                 });
             }
         } catch (e) {
-            // Si falla, dejamos los datos como están
+            console.error("No se pudieron cargar los datos del perfil:", e);
         }
     };
 
     const cargarFoto = async () => {
-        const headers = { "x-access-token": localStorage.getItem("token") };
-
         try {
             setFotoCargando(true);
             setErrorFoto("");
 
-            // Ya NO pedimos blob, viene como JSON:
-            const resp = await axios.get("/descargar/obtener-foto-perfil", {
-                headers,
-            });
+            const resp = await apiClient.get("/descargar/obtener-foto-perfil");
 
             if (resp?.data?.foto) {
-                // resp.data.foto es algo como: "data:image/jpeg;base64,...."
                 setFotoUrl(resp.data.foto);
             } else {
                 setFotoUrl(null);
             }
         } catch (e) {
-            // Si no hay foto o falla, usamos solo iniciales
             setFotoUrl(null);
         } finally {
             setFotoCargando(false);
@@ -94,25 +91,18 @@ export default function Perfil() {
         const file = event.target.files?.[0];
         if (!file) return;
 
-        const headers = {
-            "x-access-token": localStorage.getItem("token"),
-            "Content-Type": "multipart/form-data",
-        };
-
         const formData = new FormData();
-        // 🔴 Debe coincidir con upload.single('foto-perfil')
         formData.append("foto-perfil", file);
 
         try {
             setSubiendoFoto(true);
             setErrorFoto("");
-            await axios.put("/descargar/update-foto-perfil", formData, {
-                headers,
-            });
 
-            // Recargar la foto desde el backend (que ya la devolverá en base64 si quieres)
+            await apiClient.put("/descargar/update-foto-perfil", formData);
+
             await cargarFoto();
         } catch (e) {
+            console.error("No se pudo actualizar la foto de perfil:", e);
             setErrorFoto("No se pudo actualizar la foto de perfil.");
         } finally {
             setSubiendoFoto(false);
@@ -136,109 +126,297 @@ export default function Perfil() {
     const mostrandoLoading = fotoCargando || subiendoFoto;
 
     return (
-        <Box sx={{ px: 2, mt: 6 }}>
-            <Card variant="outlined">
+        <Box
+            sx={{
+                px: { xs: 2, md: 4 },
+                mt: 4,
+                mb: 4,
+                fontFamily: "'DM Sans', 'Segoe UI', sans-serif",
+            }}
+        >
+            <Card
+                variant="outlined"
+                sx={{
+                    borderRadius: 3,
+                    border: '1px solid',
+                    borderColor: 'divider',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.04), 0 8px 32px rgba(0,0,0,0.06)',
+                    overflow: 'visible',
+                    background: 'linear-gradient(180deg, #fafafa 0%, #ffffff 100%)',
+                }}
+            >
+                <Box
+                    sx={{
+                        height: 6,
+                        borderRadius: '12px 12px 0 0',
+                        background: 'linear-gradient(90deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)',
+                    }}
+                />
+
                 <CardHeader
+                    sx={{
+                        p: { xs: 3, md: 4 },
+                        alignItems: 'flex-start',
+                        '& .MuiCardHeader-content': { mt: 0.5 },
+                    }}
                     avatar={
-                        <Box sx={{ position: "relative", display: "inline-flex" }}>
+                        <Box sx={{ position: 'relative', display: 'inline-flex', mr: 1 }}>
+                            <Box
+                                sx={{
+                                    position: 'absolute',
+                                    inset: -3,
+                                    borderRadius: '50%',
+                                    background: 'linear-gradient(135deg, #1a1a2e, #0f3460)',
+                                    zIndex: 0,
+                                }}
+                            />
                             <Avatar
                                 variant="circular"
                                 src={fotoUrl || undefined}
                                 sx={{
-                                    width: 96,
-                                    height: 96,
-                                    fontSize: 32,
+                                    width: 88,
+                                    height: 88,
+                                    fontSize: 30,
+                                    fontWeight: 600,
+                                    position: 'relative',
+                                    zIndex: 1,
+                                    border: '3px solid #fff',
+                                    boxShadow: '0 4px 16px rgba(15,52,96,0.2)',
+                                    bgcolor: '#1a1a2e',
+                                    color: '#fff',
                                 }}
                             >
-                                {iniciales || <PersonRounded />}
+                                {iniciales || <PersonRounded sx={{ fontSize: 44 }} />}
                             </Avatar>
 
                             {mostrandoLoading && (
                                 <Box
                                     sx={{
-                                        position: "absolute",
+                                        position: 'absolute',
                                         inset: 0,
-                                        display: "flex",
-                                        alignItems: "center",
-                                        justifyContent: "center",
-                                        bgcolor: "rgba(0,0,0,0.4)",
-                                        borderRadius: "50%",
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        bgcolor: 'rgba(0,0,0,0.55)',
+                                        borderRadius: '50%',
+                                        zIndex: 3,
                                     }}
                                 >
-                                    <CircularProgress size={36} />
+                                    <CircularProgress size={28} sx={{ color: '#fff' }} />
                                 </Box>
                             )}
 
-                            <Tooltip title="Cambiar foto de perfil">
-                                <label
+                            <Tooltip title="Cambiar foto de perfil" placement="top">
+                                <IconButton
+                                    component="label"
                                     htmlFor="upload-foto-perfil"
-                                    style={{ cursor: "pointer" }}
+                                    size="small"
+                                    sx={{
+                                        position: 'absolute',
+                                        bottom: 2,
+                                        right: 2,
+                                        width: 28,
+                                        height: 28,
+                                        bgcolor: '#0f3460',
+                                        color: '#fff',
+                                        zIndex: 4,
+                                        border: '2px solid #fff',
+                                        boxShadow: '0 2px 8px rgba(15,52,96,0.35)',
+                                        transition: 'all 0.2s ease',
+                                        '&:hover': {
+                                            bgcolor: '#1a1a2e',
+                                            transform: 'scale(1.1)',
+                                        },
+                                    }}
                                 >
-                                    <Box
-                                        sx={{
-                                            position: "absolute",
-                                            bottom: 0,
-                                            right: 0,
-                                            width: 30,
-                                            height: 30,
-                                            borderRadius: "50%",
-                                            bgcolor: "primary.main",
-                                            color: "primary.contrastText",
-                                            display: "flex",
-                                            alignItems: "center",
-                                            justifyContent: "center",
-                                            boxShadow: 2,
-                                            fontSize: 16,
-                                            zIndex: 2,
-                                        }}
-                                    >
-                                        ✎
-                                    </Box>
-                                </label>
+                                    <EditRounded sx={{ fontSize: 13 }} />
+                                    <input
+                                        id="upload-foto-perfil"
+                                        type="file"
+                                        accept="image/*"
+                                        hidden
+                                        onChange={handleCambiarFoto}
+                                    />
+                                </IconButton>
                             </Tooltip>
-
-                            <input
-                                id="upload-foto-perfil"
-                                type="file"
-                                accept="image/*"
-                                style={{ display: "none" }}
-                                onChange={handleCambiarFoto}
-                            />
                         </Box>
                     }
-                    title={user || "Usuario"}
-                    subheader={
-                        <Box>
-                            <Typography variant="body2" color="text.secondary">
-                                {correo || "Perfil de usuario"}
+                    title={
+                        <Stack spacing={0.25}>
+                            <Typography
+                                variant="h5"
+                                component="h2"
+                                sx={{
+                                    fontWeight: 700,
+                                    fontSize: { xs: '1.25rem', md: '1.4rem' },
+                                    color: '#0d1117',
+                                    letterSpacing: '-0.3px',
+                                    lineHeight: 1.3,
+                                }}
+                            >
+                                {user || 'Usuario'}
                             </Typography>
-                            <Typography variant="caption" color="text.secondary">
-                                Haz clic en el icono para cambiar tu foto.
+
+                            <Stack direction="row" alignItems="center" spacing={0.75}>
+                                <Box
+                                    sx={{
+                                        width: 7,
+                                        height: 7,
+                                        borderRadius: '50%',
+                                        bgcolor: '#22c55e',
+                                        boxShadow: '0 0 0 2px rgba(34,197,94,0.25)',
+                                    }}
+                                />
+                                <Typography
+                                    variant="body2"
+                                    sx={{ color: '#4b5563', fontWeight: 500, fontSize: '0.875rem' }}
+                                >
+                                    {correo || 'Perfil de usuario'}
+                                </Typography>
+                            </Stack>
+
+                            <Typography
+                                variant="caption"
+                                sx={{
+                                    color: '#9ca3af',
+                                    fontSize: '0.72rem',
+                                    letterSpacing: '0.01em',
+                                }}
+                            >
+                                Haz clic en el ícono del lápiz para actualizar tu foto.
                             </Typography>
-                        </Box>
+                        </Stack>
                     }
                 />
 
                 {errorFoto && (
-                    <Box sx={{ px: 2, pb: 1 }}>
-                        <Typography variant="caption" color="error">
-                            {errorFoto}
+                    <Box
+                        sx={{
+                            mx: { xs: 3, md: 4 },
+                            mb: 2,
+                            px: 2,
+                            py: 1.25,
+                            borderRadius: 1.5,
+                            bgcolor: '#fff5f5',
+                            border: '1px solid #fed7d7',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 1,
+                        }}
+                    >
+                        <Typography
+                            variant="caption"
+                            sx={{ color: '#c53030', fontWeight: 500, fontSize: '0.8rem' }}
+                        >
+                            ⚠️ {errorFoto}
                         </Typography>
                     </Box>
                 )}
 
-                <CardContent>
+                <Divider sx={{ borderColor: 'rgba(0,0,0,0.06)' }} />
+
+                <CardContent sx={{ p: { xs: 3, md: 4 } }}>
                     <Grid container spacing={3}>
+
+                        {/* ── Columna Izquierda ── */}
                         <Grid item xs={12} md={6}>
-                            <ModificarSuperior
-                                nombreSuperior={superiorInfo.nombreSuperior}
-                                puestoSuperior={superiorInfo.puestoSuperior}
-                                recargar={cargarDatos}
-                            />
+                            <Stack spacing={2.5}>
+
+                                {/* Superior */}
+                                <Box
+                                    sx={{
+                                        p: 2.5,
+                                        borderRadius: 2,
+                                        border: '1px solid rgba(0,0,0,0.07)',
+                                        bgcolor: '#ffffff',
+                                        boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
+                                        transition: 'box-shadow 0.2s',
+                                        '&:hover': { boxShadow: '0 4px 16px rgba(0,0,0,0.08)' },
+                                    }}
+                                >
+                                    {/* Etiqueta de sección */}
+                                    <Typography
+                                        variant="overline"
+                                        sx={{
+                                            fontSize: '0.65rem',
+                                            fontWeight: 700,
+                                            letterSpacing: '0.12em',
+                                            color: '#9ca3af',
+                                            display: 'block',
+                                            mb: 1.5,
+                                            textTransform: 'uppercase',
+                                        }}
+                                    >
+                                        Información de Reporte
+                                    </Typography>
+                                    <ModificarSuperior
+                                        nombreSuperior={superiorInfo.nombreSuperior}
+                                        puestoSuperior={superiorInfo.puestoSuperior}
+                                        recargar={cargarDatos}
+                                    />
+                                </Box>
+
+                                {/* Seguridad 2FA */}
+                                <Box
+                                    sx={{
+                                        p: 2.5,
+                                        borderRadius: 2,
+                                        border: '1px solid rgba(0,0,0,0.07)',
+                                        bgcolor: '#ffffff',
+                                        boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
+                                        transition: 'box-shadow 0.2s',
+                                        '&:hover': { boxShadow: '0 4px 16px rgba(0,0,0,0.08)' },
+                                    }}
+                                >
+                                    <Typography
+                                        variant="overline"
+                                        sx={{
+                                            fontSize: '0.65rem',
+                                            fontWeight: 700,
+                                            letterSpacing: '0.12em',
+                                            color: '#9ca3af',
+                                            display: 'block',
+                                            mb: 1.5,
+                                            textTransform: 'uppercase',
+                                        }}
+                                    >
+                                        Seguridad
+                                    </Typography>
+                                    <Seguridad2FA />
+                                </Box>
+                            </Stack>
                         </Grid>
 
-                        <Grid item xs={12} md={6}>
-                            <CambiarContrasenaForm />
+                        {/* ── Columna Derecha ── */}
+                        <Grid item xs={12} md={6} sx={{ display: 'flex', flexDirection: 'column' }}>
+                            <Box
+                                sx={{
+                                    p: 2.5,
+                                    border: '1px solid rgba(0,0,0,0.07)',
+                                    borderRadius: 2,
+                                    bgcolor: '#ffffff',
+                                    boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
+                                    flex: 1,
+                                    transition: 'box-shadow 0.2s',
+                                    '&:hover': { boxShadow: '0 4px 16px rgba(0,0,0,0.08)' },
+                                }}
+                            >
+                                <Typography
+                                    variant="overline"
+                                    sx={{
+                                        fontSize: '0.65rem',
+                                        fontWeight: 700,
+                                        letterSpacing: '0.12em',
+                                        color: '#9ca3af',
+                                        display: 'block',
+                                        mb: 1.5,
+                                        textTransform: 'uppercase',
+                                    }}
+                                >
+                                    Cambiar Contraseña
+                                </Typography>
+                                <CambiarContrasenaForm />
+                            </Box>
                         </Grid>
                     </Grid>
                 </CardContent>

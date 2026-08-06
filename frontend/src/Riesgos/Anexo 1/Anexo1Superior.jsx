@@ -8,7 +8,7 @@
  */
 
 import React, { useEffect, useMemo, useState } from 'react';
-import axios from 'axios';
+import apiClient from 'api/apiClient';
 import {
     Box, Card, CardHeader, CardContent, Typography,
     FormControl, InputLabel, Select, MenuItem,
@@ -76,7 +76,6 @@ function Anexo1Sup() {
         () => window.matchMedia(`(max-width: ${theme.breakpoints.values.md}px)`).matches,
         [theme]
     );
-    const headers = { 'x-access-token': localStorage.getItem('token') };
 
     /**
      * Devuelve un Chip que representa el estado del formulario en nivel superior.
@@ -93,6 +92,24 @@ function Anexo1Sup() {
         const meta = map[v] || map.null;
         return <Chip label={meta.label} color={meta.color} size="small" />;
     };
+
+    const chipEstadoForm = (v) => {
+        const map = {
+            R: { label: 'Rechazado', color: 'error' }, A: { label: 'Aceptado', color: 'success' },
+            M: { label: 'Modificado', color: 'info' }, I: { label: 'Ingresado', color: 'default' }
+        };
+        const meta = map[v] || { label: v || '—', color: 'default' };
+        return <Chip label={meta.label} color={meta.color} size="small" />;
+    };
+
+    const chipEstadoFormConsolidador = (v) => {
+            const map = {
+                R: { label: 'Se necesita revisión', color: 'error' }, A: { label: 'Recibido', color: 'success' },
+                M: { label: 'Modificado', color: 'info' }, I: { label: 'Ingresado', color: 'default' }
+            };
+            const meta = map[v] || { label: v || '—', color: 'default' };
+            return <Chip label={meta.label} color={meta.color} size="small" />;
+        };
 
     const isMatrixComplete = (m) => {
         if (!m) return false;
@@ -131,7 +148,7 @@ function Anexo1Sup() {
     useEffect(() => {
         (async () => {
             try {
-                const { data } = await axios.get('/api/periodos-actualizados', { headers });
+                const { data } = await apiClient.get('/api/periodos-actualizados');
                 setPeriodos(data.result ?? data ?? []);
             } catch (e) {
                 console.error('Error cargando periodos', e);
@@ -143,7 +160,7 @@ function Anexo1Sup() {
     useEffect(() => {
         (async () => {
             try {
-                const { data } = await axios.get('/api/reportes-actualizados/obtener-logo', { headers });
+                const { data } = await apiClient.get('/api/reportes-actualizados/obtener-logo');
                 setLogo('data:image/png;base64,' + (data.logo ?? ''));
             } catch (e) {
                 console.error('Error cargando logo', e);
@@ -159,8 +176,8 @@ function Anexo1Sup() {
         if (!selPeriodo) return;
         setCargandoEstado(true);
         try {
-            const { data } = await axios.get('/api/primera-matriz-actualizados/estado-historial', {
-                headers, params: { periodo: selPeriodo }
+            const { data } = await apiClient.get('/api/primera-matriz-actualizados/estado-historial', {
+                params: { periodo: selPeriodo }
             });
 
             const lista = Array.isArray(data?.historial) ? data.historial : [];
@@ -226,7 +243,7 @@ function Anexo1Sup() {
 
         try {
             setGuardando(true);
-            await axios.put(
+            await apiClient.put(
                 '/api/primera-matriz-actualizados/estado-actualizar',
                 {
                     periodo,
@@ -236,8 +253,7 @@ function Anexo1Sup() {
                         ? (histSel?.COMENTARIO_SUPERIOR ?? null)
                         : ((observacion || '').trim() || null),
                     superior: true
-                },
-                { headers }
+                }
             );
 
             setAlerta(`Decisión guardada para #${histIdSel}: ${estado === 'R' ? 'Rechazado' : 'Aceptado'}.`);
@@ -259,9 +275,8 @@ function Anexo1Sup() {
         setPdfModalOpen(true);
         setPdfLoadingData(true);
         try {
-            const { data } = await axios.get('/api/reportes-actualizados/obtener-superior', {
-                headers,
-                params: { periodo }
+            const { data } = await apiClient.get('/api/reportes-actualizados/obtener-superior', {
+                                params: { periodo }
             });
             const sup = data?.data ?? data ?? {};
             setRespNombre(sup.NOMBRE_SUPERIOR ?? sup.nombre ?? sup.NOMBRE ?? '');
@@ -360,10 +375,31 @@ function Anexo1Sup() {
                                     <Table size="small" stickyHeader sx={{ minWidth: 700 }}>
                                         <TableHead>
                                             <TableRow>
+                                                <TableCell colSpan={2}></TableCell>
+                                                <TableCell
+                                                    align="center"
+                                                    colSpan={3}
+                                                    style={{ fontWeight: 700, backgroundColor: "#f5f5f5" }}
+                                                >
+                                                    Superior
+                                                </TableCell>
+                                                <TableCell
+                                                    align="center"
+                                                    colSpan={3}
+                                                    style={{ fontWeight: 700, backgroundColor: "#f5f5f5" }}
+                                                >
+                                                    Encargado de supervisar
+                                                </TableCell>
+                                            </TableRow>
+                                            <TableRow>
                                                 <TableCell style={{ fontWeight: 700 }}>Usuario que ingresó</TableCell>
                                                 <TableCell style={{ fontWeight: 700 }}>Fecha</TableCell>
-                                                <TableCell style={{ fontWeight: 700 }}>Usuario que revisó</TableCell>
-                                                <TableCell style={{ fontWeight: 700 }}>Comentario revisión</TableCell>
+                                                <TableCell style={{ fontWeight: 700 }}>Estado</TableCell>
+                                                <TableCell style={{ fontWeight: 700 }}>Nombre Superior</TableCell>
+                                                <TableCell style={{ fontWeight: 700 }}>Comentario</TableCell>
+                                                <TableCell style={{ fontWeight: 700 }}>Estado</TableCell>
+                                                <TableCell style={{ fontWeight: 700 }}>Nombre Supervisor</TableCell>
+                                                <TableCell style={{ fontWeight: 700 }}>Comentario</TableCell>
                                             </TableRow>
                                         </TableHead>
                                         <TableBody>
@@ -383,11 +419,27 @@ function Anexo1Sup() {
                                                             onClick={() => handleElegirHistPorFila(h)}
                                                         >
                                                             <TableCell>{usrH || '—'}</TableCell>
-                                                            <TableCell>{fechaH || '—'}</TableCell>
+                                                            <TableCell>{fechaH || '—'}</TableCell>                                                           
+                                                            <TableCell>
+                                                                {
+                                                                    chipEstadoForm(h.ESTADO_SUPERIOR)
+                                                                }
+                                                            </TableCell>
                                                             <TableCell>{h.NOMBRE_USUARIO_SUPERIOR ?? '—'}</TableCell>
                                                             <TableCell>
-                                                                <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
+                                                                <Typography variant="body2">
                                                                     {h.COMENTARIO_SUPERIOR ?? '—'}
+                                                                </Typography>
+                                                            </TableCell>
+                                                            <TableCell>
+                                                                {
+                                                                    chipEstadoFormConsolidador(h.ESTADO)
+                                                                }
+                                                            </TableCell>
+                                                            <TableCell>{h.NOMBRE_USUARIO_MODIFICACION ?? '—'}</TableCell>
+                                                            <TableCell>
+                                                                <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
+                                                                    {h.COMENTARIO_SUPERVISOR ?? '—'}
                                                                 </Typography>
                                                             </TableCell>
                                                         </TableRow>

@@ -174,7 +174,7 @@ exports.obtenerInfoInicial = async (req, res) => {
                 SELECT 
                     CODIGO_ENTIDAD AS CODIGO_ENTIDAD,
                     NOMBRE
-                FROM seguridad.seguridad_entidad
+                FROM gestion_riesgos.seguridad_entidad
                 WHERE CODIGO_CIA = ?
                 ORDER BY NOMBRE ASC
             `,
@@ -233,7 +233,7 @@ exports.obtenerLogo = async (req, res) => {
             SELECT 
                 path  AS path,
                 nombre AS nombre
-            FROM seguridad.seguridad_institucion
+            FROM gestion_riesgos.seguridad_institucion
             WHERE CODIGO_CIA = ?
             LIMIT 1
             `,
@@ -330,7 +330,7 @@ exports.obtenerValores = async (req, res, next) => {
     LEFT JOIN gestion_riesgos.riesgos_area ra
         ON ra.CODIGO_CIA = rrx.CODIGO_CIA AND ra.CODIGO_AREA = rrx.CODIGO_AREA
     -- Dirección del riesgo
-    LEFT JOIN seguridad.seguridad_entidad se
+    LEFT JOIN gestion_riesgos.seguridad_entidad se
         ON se.CODIGO_CIA = rrx.CODIGO_CIA AND se.CODIGO_ENTIDAD = rrx.CODIGO_ENTIDAD
     -- Período del riesgo
     LEFT JOIN gestion_riesgos.riesgos_periodo rp
@@ -359,7 +359,7 @@ exports.obtenerValores = async (req, res, next) => {
     LEFT JOIN gestion_riesgos.riesgos_frecuencia rf
         ON rf.CODIGO_CIA = rrx.CODIGO_CIA AND rf.CODIGO_FRECUENCIA = rrx.CODIGO_FRECUENCIA
     -- Unidad
-    LEFT JOIN seguridad.seguridad_entidad sent
+    LEFT JOIN gestion_riesgos.seguridad_entidad sent
         ON rrx.codigo_entidad = sent.codigo_entidad AND rrx.codigo_cia = sent.codigo_cia
     WHERE rrx.CODIGO_CIA = ?
         AND rrx.CODIGO_PERIODO = ?
@@ -448,7 +448,7 @@ exports.obtenerPropiedades = async (req, res) => {
 exports.institucion = async (req, res, next) => {
     const sqlPropiedades = `
         SELECT NOMBRE, TIPO
-        FROM seguridad.seguridad_institucion
+        FROM gestion_riesgos.seguridad_institucion
         WHERE codigo_cia = ?
         `;
     const [propRows] = await pool.execute(sqlPropiedades, [req.codigo_cia]);
@@ -515,7 +515,7 @@ exports.obtenerValoresInst = async (req, res, next) => {
     LEFT JOIN gestion_riesgos.riesgos_area ra
         ON ra.CODIGO_CIA = rrx.CODIGO_CIA AND ra.CODIGO_AREA = rrx.CODIGO_AREA
     -- Dirección del riesgo
-    LEFT JOIN seguridad.seguridad_entidad se
+    LEFT JOIN gestion_riesgos.seguridad_entidad se
         ON se.CODIGO_CIA = rrx.CODIGO_CIA AND se.CODIGO_ENTIDAD = rrx.CODIGO_ENTIDAD
     -- Período del riesgo
     LEFT JOIN gestion_riesgos.riesgos_periodo rp
@@ -544,7 +544,7 @@ exports.obtenerValoresInst = async (req, res, next) => {
     LEFT JOIN gestion_riesgos.riesgos_frecuencia rf
         ON rf.CODIGO_CIA = rrx.CODIGO_CIA AND rf.CODIGO_FRECUENCIA = rrx.CODIGO_FRECUENCIA
     -- Unidad
-    LEFT JOIN seguridad.seguridad_entidad sent
+    LEFT JOIN gestion_riesgos.seguridad_entidad sent
         ON rrx.codigo_entidad = sent.codigo_entidad AND rrx.codigo_cia = sent.codigo_cia
     WHERE rrx.CODIGO_CIA = ?
         AND rrx.CODIGO_PERIODO = ?

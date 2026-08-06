@@ -11,7 +11,7 @@
  */
 
 import { useEffect, useState, useCallback } from "react";
-import axios from "axios";
+import apiClient from "api/apiClient";
 import {
     Dialog, DialogTitle, DialogContent, DialogActions,
     Stack, Button, LinearProgress, Alert, Tooltip,
@@ -99,6 +99,8 @@ export default function SeguimientoDocsModal({
     periodo,
     mes,
     titulo = "Documentos",
+    viewOnly = false,
+    entidadId = null,
     endpoints = {
         list: "/api/seguimientos-actualizados/documentos",
         upload: "/api/seguimientos-actualizados/documentos",
@@ -117,8 +119,6 @@ export default function SeguimientoDocsModal({
     const openSnack = (message, severity = "success") => setSnack({ open: true, message, severity });
     const closeSnack = () => setSnack((s) => ({ ...s, open: false }));
 
-    const headers = useCallback(() => ({ "x-access-token": localStorage.getItem("token") }), []);
-
     /**
      * listar
      */
@@ -127,10 +127,16 @@ export default function SeguimientoDocsModal({
         try {
             setLoading(true);
             setError("");
-            const { data } = await axios.get(endpoints.list, {
-                params: { codigo_periodo: Number(periodo), mes: Number(mes) },
-                headers: headers(),
+            const params = {
+                codigo_periodo: Number(periodo),
+                mes: Number(mes),
+                ...(viewOnly && { codigo_entidad: Number(entidadId) }),
+            };
+
+            const { data } = await apiClient.get(endpoints.list, {
+                params,
             });
+
             setDocs(Array.isArray(data?.documentos) ? data.documentos : []);
         } catch (e) {
             console.error(e);
@@ -139,7 +145,7 @@ export default function SeguimientoDocsModal({
         } finally {
             setLoading(false);
         }
-    }, [open, periodo, mes, endpoints.list, headers]);
+    }, [open, periodo, mes, endpoints.list]);
 
     useEffect(() => { listar(); }, [listar]);
 
@@ -166,9 +172,7 @@ export default function SeguimientoDocsModal({
 
         try {
             setSubiendo(true);
-            const { data } = await axios.post(endpoints.upload, fd, {
-                headers: { ...headers(), "Content-Type": "multipart/form-data" },
-            });
+            const { data } = await apiClient.post(endpoints.upload, fd);
 
             if (data?.ok) {
                 const tot = Array.isArray(data.inserted) ? data.inserted.length : files.length;
@@ -203,9 +207,14 @@ export default function SeguimientoDocsModal({
     const descargar = async (doc) => {
         try {
             const url = endpoints.download(doc.codigo_doc);
-            const response = await axios.get(url, {
-                params: { codigo_periodo: Number(periodo), mes: Number(mes) },
-                headers: headers(),
+            const params = {
+                codigo_periodo: Number(periodo),
+                mes: Number(mes),
+                ...(viewOnly && { codigo_entidad: Number(entidadId) }),
+            };
+
+            const response = await apiClient.get(url, {
+                params,
                 responseType: "blob",
             });
 
@@ -272,11 +281,18 @@ export default function SeguimientoDocsModal({
 
     const fetchBlob = async (doc, as = "blob") => {
         const url = endpoints.download(doc.codigo_doc);
-        const resp = await axios.get(url, {
-            params: { codigo_periodo: Number(periodo), mes: Number(mes) },
-            headers: headers(),
+
+        const params = {
+            codigo_periodo: Number(periodo),
+            mes: Number(mes),
+            ...(viewOnly && { codigo_entidad: Number(entidadId) }),
+        };
+
+        const resp = await apiClient.get(url, {
+            params,
             responseType: as,
         });
+
         return resp.data;
     };
 
@@ -392,10 +408,10 @@ export default function SeguimientoDocsModal({
                 ? endpoints.delete(doc.codigo_doc)
                 : `/api/seguimientos-actualizados/documentos/${doc.codigo_doc}`;
 
-            await axios.put(
+            await apiClient.put(
                 url,
                 { periodo: Number(periodo), mes: Number(mes) },
-                { headers: headers() }
+                {}
             );
 
             // Independientemente del mensaje del backend, tratamos 200 como éxito
@@ -429,21 +445,22 @@ export default function SeguimientoDocsModal({
                             Actualizar
                         </Button>
 
-                        <Button
-                            component="label"
-                            variant="contained"
-                            startIcon={<CloudUploadRounded />}
-                            disabled={subiendo}
-                        >
-                            Subir archivos
-                            <input
-                                type="file"
-                                multiple
-                                hidden
-                                accept={ACCEPT_STR}
-                                onChange={subiendo ? undefined : subir}
-                            />
-                        </Button>
+                        {(!viewOnly) && (
+                            <Button
+                                component="label"
+                                variant="contained"
+                                startIcon={<CloudUploadRounded />}
+                                disabled={subiendo}
+                            >
+                                Subir archivos
+                                <input
+                                    type="file"
+                                    multiple
+                                    hidden
+                                    accept={ACCEPT_STR}
+                                    onChange={subiendo ? undefined : subir}
+                                />
+                            </Button>)}
 
                         {(loading || subiendo) && <LinearProgress sx={{ flex: 1 }} />}
                     </Stack>
@@ -499,18 +516,19 @@ export default function SeguimientoDocsModal({
                                                         </IconButton>
                                                     </span>
                                                 </Tooltip>
-                                                <Tooltip title="Eliminar">
-                                                    <span>
-                                                        <IconButton
-                                                            size="small"
-                                                            color="error"
-                                                            onClick={() => eliminar(d)}
-                                                            disabled={eliminandoId === d.codigo_doc}
-                                                        >
-                                                            <DeleteRounded fontSize="small" />
-                                                        </IconButton>
-                                                    </span>
-                                                </Tooltip>
+                                                {viewOnly || (
+                                                    <Tooltip title="Eliminar">
+                                                        <span>
+                                                            <IconButton
+                                                                size="small"
+                                                                color="error"
+                                                                onClick={() => eliminar(d)}
+                                                                disabled={eliminandoId === d.codigo_doc}
+                                                            >
+                                                                <DeleteRounded fontSize="small" />
+                                                            </IconButton>
+                                                        </span>
+                                                    </Tooltip>)}
                                             </Stack>
                                         </TableCell>
                                     </TableRow>

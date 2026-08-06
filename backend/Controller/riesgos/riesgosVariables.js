@@ -88,8 +88,8 @@ exports.obtenerInfoInicial = async (req, res) => {
             pool.execute(
                 ` 
                 SELECT re.NOMBRE, re.SIGLAS, rp.CODIGO_ENTIDAD
-                FROM seguridad.seguridad_persona rp
-                LEFT JOIN  seguridad.seguridad_entidad re 
+                FROM gestion_riesgos.seguridad_persona rp
+                LEFT JOIN  gestion_riesgos.seguridad_entidad re 
                 ON  re.CODIGO_CIA = rp.CODIGO_CIA AND re.CODIGO_ENTIDAD = rp.CODIGO_ENTIDAD
                 WHERE rp.CODIGO_CIA = ? AND rp.CODIGO_COLABORADOR = ?
                 `, [codigo_cia, userId]
@@ -912,8 +912,8 @@ exports.obtenerRiesgos = async (req, res) => {
             rr.REF,
             rr.COMENTARIO_SUPERVISOR_${tipo} AS COMENTARIO_SUPERVISOR,
             rr.ESTADO_${tipo} AS ESTADO,
-            rr.ESTADO_${tipo}_SUPERIOR AS ESTADO_SUPERIOR,
             rr.COMENTARIO_SUPERIOR_${tipo} AS COMENTARIO_SUPERIOR,
+            rr.ESTADO_${tipo}_SUPERIOR AS ESTADO_SUPERIOR,
             ELIMINADO
         FROM 
             gestion_riesgos.riesgos_riesgo_extendido rr
@@ -1043,7 +1043,7 @@ exports.crearRiesgo = async (req, res) => {
             observaciones || null, varMit || null, ref || null, usuario_creacion,
             severidadNarracion || null, Number(probabilidadAjustada) || null, Number(severidadAjustada) || null,
             Number(riesgoResidual) || null, Number(riesgoInherente) || null, evento || null, control || null,
-            monitoreo || null, pFreq || null, responsable || null, extras || null,
+            monitoreo || null, pFreq || null, responsable || null, extras ? JSON.stringify(extras) : null,
             organoCodigo || null, viceministerioCodigo || null
         ]);
 
@@ -1329,7 +1329,7 @@ exports.obtenerRiesgoPeriodoPasado = async (req, res) => {
         AND rf.CODIGO_FRECUENCIA = rrx.CODIGO_FRECUENCIA
 
         -- Dirección
-        LEFT JOIN seguridad.seguridad_entidad sent
+        LEFT JOIN gestion_riesgos.seguridad_entidad sent
             ON sent.CODIGO_CIA = rrx.CODIGO_CIA
         AND sent.CODIGO_ENTIDAD = rrx.CODIGO_ENTIDAD
 
@@ -1468,7 +1468,7 @@ exports.actualizarRiesgoMe = async (req, res) => {
         SEVERIDAD_AJUSTADA   = ?, RIESGO_INHERENTE     = ?, RIESGO_RESIDUAL      = ?, EVENTO               = ?,
         CONTROL              = ?, MONITOREO            = ?, CODIGO_FRECUENCIA    = ?, RESPONSABLE          = ?,
         SEVERIDAD_NARRACION  = ?, EXTRAS_${tipo}               = ?, USUARIO_MODIFICACION = ?, FECHA_MODIFICACION   = CURRENT_TIMESTAMP,
-        ESTADO_${tipo} = 0,       VICEMINISTERIO       = ?,         ORGANO = ?, ESTADO_${tipo}_SUPERIOR = 0
+        ESTADO_${tipo} = 0, ESTADO_${tipo}_SUPERIOR = 0,       VICEMINISTERIO       = ?,         ORGANO = ?
       WHERE
         CODIGO_CIA     = ? AND CODIGO_ENTIDAD = ? AND CODIGO_PERIODO = ? AND CODIGO_RIESGO  = ?
       LIMIT 1
@@ -1624,7 +1624,6 @@ exports.restablecerRiesgo = async (req, res) => {
         try { conn?.release(); } catch { }
     }
 };
-
 /**
  * obtenerRiesgosUnidadPeriodo
  *
@@ -1638,7 +1637,7 @@ exports.restablecerRiesgo = async (req, res) => {
  */
 exports.obtenerRiesgosUnidadPeriodo = async (req, res) => {
     const cia = Number(req.codigo_cia ?? req.user?.CODIGO_CIA);
-    const { periodo, codigo_entidad = req.codigo_entidad, tipo } = req.query;
+    const { periodo, codigo_entidad, tipo } = req.query;
 
     if (!Number.isFinite(cia) || !periodo || !codigo_entidad) {
         return res.status(400).json({ ok: false, msg: 'Faltan parámetros: periodo y codigo_entidad.' });
@@ -1701,17 +1700,20 @@ exports.obtenerRiesgosUnidadPeriodo = async (req, res) => {
             rrx.MONITOREO                                AS 'Método de monitoreo',
             rf.DESCRIPCION                               AS 'Frecuencia',
             rrx.RESPONSABLE                              AS 'Responsable',
+            rrx.COMENTARIO_SUPERVISOR_${tipo}            AS 'Comentario supervisor',
+            rrx.COMENTARIO_SUPERIOR_${tipo}              AS 'Comentario superior',
             CASE 
                 WHEN JSON_VALID(rrx.EXTRAS_${tipo}) THEN JSON_EXTRACT(rrx.EXTRAS_${tipo}, '$')
                 ELSE JSON_OBJECT('EXTRAS_${tipo}', JSON_ARRAY())
             END AS EXTRAS,
-            rrx.ESTADO_${tipo} AS ESTADO
+            rrx.ESTADO_${tipo} AS ESTADO_SUPERVISOR,
+            rrx.ESTADO_${tipo}_SUPERIOR AS ESTADO_SUPERIOR
         FROM gestion_riesgos.riesgos_riesgo_extendido rrx
         -- Área del riesgo
         LEFT JOIN gestion_riesgos.riesgos_area ra
             ON ra.CODIGO_CIA = rrx.CODIGO_CIA AND ra.CODIGO_AREA = rrx.CODIGO_AREA
         -- Dirección del riesgo
-        LEFT JOIN seguridad.seguridad_entidad se
+        LEFT JOIN gestion_riesgos.seguridad_entidad se
             ON se.CODIGO_CIA = rrx.CODIGO_CIA AND se.CODIGO_ENTIDAD = rrx.CODIGO_ENTIDAD
         -- Período del riesgo
         LEFT JOIN gestion_riesgos.riesgos_periodo rp
@@ -1835,13 +1837,16 @@ exports.obtenerRiesgosUnidadPeriodoSuperior = async (req, res) => {
                 WHEN JSON_VALID(rrx.EXTRAS_${tipo}) THEN JSON_EXTRACT(rrx.EXTRAS_${tipo}, '$')
                 ELSE JSON_OBJECT('EXTRAS_${tipo}', JSON_ARRAY())
             END AS EXTRAS,
-            rrx.ESTADO_${tipo}_SUPERIOR AS ESTADO
+            rrx.ESTADO_${tipo} AS ESTADO_SUPERVISOR,
+            rrx.ESTADO_${tipo}_SUPERIOR AS ESTADO_SUPERIOR,
+            rrx.COMENTARIO_SUPERVISOR_${tipo}            AS 'Comentario supervisor',
+            rrx.COMENTARIO_SUPERIOR_${tipo}              AS 'Comentario superior'
         FROM gestion_riesgos.riesgos_riesgo_extendido rrx
         -- Área del riesgo
         LEFT JOIN gestion_riesgos.riesgos_area ra
             ON ra.CODIGO_CIA = rrx.CODIGO_CIA AND ra.CODIGO_AREA = rrx.CODIGO_AREA
         -- Dirección del riesgo
-        LEFT JOIN seguridad.seguridad_entidad se
+        LEFT JOIN gestion_riesgos.seguridad_entidad se
             ON se.CODIGO_CIA = rrx.CODIGO_CIA AND se.CODIGO_ENTIDAD = rrx.CODIGO_ENTIDAD
         -- Período del riesgo
         LEFT JOIN gestion_riesgos.riesgos_periodo rp
@@ -2066,7 +2071,7 @@ exports.obtenerDetalleRiesgos = async (req, res, next) => {
     LEFT JOIN gestion_riesgos.riesgos_area ra
         ON ra.CODIGO_CIA = rrx.CODIGO_CIA AND ra.CODIGO_AREA = rrx.CODIGO_AREA
     -- Dirección del riesgo
-    LEFT JOIN seguridad.seguridad_entidad se
+    LEFT JOIN gestion_riesgos.seguridad_entidad se
         ON se.CODIGO_CIA = rrx.CODIGO_CIA AND se.CODIGO_ENTIDAD = rrx.CODIGO_ENTIDAD
     -- Período del riesgo
     LEFT JOIN gestion_riesgos.riesgos_periodo rp
@@ -2095,7 +2100,7 @@ exports.obtenerDetalleRiesgos = async (req, res, next) => {
     LEFT JOIN gestion_riesgos.riesgos_frecuencia rf
         ON rf.CODIGO_CIA = rrx.CODIGO_CIA AND rf.CODIGO_FRECUENCIA = rrx.CODIGO_FRECUENCIA
     -- Unidad
-    LEFT JOIN seguridad.seguridad_entidad sent
+    LEFT JOIN gestion_riesgos.seguridad_entidad sent
         ON rrx.codigo_entidad = sent.codigo_entidad AND rrx.codigo_cia = sent.codigo_cia
     WHERE rrx.CODIGO_CIA = ?
         AND rrx.CODIGO_PERIODO = ?
@@ -2231,7 +2236,7 @@ exports.obtenerRiesgosPeriodo = async (req, res) => {
         AND rf.CODIGO_FRECUENCIA = rrx.CODIGO_FRECUENCIA
 
         -- Dirección
-        LEFT JOIN seguridad.seguridad_entidad sent
+        LEFT JOIN gestion_riesgos.seguridad_entidad sent
             ON sent.CODIGO_CIA = rrx.CODIGO_CIA
         AND sent.CODIGO_ENTIDAD = rrx.CODIGO_ENTIDAD
 

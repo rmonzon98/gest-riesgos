@@ -15,7 +15,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import axios from 'axios';
+import apiClient from 'api/apiClient';
 import {
     Box, Typography, Card, CardHeader, CardContent, FormControl, InputLabel, Select, MenuItem, Tabs, Tab
 } from '@mui/material';
@@ -58,13 +58,10 @@ export default function MantenimientoRiesgosMain() {
     const [periodos, setPeriodos] = useState([]);
     const [periodo, setPeriodo] = useState('');
     const [tab, setTab] = useState(0);
-
-    const headers = { 'x-access-token': localStorage.getItem('token') };
-
     useEffect(() => {
         (async () => {
             try {
-                const { data } = await axios.get('/api/periodos-actualizados', { headers });
+                const { data } = await apiClient.get('/api/periodos-actualizados');
                 setPeriodos(data.result ?? data ?? []);
             } catch (err) {
                 console.error('Error al cargar periodos', err);

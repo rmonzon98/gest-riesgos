@@ -8,7 +8,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import Axios from 'axios';
+import apiClient from 'api/apiClient';
 import {
     Box,
     Button,
@@ -55,9 +55,7 @@ function CambiarLogo() {
     const refreshLogo = async () => {
         try {
             setLoading(true);
-            const resp = await Axios.get('/descargar/obtener-logo', {
-                headers: { 'x-access-token': localStorage.getItem('token') }
-            });
+            const resp = await apiClient.get('/descargar/obtener-logo');
             setPath(resp.data.logo || '');
         } catch (e) {
             setSnack({ open: true, severity: 'error', message: 'No se pudo cargar el logo actual.' });
@@ -119,9 +117,8 @@ function CambiarLogo() {
 
         try {
             setLoading(true);
-            const resp = await Axios.put('/descargar/update-image-logo', formData, {
+            const resp = await apiClient.put('/descargar/update-image-logo', formData, {
                 headers: {
-                    'x-access-token': localStorage.getItem('token'),
                     'Content-Type': 'multipart/form-data'
                 }
             });

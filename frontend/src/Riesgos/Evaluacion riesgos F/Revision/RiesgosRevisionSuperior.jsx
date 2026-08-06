@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import axios from 'axios';
+import apiClient from 'api/apiClient';
 import {
     Box,
     Card,
@@ -32,9 +32,15 @@ import ExpandLessRounded from '@mui/icons-material/ExpandLessRounded';
 import { fmt } from 'funciones/Fechas';
 
 const MAX_RAZON = 250;
-const headers = { 'x-access-token': localStorage.getItem('token') };
 
 const statusInfo = (estadoNum) => {
+    const v = Number(estadoNum);
+    if (v === 1) return { label: 'Recibido', color: 'success' };
+    if (v === 2) return { label: 'Se necesita revisión', color: 'error' };
+    return { label: 'Revisión pendiente', color: 'warning' };
+};
+
+const statusInfoSuperior = (estadoNum) => {
     const v = Number(estadoNum);
     if (v === 1) return { label: 'Aprobado', color: 'success' };
     if (v === 2) return { label: 'Rechazado', color: 'error' };
@@ -114,45 +120,6 @@ const getEstadoSuperior = (r, tipo) => {
     );
 };
 
-const getComentarioSuperior = (r, tipo) => {
-    const tU = getTipoUpper(tipo);
-    const tL = getTipoLower(tipo);
-
-    return (
-        r?.COMENTARIO_SUPERIOR ??
-        r?.comentario_superior ??
-        r?.[`COMENTARIO_SUPERIOR_${tU}`] ??
-        r?.[`comentario_superior_${tL}`] ??
-        ''
-    );
-};
-
-const getSuperiorModificacion = (r, tipo) => {
-    const tU = getTipoUpper(tipo);
-    const tL = getTipoLower(tipo);
-
-    return (
-        r?.SUPERIOR_MODIFICACION ??
-        r?.superior_modificacion ??
-        r?.[`SUPERIOR_MODIFICACION_${tU}`] ??
-        r?.[`superior_modificacion_${tL}`] ??
-        ''
-    );
-};
-
-const getFechaSuperior = (r, tipo) => {
-    const tU = getTipoUpper(tipo);
-    const tL = getTipoLower(tipo);
-
-    return (
-        r?.FECHA_SUPERIOR ??
-        r?.fecha_superior ??
-        r?.[`FECHA_SUPERIOR_${tU}`] ??
-        r?.[`fecha_superior_${tL}`] ??
-        ''
-    );
-};
-
 const getExtrasRiesgo = (r, tipo) => {
     const tU = getTipoUpper(tipo);
     const tL = getTipoLower(tipo);
@@ -192,8 +159,8 @@ function RiesgosRevisionSuperior({ tipo = '', titulo = 'Revisión superior de ri
                 setCargandoInicial(true);
 
                 const [perRes, unidadRes] = await Promise.all([
-                    axios.get('/api/periodos-actualizados', { headers }),
-                    axios.get('/api/responsables-actualizados/obtener-mi-unidad', { headers })
+                    apiClient.get('/api/periodos-actualizados'),
+                    apiClient.get('/api/responsables-actualizados/obtener-mi-unidad')
                 ]);
 
                 const perArr = Array.isArray(perRes.data?.result)
@@ -218,8 +185,7 @@ function RiesgosRevisionSuperior({ tipo = '', titulo = 'Revisión superior de ri
         setAlerta(null);
 
         try {
-            const { data } = await axios.get('/api/riesgos-variables-actualizados/unidad-periodo-superior', {
-                headers,
+            const { data } = await apiClient.get('/api/riesgos-variables-actualizados/unidad-periodo-superior', {
                 params: { periodo, tipo }
             });
 
@@ -277,7 +243,7 @@ function RiesgosRevisionSuperior({ tipo = '', titulo = 'Revisión superior de ri
     };
 
     const enviarRevisionSuperior = async ({ riesgo, estado, comentario }) => {
-        await axios.put(
+        await apiClient.put(
             '/api/riesgos-variables-actualizados/revision-superior',
             {
                 comentario: comentario ?? '',
@@ -287,7 +253,6 @@ function RiesgosRevisionSuperior({ tipo = '', titulo = 'Revisión superior de ri
                 codigo_entidad: Number(riesgo.CODIGO_ENTIDAD),
                 tipo
             },
-            { headers }
         );
     };
 
@@ -396,7 +361,8 @@ function RiesgosRevisionSuperior({ tipo = '', titulo = 'Revisión superior de ri
                                     {g.items.map((r, idx) => {
                                         const riskKey = `${g.nombre_area}-${r.CODIGO_ENTIDAD}-${r.CODIGO_RIESGO ?? idx}`;
                                         const estado = getEstadoSuperior(r, tipo);
-                                        const si = statusInfo(estado);
+                                        const ss = statusInfoSuperior(estado);
+                                        const si = statusInfo(r.ESTADO_SUPERVISOR ?? 0);
                                         const expanded = expandIds.has(riskKey);
 
                                         const colDefs = [
@@ -447,11 +413,17 @@ function RiesgosRevisionSuperior({ tipo = '', titulo = 'Revisión superior de ri
                                                 }
                                             }
                                         ].filter((c) => hasLabel(predefSet, c.label));
-
                                         const extrasMap = parseExtrasToMap(getExtrasRiesgo(r, tipo));
-                                        const comentarioSuperior = getComentarioSuperior(r, tipo);
-                                        const superiorModificacion = getSuperiorModificacion(r, tipo);
-                                        const fechaSuperior = getFechaSuperior(r, tipo);
+
+                                        const idRiesgo = Number(
+                                            Object.keys(riesgos).find(
+                                                id => safeGet(riesgos[id], 'Ref.') === safeGet(r, 'Ref.')
+                                            )
+                                        );
+
+                                        const comentarioSupervisor = safeGet(riesgos[idRiesgo], 'Comentario supervisor')
+                                        const comentarioSuperior = safeGet(riesgos[idRiesgo], 'Comentario superior')
+
 
                                         return (
                                             <Paper
@@ -465,25 +437,36 @@ function RiesgosRevisionSuperior({ tipo = '', titulo = 'Revisión superior de ri
                                                 }}
                                                 onClick={() => toggleExpand(riskKey)}
                                             >
-                                                <Stack
-                                                    direction="row"
-                                                    alignItems="center"
-                                                    justifyContent="space-between"
-                                                >
-                                                    <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap">
+                                                {/* Header compacto */}
+                                                <Stack direction="row" alignItems="center" justifyContent="space-between">
+                                                    <Stack direction="row" alignItems="center" spacing={2}>
+
+                                                        {/* Ref */}
                                                         <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
                                                             {safeGet(r, 'Ref.') || '—'}
                                                         </Typography>
-                                                        <Chip size="small" color={si.color} label={si.label} />
+
+                                                        {/* Estado Superior */}
+                                                        <Stack direction="row" alignItems="center" spacing={1}>
+                                                            <Typography variant="body2">
+                                                                Estado Superior
+                                                            </Typography>
+                                                            <Chip size="small" color={ss.color} label={ss.label} />
+                                                        </Stack>
+
+                                                        {/* Estado Supervisor */}
+                                                        <Stack direction="row" alignItems="center" spacing={1}>
+                                                            <Typography variant="body2">
+                                                                Estado Supervisor
+                                                            </Typography>
+                                                            <Chip size="small" color={si.color} label={si.label} />
+                                                        </Stack>
+
                                                     </Stack>
 
                                                     <Tooltip title={expanded ? 'Ocultar detalles' : 'Ver detalles'}>
                                                         <IconButton size="small">
-                                                            {expanded ? (
-                                                                <ExpandLessRounded fontSize="small" />
-                                                            ) : (
-                                                                <ExpandMoreRounded fontSize="small" />
-                                                            )}
+                                                            {expanded ? <ExpandLessRounded fontSize="small" /> : <ExpandMoreRounded fontSize="small" />}
                                                         </IconButton>
                                                     </Tooltip>
                                                 </Stack>
@@ -652,19 +635,40 @@ function RiesgosRevisionSuperior({ tipo = '', titulo = 'Revisión superior de ri
                                                             </Grid>
                                                         )}
 
-                                                        <Grid item xs={12}>
-                                                            <Divider sx={{ my: 1 }} />
-                                                            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
-                                                                Revisión superior
-                                                            </Typography>
+                                                        <Grid container spacing={2} mt={2} ml={1}>
+                                                            {(comentarioSuperior || comentarioSupervisor) && <Grid item xs={12}>
+                                                                <Divider sx={{ mb: 2 }}>
+                                                                    <Typography variant="subtitle2" color="text.secondary">
+                                                                        Observaciones y comentarios
+                                                                    </Typography>
+                                                                </Divider>
+                                                            </Grid>}
+                                                            
+                                                            {comentarioSuperior &&
+                                                                <Grid item xs={12} md={4}>
+                                                                    <Typography variant="caption">Comentario Superior</Typography>
+                                                                    <Paper
+                                                                        variant="outlined"
+                                                                        sx={{ p: 1.2, mt: 0.5, whiteSpace: 'pre-wrap' }}
+                                                                    >
+                                                                        {comentarioSuperior ?? '—'}
+                                                                    </Paper>
+                                                                </Grid>
+                                                            }
+
+                                                            {comentarioSupervisor &&
+                                                                <Grid item xs={12} md={4}>
+                                                                    <Typography variant="caption">Comentario Supervisor</Typography>
+                                                                    <Paper
+                                                                        variant="outlined"
+                                                                        sx={{ p: 1.2, mt: 0.5, whiteSpace: 'pre-wrap' }}
+                                                                    >
+                                                                        {comentarioSupervisor ?? '—'}
+                                                                    </Paper>
+                                                                </Grid>
+                                                            }
                                                         </Grid>
 
-                                                        <Grid item xs={12} md={4}>
-                                                            <Typography variant="caption">Estado</Typography>
-                                                            <Paper variant="outlined" sx={{ p: 1.2, mt: 0.5 }}>
-                                                                <Chip size="small" color={si.color} label={si.label} />
-                                                            </Paper>
-                                                        </Grid>
 
                                                         <Grid item xs={12}>
                                                             <Stack

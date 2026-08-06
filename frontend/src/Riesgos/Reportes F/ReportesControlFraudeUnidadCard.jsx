@@ -8,7 +8,7 @@
  */
 
 import { useState } from 'react';
-import axios from 'axios';
+import apiClient from 'api/apiClient';
 import {
     Button,
     Select,
@@ -67,9 +67,6 @@ function ReportesControlFraudeUnidadCard({ unidades = [], periodos = [], logoBas
     const mostrarAlerta = (mensaje, tipo = 'warning') => {
         setAlerta({ open: true, tipo, mensaje });
     };
-
-    const headers = () => ({ 'x-access-token': localStorage.getItem('token') });
-
     /**
      * mapTituloToConfig
      *
@@ -193,8 +190,7 @@ function ReportesControlFraudeUnidadCard({ unidades = [], periodos = [], logoBas
         try {
             setLoading(true);
 
-            const { data } = await axios.get(cfg.apiPath, {
-                headers: headers(),
+            const { data } = await apiClient.get(cfg.apiPath, {
                 params: { periodo, unidad },
             });
 
@@ -263,8 +259,7 @@ function ReportesControlFraudeUnidadCard({ unidades = [], periodos = [], logoBas
         try {
             setLoading(true);
 
-            const { data } = await axios.get(cfg.apiPath, {
-                headers: headers(),
+            const { data } = await apiClient.get(cfg.apiPath, {
                 params: { periodo, unidad },
             });
 
@@ -423,8 +418,7 @@ function ReportesControlFraudeUnidadCard({ unidades = [], periodos = [], logoBas
         try {
             setLoading(true);
 
-            const { data } = await axios.get(cfg.apiPath, {
-                headers: headers(),
+            const { data } = await apiClient.get(cfg.apiPath, {
                 params: { periodo, unidad },
             });
 

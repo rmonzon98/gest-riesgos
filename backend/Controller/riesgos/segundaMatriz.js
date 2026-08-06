@@ -638,7 +638,7 @@ exports.guardarRespuesta = async (req, res) => {
         }
 
         const [[entChk]] = await conn.execute(
-            `SELECT 1 AS ok FROM seguridad.seguridad_entidad WHERE CODIGO_CIA = ? AND CODIGO_ENTIDAD = ? LIMIT 1`,
+            `SELECT 1 AS ok FROM gestion_riesgos.seguridad_entidad WHERE CODIGO_CIA = ? AND CODIGO_ENTIDAD = ? LIMIT 1`,
             [codigo_cia, Number(codigo_entidad)]
         );
         if (!entChk) {
@@ -752,13 +752,13 @@ exports.obtenerEstadoEHistorial = async (req, res) => {
                 ) AS NOMBRE_USUARIO_SUPERIOR
             FROM 
                 gestion_riesgos.riesgos_segunda_matriz_his h
-                LEFT JOIN seguridad.seguridad_persona p1
+                LEFT JOIN gestion_riesgos.seguridad_persona p1
                     ON p1.CODIGO_CIA = h.CODIGO_CIA
                     AND p1.CODIGO_COLABORADOR = h.USUARIO_CREACION
-                LEFT JOIN seguridad.seguridad_persona p2
+                LEFT JOIN gestion_riesgos.seguridad_persona p2
                     ON p2.CODIGO_CIA = h.CODIGO_CIA
                     AND p2.CODIGO_COLABORADOR = h.USUARIO_MODIFICACION
-                LEFT JOIN seguridad.seguridad_persona p3
+                LEFT JOIN gestion_riesgos.seguridad_persona p3
                     ON p3.CODIGO_CIA = h.CODIGO_CIA
                     AND p3.CODIGO_COLABORADOR = h.USUARIO_SUPERIOR
             WHERE 
@@ -854,9 +854,10 @@ exports.estadoActualizar = async (req, res) => {
 
         const comentarioPrevio = sel[0]?.COMENTARIO_SUPERVISOR ?? null;
         let comentarioBloqueado = false;
+        let comentarioFinal = comentario ?? null;
         if (comentarioPrevio && String(comentarioPrevio).trim() !== '') {
             comentarioBloqueado = true;
-            comentario = comentarioPrevio;
+            comentarioFinal = comentarioPrevio;
         }
 
         const [upd] = await pool.execute(
@@ -876,7 +877,7 @@ exports.estadoActualizar = async (req, res) => {
             LIMIT 1`,
             [
                 estado,
-                comentario,
+                comentarioFinal,
                 usuario_mod ?? null,
                 codigo_cia,
                 Number(codigo_entidad),
@@ -977,13 +978,13 @@ exports.obtenerUltimaVersion = async (req, res) => {
                 ) AS NOMBRE_USUARIO_SUPERIOR
             FROM 
                 gestion_riesgos.riesgos_segunda_matriz_his h
-                LEFT JOIN seguridad.seguridad_persona p1
+                LEFT JOIN gestion_riesgos.seguridad_persona p1
                     ON p1.CODIGO_CIA = h.CODIGO_CIA
                     AND p1.CODIGO_COLABORADOR = h.USUARIO_CREACION
-                LEFT JOIN seguridad.seguridad_persona p2
+                LEFT JOIN gestion_riesgos.seguridad_persona p2
                     ON p2.CODIGO_CIA = h.CODIGO_CIA
                     AND p2.CODIGO_COLABORADOR = h.USUARIO_MODIFICACION
-                LEFT JOIN seguridad.seguridad_persona p3
+                LEFT JOIN gestion_riesgos.seguridad_persona p3
                     ON p3.CODIGO_CIA = h.CODIGO_CIA
                     AND p3.CODIGO_COLABORADOR = h.USUARIO_SUPERIOR
             WHERE 

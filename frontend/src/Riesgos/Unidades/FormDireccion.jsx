@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect } from "react";
 import {
     Dialog,
     DialogTitle,
@@ -7,58 +7,70 @@ import {
     Button,
     TextField,
     Box
-} from '@mui/material';
-import axios from 'axios';
+} from "@mui/material";
+import apiClient from "api/apiClient";
 
 function FormDireccion({ showModal, id, onClose, onSuccess, onError }) {
-    const [descripcion, setDescripcion] = useState('');
-    const [abreviatura, setAbreviatura] = useState('');
+    const [descripcion, setDescripcion] = useState("");
+    const [abreviatura, setAbreviatura] = useState("");
 
     const MAX_DESC = 200;
     const MAX_ABR = 10;
 
     useEffect(() => {
-        if (id && showModal) {
-            axios.get(`/api/direcciones-actualizados/obtener-direccion`, {
-                headers: { "x-access-token": localStorage.getItem('token') },
-                params: { direccion: parseInt(id) }
-            }).then((res) => {
-                const data = res.data.result[0];
-                setDescripcion(data.NOMBRE || '');
-                setAbreviatura(data.SIGLAS || '');
-            }).catch((err) => {
-                console.error('Error al obtener dirección:', err);
-            });
-        } else {
-            setDescripcion('');
-            setAbreviatura('');
-        }
-    }, [id, showModal]);
+        const cargarDireccion = async () => {
+            if (!id || !showModal) {
+                setDescripcion("");
+                setAbreviatura("");
+                return;
+            }
+
+            try {
+                const res = await apiClient.get("/api/direcciones-actualizados/obtener-direccion", {
+                    params: { direccion: parseInt(id, 10) }
+                });
+
+                const data = res.data?.result?.[0] || {};
+                setDescripcion(data.NOMBRE || "");
+                setAbreviatura(data.SIGLAS || "");
+            } catch (err) {
+                console.error("Error al obtener dirección:", err);
+                if (typeof onError === "function") onError();
+            }
+        };
+
+        cargarDireccion();
+    }, [id, showModal, onError]);
 
     const handleSubmit = async () => {
-        const payload = { descripcion, abreviatura };
+        const payload = {
+            descripcion,
+            abreviatura
+        };
+
         if (id) payload.id = id;
 
         try {
             if (id) {
-                await axios.put(`/api/direcciones-actualizados`, payload, {
-                    headers: { "x-access-token": localStorage.getItem('token') }
-                }).catch((err) => { onError() });
+                await apiClient.put("/api/direcciones-actualizados", payload);
             } else {
-                await axios.post(`/api/direcciones-actualizados`, payload, {
-                    headers: { "x-access-token": localStorage.getItem('token') }
-                }).catch((err) => { onError() });
+                await apiClient.post("/api/direcciones-actualizados", payload);
             }
 
-            onSuccess ? onSuccess() : onClose();
+            if (typeof onSuccess === "function") {
+                onSuccess();
+            } else {
+                onClose();
+            }
         } catch (err) {
-            console.error('Error guardando dirección:', err);
+            console.error("Error guardando dirección:", err);
+            if (typeof onError === "function") onError();
         }
     };
 
     return (
         <Dialog open={showModal} onClose={onClose} fullWidth maxWidth="sm">
-            <DialogTitle>{id ? 'Editar dirección' : 'Nueva dirección'}</DialogTitle>
+            <DialogTitle>{id ? "Editar dirección" : "Nueva dirección"}</DialogTitle>
             <DialogContent>
                 <Box mt={2}>
                     <TextField

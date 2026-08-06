@@ -8,7 +8,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react';
-import axios from 'axios';
+import apiClient from 'api/apiClient';
 import {
     Box, Card, CardHeader, CardContent, Typography, Button, FormControl, Select, MenuItem, InputLabel,
     Table, TableHead, TableRow, TableCell, TableBody, TableContainer, Stack, Alert,
@@ -77,7 +77,6 @@ function Anexo1Institucional() {
 
     const theme = useTheme();
     const isMobile = useMediaQuery(`(max-width:${theme.breakpoints.values.md}px)`);
-    const headersReq = { 'x-access-token': localStorage.getItem('token') };
 
     const TIPO_MATRIZ = 1;
     const getMatProp = (m, key) => m?.[key] ?? m?.[key?.toUpperCase?.()];
@@ -111,7 +110,7 @@ function Anexo1Institucional() {
 
     const obtenerPeriodos = async () => {
         try {
-            const { data } = await axios.get('/api/periodos-actualizados', { headers: headersReq });
+            const { data } = await apiClient.get('/api/periodos-actualizados');
             setPeriodos(data.result ?? data ?? []);
         } catch {
             setPeriodos([]);
@@ -120,7 +119,7 @@ function Anexo1Institucional() {
 
     const obtenerLogo = async () => {
         try {
-            const { data } = await axios.get('/api/reportes-actualizados/obtener-logo', { headers: headersReq });
+            const { data } = await apiClient.get('/api/reportes-actualizados/obtener-logo');
             setLogo('data:image/png;base64,' + (data.logo ?? ''));
             setInstitucion(data.nombre ?? '');
         } catch {
@@ -131,7 +130,7 @@ function Anexo1Institucional() {
     const obtenerSuperior = async () => {
         try {
             setLoadingSup(true);
-            const { data } = await axios.get('/api/reportes-actualizados/obtener-superior', { headers: headersReq });
+            const { data } = await apiClient.get('/api/reportes-actualizados/obtener-superior');
             if (data?.nombre) setSupNombre(String(data.nombre));
             if (data?.puesto) setSupPuesto(String(data.puesto));
         } catch (e) {
@@ -152,9 +151,9 @@ function Anexo1Institucional() {
         setCargando(true);
         setAlerta(null);
         try {
-            const dirReq = axios.get('/api/institucion-actualizados/obtener-primer-matriz-direcciones', { headers: headersReq, params: { periodo: p } });
-            const defReq = axios.get('/api/primera-matriz-actualizados/matriz-defecto', { headers: headersReq, params: { periodo: p, institucional: true } });
-            const instReq = axios.get('/api/institucion-actualizados/primera-matriz', { headers: headersReq, params: { periodo: p, tipo: TIPO_MATRIZ } });
+            const dirReq = apiClient.get('/api/institucion-actualizados/obtener-primer-matriz-direcciones', { params: { periodo: p } });
+            const defReq = apiClient.get('/api/primera-matriz-actualizados/matriz-defecto', { params: { periodo: p, institucional: true } });
+            const instReq = apiClient.get('/api/institucion-actualizados/primera-matriz', { params: { periodo: p, tipo: TIPO_MATRIZ } });
 
             const [dirRes, defRes, instRes] = await Promise.allSettled([dirReq, defReq, instReq]);
 
@@ -258,9 +257,8 @@ function Anexo1Institucional() {
         try {
             setCargandoDefecto(true);
             setAlerta(null);
-            const { data } = await axios.get('/api/primera-matriz-actualizados/matriz-defecto', {
-                headers: headersReq,
-                params: { periodo, institucional: true }
+            const { data } = await apiClient.get('/api/primera-matriz-actualizados/matriz-defecto', {
+                                params: { periodo, institucional: true }
             });
             const defMats =
                 Array.isArray(data?.matrices) ? data.matrices
@@ -425,7 +423,7 @@ function Anexo1Institucional() {
         };
 
         try {
-            await axios.post('/api/institucion-actualizados/primera-matriz', payload, { headers: headersReq });
+            await apiClient.post('/api/institucion-actualizados/primera-matriz', payload);
             setSnack({ open: true, msg: 'Guardado exitoso', sev: 'success' });
             await cargarTodoPorPeriodo(periodo);
         } catch (e) {

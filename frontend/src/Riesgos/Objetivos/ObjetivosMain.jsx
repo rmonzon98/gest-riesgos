@@ -8,7 +8,7 @@ import {
 import EditIcon from "@mui/icons-material/Edit";
 import AddIcon from "@mui/icons-material/Add";
 import ClearIcon from "@mui/icons-material/Clear";
-import axios from "axios";
+import apiClient from "api/apiClient";
 import AlertaMensaje from "../Alerta F/AlertaMensaje";
 import FormObjetivo from "./FormObjetivo";
 
@@ -35,9 +35,7 @@ function ObjetivosMain() {
 
     const obtenerTipos = async () => {
         try {
-            const res = await axios.get("/api/tipo-objetivo-actualizados", {
-                headers: { "x-access-token": localStorage.getItem("token") }
-            });
+            const res = await apiClient.get("/api/tipo-objetivo-actualizados");
             setTipos(res.data.result || []);
         } catch (error) {
             console.error(error);
@@ -51,9 +49,8 @@ function ObjetivosMain() {
     const obtenerObjetivos = async () => {
         if (!codigoTipo) return;
         try {
-            const res = await axios.get("/api/objetivos-actualizados", {
-                params: { tipoObjetivo: codigoTipo },
-                headers: { "x-access-token": localStorage.getItem("token") }
+            const res = await apiClient.get("/api/objetivos-actualizados", {
+                params: { tipoObjetivo: codigoTipo }
             });
             setObjetivos(res.data.result || []);
         } catch (error) {

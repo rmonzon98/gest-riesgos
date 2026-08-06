@@ -19,7 +19,7 @@ const { DOCS_DIR, relToDocs, absInDocs, safeInDocs } = require('../../services/p
  * 
  * Devuelve el logo de la institución (en Base64 data URL) según `codigo_cia`.
  *
- * - Lee la ruta del logo almacenada en BD (tabla `seguridad.seguridad_institucion`).
+ * - Lee la ruta del logo almacenada en BD (tabla `gestion_riesgos.seguridad_institucion`).
  * - Resuelve la ubicación en disco dentro de `DOCS_DIR` y la envía como `data:<mime>;base64,...`.
  *
  * @route GET /general/logo
@@ -35,7 +35,7 @@ exports.obtenerLogo = async (req, res) => {
         SELECT 
             path "LOGO"
         FROM 
-            seguridad.seguridad_institucion
+            gestion_riesgos.seguridad_institucion
         WHERE 
             CODIGO_CIA = ?
         LIMIT 1
@@ -81,7 +81,7 @@ exports.obtenerLogoBarra = async (req, res) => {
         SELECT 
             path_barra "LOGO"
         FROM 
-            seguridad.seguridad_institucion
+            gestion_riesgos.seguridad_institucion
         WHERE 
             CODIGO_CIA = ?
         LIMIT 1
@@ -156,7 +156,7 @@ exports.actualizarLogo = async (req, res) => {
         cn = await pool.getConnection();
 
         const [rows] = await cn.query(
-            `SELECT PATH FROM seguridad.seguridad_institucion WHERE CODIGO_CIA = ? LIMIT 1`,
+            `SELECT PATH FROM gestion_riesgos.seguridad_institucion WHERE CODIGO_CIA = ? LIMIT 1`,
             [codigo_cia]
         );
         oldPathRel = rows?.[0]?.PATH || null;
@@ -190,7 +190,7 @@ exports.actualizarLogo = async (req, res) => {
 
         await cn.beginTransaction();
         await cn.query(
-            `UPDATE seguridad.seguridad_institucion
+            `UPDATE gestion_riesgos.seguridad_institucion
         SET PATH = ?, FECHA_MODIFICACION = NOW(), usuario_modificacion = ?
         WHERE CODIGO_CIA = ?`,
             [newPathRel, req.userId, codigo_cia]
@@ -239,7 +239,7 @@ exports.actualizarLogoBarra = async (req, res) => {
         cn = await pool.getConnection();
 
         const [rows] = await cn.query(
-            `SELECT PATH_BARRA FROM seguridad.seguridad_institucion WHERE CODIGO_CIA = ? LIMIT 1`,
+            `SELECT PATH_BARRA FROM gestion_riesgos.seguridad_institucion WHERE CODIGO_CIA = ? LIMIT 1`,
             [codigo_cia]
         );
         oldPathRel = rows?.[0]?.PATH || null;
@@ -273,7 +273,7 @@ exports.actualizarLogoBarra = async (req, res) => {
 
         await cn.beginTransaction();
         await cn.query(
-            `UPDATE seguridad.seguridad_institucion
+            `UPDATE gestion_riesgos.seguridad_institucion
         SET PATH_BARRA = ?, FECHA_MODIFICACION = NOW(), usuario_modificacion = ? 
         WHERE CODIGO_CIA = ?`,
             [newPathRel, req.userId, codigo_cia]
@@ -338,7 +338,7 @@ exports.obtenerFotoPerfil = async (req, res) => {
             SELECT 
                 path AS foto
             FROM 
-                seguridad.seguridad_persona
+                gestion_riesgos.seguridad_persona
             WHERE 
                 CODIGO_CIA = ?
                 AND codigo_colaborador = ?
@@ -410,7 +410,7 @@ exports.actualizarFotoPerfil = async (req, res) => {
         cn = await pool.getConnection();
 
         const [rows] = await cn.query(
-            `SELECT PATH FROM seguridad.seguridad_persona WHERE CODIGO_CIA = ? AND codigo_colaborador = ?`,
+            `SELECT PATH FROM gestion_riesgos.seguridad_persona WHERE CODIGO_CIA = ? AND codigo_colaborador = ?`,
             [codigo_cia, usuario]
         );
         oldPathRel = rows?.[0]?.PATH || null;
@@ -444,7 +444,7 @@ exports.actualizarFotoPerfil = async (req, res) => {
 
         await cn.beginTransaction();
         await cn.query(
-            `UPDATE seguridad.seguridad_persona
+            `UPDATE gestion_riesgos.seguridad_persona
         SET PATH = ?, FECHA_MODIFICACION = NOW(), usuario_modificacion = '${req.userId}'
         WHERE CODIGO_CIA = ? AND codigo_colaborador = ?`,
             [newPathRel, codigo_cia, req.userId]
