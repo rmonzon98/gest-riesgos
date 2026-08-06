@@ -21,7 +21,7 @@ import React, { useEffect, useState } from "react";
 import apiClient from "api/apiClient";
 import {
     Box, Card, CardHeader, CardContent, Typography, Stack, Button, Chip, Alert, CircularProgress, TextField,
-    Checkbox, IconButton, Paper, MenuItem, Select, FormControl, InputLabel
+    Checkbox, IconButton, Paper, MenuItem, Select, FormControl, InputLabel, Divider
 } from "@mui/material";
 import DeleteRounded from "@mui/icons-material/DeleteRounded";
 import DragIndicatorRounded from "@mui/icons-material/DragIndicatorRounded";
@@ -32,6 +32,13 @@ import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 
 /** Base API */
 const API_BASE = "/api/riesgos-variables-actualizados";
+
+const maintenanceCardSx = {
+    borderRadius: 2,
+    border: "1px solid",
+    borderColor: "divider",
+    boxShadow: "0 8px 24px rgba(15, 23, 42, 0.06)"
+};
 
 /** Report IDs canónicos */
 const REPORT_IDS = {
@@ -472,7 +479,7 @@ export default function MantenimientoReportes({ periodo }) {
      * @returns {JSX.Element}
      */
     const BloqueLectura = ({ title, subtitle, items }) => (
-        <Card sx={{ borderRadius: "16px", mb: 2 }}>
+        <Card sx={{ ...maintenanceCardSx, mb: 2 }}>
             <CardHeader title={title} subheader={subtitle} />
             <CardContent>
                 {loadingDetalle ? (
@@ -544,7 +551,7 @@ export default function MantenimientoReportes({ periodo }) {
         };
 
         return (
-            <Card sx={{ borderRadius: "16px", mb: 2 }}>
+            <Card sx={{ ...maintenanceCardSx, mb: 2 }}>
                 <CardHeader title={title} subheader={subtitle} />
                 <CardContent>
                     <Stack spacing={2}>
@@ -576,6 +583,10 @@ export default function MantenimientoReportes({ periodo }) {
                                 <TextField {...params} label="Agregar propiedades (marca varias o 'Seleccionar todas')" placeholder="Buscar propiedad…" />
                             )}
                         />
+
+                        <Typography variant="caption" color="text.secondary">
+                            Arrastre las propiedades para cambiar el orden en el reporte.
+                        </Typography>
 
                         <DragDropContext onDragEnd={(result) => {
                             if (!result.destination) return;
@@ -637,9 +648,14 @@ export default function MantenimientoReportes({ periodo }) {
             {okMsg && <Alert severity="success" sx={{ mb: 2 }}>{okMsg}</Alert>}
 
             {/* ====== Selector de versión ====== */}
-            <Card sx={{ borderRadius: "16px", mb: 2 }}>
+            <Card sx={{ ...maintenanceCardSx, mb: 2 }}>
                 <CardHeader title="Seleccione una versión (Reportes)" />
                 <CardContent>
+                    <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ mb: 2 }}>
+                        <Chip label={versionSeleccionada ? `Version ${versionSeleccionada}` : "Seleccione una version"} color={versionSeleccionada ? "primary" : "default"} variant={versionSeleccionada ? "filled" : "outlined"} />
+                        <Chip label={`${versiones.length} version(es) registradas`} variant="outlined" />
+                        <Chip label={modo === "crear" ? "Editando nueva version" : "Modo consulta"} variant="outlined" />
+                    </Stack>
                     {loading ? (
                         <Typography variant="body2" color="text.secondary">Cargando…</Typography>
                     ) : versiones.length === 0 ? (
@@ -680,9 +696,13 @@ export default function MantenimientoReportes({ periodo }) {
             </Card>
 
             {/* ====== Acciones ====== */}
-            <Card sx={{ borderRadius: "16px", mb: 2 }}>
+            <Card sx={{ ...maintenanceCardSx, mb: 2 }}>
                 <CardHeader title="Acciones" />
                 <CardContent>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                        Cree una configuracion nueva, reutilice una version existente o marque cual sera la configuracion por defecto del periodo.
+                    </Typography>
+                    <Divider sx={{ mb: 2 }} />
                     <Stack direction={{ xs: "column", sm: "row" }} spacing={1} useFlexGap flexWrap={{ sm: "wrap" }}>
                         <Button
                             variant="contained"

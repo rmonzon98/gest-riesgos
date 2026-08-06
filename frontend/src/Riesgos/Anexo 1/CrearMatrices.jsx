@@ -292,6 +292,16 @@ export default function CrearMatrices({
                 </Typography>
             )}
 
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mt: 2 }}>
+                <Chip size="small" color="primary" label={`Tabla ${active + 1} de ${tablas.length}`} />
+                <Chip size="small" variant="outlined" label={`${tabla?.headers?.length ?? 0} columna(s)`} />
+                <Chip size="small" variant="outlined" label={`${tabla?.rows?.length ?? 0} fila(s)`} />
+            </Stack>
+
+            <Alert severity="info" variant="outlined" sx={{ mt: 2 }}>
+                Complete los encabezados y el titulo de la primera columna en cada fila antes de guardar.
+            </Alert>
+
             {loadingDirs && (
                 <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 2 }}>
                     <CircularProgress size={18} />

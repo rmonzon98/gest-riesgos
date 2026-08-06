@@ -29,6 +29,13 @@ import apiClient from "api/apiClient";
 const API_BASE = "/api/riesgos-variables-actualizados";
 const norm = (s) => (s ?? "").toString().trim().toLowerCase();
 
+const maintenanceCardSx = {
+    borderRadius: 2,
+    border: "1px solid",
+    borderColor: "divider",
+    boxShadow: "0 8px 24px rgba(15, 23, 42, 0.06)"
+};
+
 /**
  * PropiedadesReadonly
  *Muestra en modo solo lectura la lista de propiedades de una versión.
@@ -129,7 +136,7 @@ function CrearPropiedadesEditor({
     };
 
     return (
-        <Card sx={{ borderRadius: "16px" }}>
+        <Card sx={maintenanceCardSx}>
             <CardHeader title={title} subheader={subheader} />
             <CardContent>
                 <Stack spacing={2} sx={{ mb: 2 }}>
@@ -335,12 +342,12 @@ export default function MantenimientoRiesgosPropiedades({ periodo = "" }) {
 
     return (
         <Box sx={{ mt: 2 }}>
-            <Card sx={{ borderRadius: "16px", mb: 2 }}>
+            <Card sx={{ ...maintenanceCardSx, mb: 2 }}>
                 <CardHeader
                     title="Versiones de propiedades extra de riesgos"
                     subheader={periodo ? `Período: ${periodo}` : undefined}
                     action={
-                        <Stack direction="row" spacing={1}>
+                        <Stack direction={{ xs: "column", md: "row" }} spacing={1} useFlexGap flexWrap="wrap" sx={{ maxWidth: { md: 820 } }}>
                             <Button
                                 variant="contained"
                                 startIcon={<AddRounded />}
@@ -381,6 +388,11 @@ export default function MantenimientoRiesgosPropiedades({ periodo = "" }) {
                     }
                 />
                 <CardContent>
+                    <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ mb: 2 }}>
+                        <Chip label={versionSel ? `Version ${versionSel}` : "Seleccione una version"} color={versionSel ? "primary" : "default"} variant={versionSel ? "filled" : "outlined"} />
+                        <Chip label={selEsDefecto ? "Version por defecto" : "No marcada como defecto"} variant="outlined" />
+                        <Chip label={`${propsList.length} propiedad(es)`} variant="outlined" />
+                    </Stack>
 
                     {/* Alerts con auto-dismiss */}
                     <Collapse in={Boolean(error)}>

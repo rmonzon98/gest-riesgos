@@ -12,7 +12,7 @@ import apiClient from 'api/apiClient';
 import {
     Stepper, Step, StepLabel, Button, TextField, Stack, Box, Typography,
     IconButton, useMediaQuery, MobileStepper, Table, TableHead, TableRow, TableCell,
-    TableBody, Divider, Tooltip, TableContainer, Snackbar, Alert
+    TableBody, Divider, Tooltip, TableContainer, Snackbar, Alert, Chip
 } from '@mui/material';
 import { Add, Close, KeyboardArrowLeft, KeyboardArrowRight, Delete } from '@mui/icons-material';
 import { useTheme } from '@mui/material/styles';
@@ -303,6 +303,16 @@ export default function CrearMatrices({
                     Creando a partir de la versión v{fromVersion}
                 </Typography>
             )}
+
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mt: 2 }}>
+                <Chip size="small" color="primary" label={`Tabla ${active + 1} de ${tablas.length}`} />
+                <Chip size="small" variant="outlined" label={`${tabla?.headers?.length ?? 0} columna(s)`} />
+                <Chip size="small" variant="outlined" label={`${tabla?.rows?.length ?? 0} fila(s)`} />
+            </Stack>
+
+            <Alert severity="info" variant="outlined" sx={{ mt: 2 }}>
+                Las columnas Aplica y Comentario son automaticas; solo edite las columnas libres.
+            </Alert>
 
             {!isMobile ? (
                 <Stepper activeStep={active} sx={{ my: 3 }}>

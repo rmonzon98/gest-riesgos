@@ -17,7 +17,7 @@
 import React, { useEffect, useState } from 'react';
 import apiClient from 'api/apiClient';
 import {
-    Box, Typography, Card, CardHeader, CardContent, FormControl, InputLabel, Select, MenuItem, Tabs, Tab
+    Box, Typography, Card, CardHeader, CardContent, FormControl, InputLabel, Select, MenuItem, Tabs, Tab, Stack, Chip
 } from '@mui/material';
 import { fmt } from 'funciones/Fechas';
 
@@ -39,6 +39,13 @@ function TabPanel({ children, value, index }) {
     if (value !== index) return null;
     return <Box sx={{ mt: 2 }}>{children}</Box>;
 }
+
+const cardSx = {
+    borderRadius: 2,
+    border: '1px solid',
+    borderColor: 'divider',
+    boxShadow: '0 8px 24px rgba(15, 23, 42, 0.06)'
+};
 
 /**
  * MantenimientoRiesgosMain
@@ -70,13 +77,20 @@ export default function MantenimientoRiesgosMain() {
     }, []);
 
     return (
-        <Box sx={{ p: 2 }}>
-            <Typography variant="h5" sx={{ fontWeight: 700, mb: 2 }}>
+        <Box sx={{ p: { xs: 2, md: 3 } }}>
+            <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 700 }}>
+                Configuracion
+            </Typography>
+            <Typography variant="h4" sx={{ fontWeight: 800, mb: 1, lineHeight: 1.15 }}>
                 Mantenimiento de evaluación de riesgos
             </Typography>
 
             {/* Selección de período */}
-            <Card sx={{ borderRadius: '16px', mb: 2 }}>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 3, maxWidth: 760 }}>
+                Seleccione el periodo y luego ajuste las propiedades extra o las columnas visibles en reportes.
+            </Typography>
+
+            <Card sx={{ ...cardSx, mb: 2 }}>
                 <CardHeader title="Seleccione un período" />
                 <CardContent>
                     {periodos.length === 0 ? (
@@ -104,9 +118,13 @@ export default function MantenimientoRiesgosMain() {
             </Card>
 
             {periodo && (
-                <Card sx={{ borderRadius: '16px' }}>
+                <Card sx={cardSx}>
                     <CardHeader title="Configuración por período" subheader={`Período ${periodo}`} />
                     <CardContent>
+                        <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} sx={{ mb: 2 }}>
+                            <Chip label="Propiedades extra: campos adicionales para capturar riesgos" variant="outlined" />
+                            <Chip label="Reportes: columnas y orden de salida" variant="outlined" />
+                        </Stack>
                         <Tabs
                             value={tab}
                             onChange={(_, v) => setTab(v)}

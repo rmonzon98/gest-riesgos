@@ -13,13 +13,27 @@ import {
     Box, FormControl, InputLabel, Select, MenuItem,
     Typography, Card, CardHeader, CardContent,
     TableCell, TableRow, Table, TableHead, TableBody,
-    Stack, Button, Stepper, Step, StepLabel, useMediaQuery, MobileStepper, Chip, Alert, CircularProgress
+    Stack, Button, Stepper, Step, StepLabel, useMediaQuery, MobileStepper, Chip, Alert, CircularProgress, Divider
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import { KeyboardArrowLeft, KeyboardArrowRight } from '@mui/icons-material';
 import { fmt } from 'funciones/Fechas';
 import CrearMatrices from './CrearMatrices';
 import anexo1DefaultSistema from './anexo1DefaultSistema.json';
+
+const maintenanceCardSx = {
+    borderRadius: 2,
+    border: '1px solid',
+    borderColor: 'divider',
+    boxShadow: '0 8px 24px rgba(15, 23, 42, 0.06)'
+};
+
+const helperChipSx = {
+    justifyContent: 'flex-start',
+    height: 'auto',
+    py: 0.75,
+    '& .MuiChip-label': { whiteSpace: 'normal' }
+};
 
 /**
  * Mantenimiento de versiones del Anexo 1 y sus matrices base.
@@ -259,12 +273,18 @@ function Anexo1Mant() {
     };
 
     return (
-        <Box sx={{ p: 2 }}>
+        <Box sx={{ p: { xs: 2, md: 3 } }}>
             <Typography variant="h5" sx={{ fontWeight: 700, mb: 2 }}>
                 Mantenimiento de evaluación de la eficiencia del control interno y gobernanza
             </Typography>
 
             {/* Estado de carga/errores de direcciones */}
+            <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} sx={{ mb: 2 }}>
+                <Chip sx={helperChipSx} color={periodo ? 'primary' : 'default'} label="1. Seleccione un periodo" />
+                <Chip sx={helperChipSx} color={version ? 'primary' : 'default'} label="2. Revise una version existente" />
+                <Chip sx={helperChipSx} color={mostrarCrear || mostrarBasado ? 'primary' : 'default'} label="3. Cree o derive una nueva version" />
+            </Stack>
+
             {loadingDirs && (
                 <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
                     <CircularProgress size={18} />
@@ -273,7 +293,7 @@ function Anexo1Mant() {
             )}
             {!!errorDirs && <Alert severity="warning" sx={{ mb: 2 }}>{errorDirs}</Alert>}
 
-            <Card sx={{ borderRadius: '16px', mb: 2 }}>
+            <Card sx={{ ...maintenanceCardSx, mb: 2 }}>
                 <CardHeader title="Seleccione un período" />
                 <CardContent>
                     {periodos.length === 0 ? (
@@ -301,7 +321,7 @@ function Anexo1Mant() {
             </Card>
 
             {periodo && (
-                <Card sx={{ borderRadius: '16px', mb: 2 }}>
+                <Card sx={{ ...maintenanceCardSx, mb: 2 }}>
                     <CardHeader title="Seleccione una versión" />
                     <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                         {versiones.length === 0 ? (
@@ -330,7 +350,7 @@ function Anexo1Mant() {
             )}
 
             {version && !mostrarBasado && (
-                <Card sx={{ borderRadius: '16px', mb: 2 }}>
+                <Card sx={{ ...maintenanceCardSx, mb: 2 }}>
                     <CardHeader title={`Matrices de la versión ${version}`} />
                     <CardContent>
                         {matrices.length === 0 ? (
@@ -377,7 +397,13 @@ function Anexo1Mant() {
 
                                 {/* Vista previa de la matriz activa */}
                                 {matrizActiva && (
-                                    <Box sx={{ p: 1, border: '1px dashed', borderRadius: 2 }}>
+                                    <Box sx={{ p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 2, bgcolor: 'background.default' }}>
+                                        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} justifyContent="space-between" alignItems={{ xs: 'flex-start', sm: 'center' }} sx={{ mb: 1.5 }}>
+                                            <Chip size="small" color="primary" label={`Matriz ${activePreview + 1} de ${matrices.length}`} />
+                                            <Typography variant="caption" color="text.secondary">
+                                                Vista previa de estructura y obligatoriedad
+                                            </Typography>
+                                        </Stack>
                                         <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
                                             {matrizActiva.TITULO || 'Sin título'}
                                         </Typography>
@@ -479,10 +505,19 @@ function Anexo1Mant() {
 
             {/* Card de acciones inferiores con botón Crear (oculta mientras se usa "Tomar como base") */}
             {!mostrarBasado && (
-                <Card sx={{ borderRadius: '16px' }}>
+                <Card sx={maintenanceCardSx}>
                     <CardHeader title="Acciones" />
                     <CardContent>
                         <Stack direction="column" spacing={2}>
+                            <Stack spacing={0.75}>
+                                <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                                    Elija como iniciar la configuracion
+                                </Typography>
+                                <Typography variant="body2" color="text.secondary">
+                                    Puede crear una version vacia, cargar la plantilla del sistema o reutilizar la version por defecto del periodo anterior.
+                                </Typography>
+                            </Stack>
+                            <Divider />
                             <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
                                 <Button
                                     variant="contained"
@@ -539,7 +574,7 @@ function Anexo1Mant() {
 
             {/* Editor de nueva versión basada en otra */}
             {mostrarBasado && basadoConfig && (
-                <Card sx={{ borderRadius: '16px', mt: 2 }}>
+                <Card sx={{ ...maintenanceCardSx, mt: 2 }}>
                     <CardHeader title={`Crear nueva versión (base v${basadoConfig.version})`} />
                     <CardContent>
                         <CrearMatrices
