@@ -14,6 +14,7 @@ const timeToken = 1000 * 60 * 60 * HOURS;
 const port = process.env.SERVER_PORT || process.env.PORT || 8080;
 
 const { DOCS_DIR } = require('./services/paths');
+const { verifyJWT } = require('./services/verifyJWTUpd');
 
 const corsOrigin = process.env.CORS_URL || process.env.CORS_ORIGIN || 'http://localhost:5173';
 
@@ -50,8 +51,8 @@ app.use(session({
 }));
 
 // Estáticos DEL BACKEND (NO del frontend)
-app.use('/Pictures', express.static(path.join(__dirname, 'Pictures')));
-app.use('/docs', express.static(DOCS_DIR));
+app.use('/Pictures', verifyJWT, express.static(path.join(__dirname, 'Pictures')));
+app.use('/docs', verifyJWT, express.static(DOCS_DIR));
 
 // Healthcheck
 app.get('/healthz', (_req, res) => res.status(200).json({ ok: true }));
