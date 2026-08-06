@@ -476,8 +476,8 @@ export default function LoginPage() {
             <Box sx={{ textAlign: "center", mb: 4 }}>
               <img
                 src={inicio}
-                alt="Logo"
-                style={{ width: '45%', height: 'auto', objectFit: 'contain' }}
+                alt="Sistema de Gestión de Riesgos"
+                style={{ width: '70%', maxWidth: 420, height: 'auto', objectFit: 'contain' }}
               />
             </Box>
           )}
@@ -514,7 +514,7 @@ export default function LoginPage() {
                       mb: 1
                     }}
                   >
-                    Sistema de Gestión de Riesgos Institucionales –SIGERI–
+                    Sistema de Gestión de Riesgos
                   </Typography>
 
                   <Typography

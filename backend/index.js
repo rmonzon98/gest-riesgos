@@ -15,7 +15,7 @@ const port = process.env.SERVER_PORT || process.env.PORT || 8080;
 
 const { DOCS_DIR } = require('./services/paths');
 
-const corsOrigin = process.env.CORS_URL || process.env.CORS_ORIGIN || 'http://localhost:3000';
+const corsOrigin = process.env.CORS_URL || process.env.CORS_ORIGIN || 'http://localhost:5173';
 
 // Si estás detrás de proxy (Nginx/ALB), habilita esto
 // app.set('trust proxy', 1);

@@ -20,7 +20,7 @@ if (!authenticator) {
     );
 }
 
-const ISSUER = process.env.TOTP_ISSUER || 'SIGERI';
+const ISSUER = process.env.TOTP_ISSUER || 'Sistema de Gestión de Riesgos';
 
 authenticator.options = {
     step: 30,

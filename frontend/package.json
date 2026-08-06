@@ -35,34 +35,24 @@
     "react-dom": "^18.0.0",
     "react-quill-new": "^3.7.0",
     "react-router-dom": "^7.11.0",
-    "react-scripts": "5.0.1",
     "recharts": "^3.4.1",
     "sass": "^1.99.0",
     "tar": "^7.5.16",
     "tmp": "^0.2.7"
   },
   "scripts": {
-    "start": "react-scripts start",
-    "build": "react-scripts build",
-    "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "start": "vite",
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
   },
   "overrides": {
     "@tootallnate/once": "^2.0.1",
     "quill": "$quill",
-    "nth-check": "^2.1.1",
     "postcss": "^8.5.25",
     "serialize-javascript": "^7.0.5",
-    "svgo": "^4.0.2",
     "underscore": "^1.13.8",
-    "uuid": "^11.1.1",
-    "webpack-dev-server": "5.2.6"
-  },
-  "eslintConfig": {
-    "extends": [
-      "react-app",
-      "react-app/jest"
-    ]
+    "uuid": "^11.1.1"
   },
   "browserslist": {
     "production": [
@@ -75,5 +65,9 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^6.0.5",
+    "vite": "^8.2.0"
   }
 }

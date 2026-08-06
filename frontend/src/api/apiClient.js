@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || "";
+const API_BASE_URL = import.meta.env.VITE_API_URL || "";
 
 function getCookie(nombre) {
     const value = `; ${document.cookie}`;
@@ -75,7 +75,7 @@ function addCsrfHeader(config) {
 }
 
 function installInterceptors(instance) {
-    if (instance.__sigeriInterceptorsInstalled) return;
+    if (instance.__gestionRiesgosInterceptorsInstalled) return;
 
     instance.interceptors.request.use(
         (config) => addCsrfHeader(config),
@@ -140,7 +140,7 @@ function installInterceptors(instance) {
         }
     );
 
-    instance.__sigeriInterceptorsInstalled = true;
+    instance.__gestionRiesgosInterceptorsInstalled = true;
 }
 
 axios.defaults.baseURL = API_BASE_URL;

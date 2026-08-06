@@ -81,7 +81,7 @@ const normalizeUrlKey = (url) => {
 
 
 const getApiBaseUrl = () => {
-    const baseUrl = apiClient?.defaults?.baseURL || process.env.REACT_APP_API_URL || "";
+    const baseUrl = apiClient?.defaults?.baseURL || import.meta.env.VITE_API_URL || "";
     return String(baseUrl).replace(/\/$/, "");
 };
 

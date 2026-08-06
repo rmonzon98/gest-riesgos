@@ -34,7 +34,7 @@ import ChevronRightRounded from "@mui/icons-material/ChevronRightRounded";
 import { buildExcelHTMLsFromArrayBuffer } from "utils/excelPreview";
 import { fmt } from "funciones/Fechas";
 
-const FILE_BASE = process.env.REACT_APP_API_URL;
+const FILE_BASE = import.meta.env.VITE_API_URL || "";
 
 /**
  * Convierte la "ruta" que viene del backend (a veces absoluta Windows, a veces relativa)

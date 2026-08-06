@@ -32,6 +32,14 @@ body[data-theme='blue'] {
   @include theme-colors(map-get($theme-colors, blue));
 }
 
+html,
+body,
+#root {
+  min-height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
 body {
   background-color: var(--color-neutral);
   color: var(--color-text);

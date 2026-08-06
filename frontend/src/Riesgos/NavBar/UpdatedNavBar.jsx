@@ -627,8 +627,8 @@ const UpdatedNavBar = () => {
                             <Box
                                 component="img"
                                 src={logo}
-                                alt="Logo"
-                                sx={{ width: { xs: 60 }, mr: 1 }}
+                                alt="Sistema de Gestión de Riesgos"
+                                sx={{ height: { xs: 38, md: 48 }, width: { xs: 126, md: 170 }, objectFit: 'contain', mr: 1 }}
                             />
                         )}
 
@@ -661,13 +661,15 @@ const UpdatedNavBar = () => {
                             to="/riesgos"
                             sx={{
                                 color: CONTRAST,
+                                fontSize: '0.9rem',
                                 fontWeight: 700,
-                                letterSpacing: 0.5,
+                                lineHeight: 1.1,
+                                textAlign: 'center',
                                 textDecoration: 'none',
                                 '&:hover': { textDecoration: 'underline' }
                             }}
                         >
-                            -SIGERI-
+                            Sistema de Gestión de Riesgos
                         </Typography>
                     </Box>
 
@@ -695,7 +697,7 @@ const UpdatedNavBar = () => {
                                 '&:hover': { textDecoration: 'underline' }
                             }}
                         >
-                            Sistema de Gestión de Riesgos Institucionales -SIGERI-
+                            Sistema de Gestión de Riesgos
                         </Typography>
 
                         <Box
