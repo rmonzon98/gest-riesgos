@@ -180,7 +180,7 @@ exports.obtenerMetricas = async (req, res) => {
         ] = await Promise.all([
             pool.execute(
                 `
-                SELECT codigo_entidad, codigo_tipo_objetivo, riesgo_residual, riesgo_inherente, codigo_periodo
+                SELECT codigo_entidad, codigo_tipo_objetivo, riesgo_residual, riesgo_inherente, codigo_periodo, es_nuevo
                 FROM gestion_riesgos.riesgos_riesgo_extendido
                 WHERE eliminado = 0 AND codigo_cia = ?
                 `, [codigo_cia]

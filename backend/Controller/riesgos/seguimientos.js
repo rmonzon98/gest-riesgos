@@ -544,7 +544,7 @@ exports.obtenerRelacionesPreviasGeneral = async (req, res) => {
     try {
         const sql = `
         WITH RECURSIVE cadena AS (
-            -- Semilla: riesgos del período actual
+            -- Semilla: riesgos del período actual (los riesgos nuevos no llevan seguimiento en su periodo de origen)
             SELECT
                 r.CODIGO_CIA,
                 r.CODIGO_ENTIDAD,
@@ -559,6 +559,7 @@ exports.obtenerRelacionesPreviasGeneral = async (req, res) => {
             AND r.CODIGO_ENTIDAD = ?
             AND r.CODIGO_PERIODO = ?
             AND COALESCE(r.ELIMINADO, 0) != 1
+            AND COALESCE(r.ES_NUEVO, 0) = 0
 
             UNION ALL
 
@@ -929,6 +930,7 @@ const obtenerCodigoRiesgo = (riesgo) => {
  * Crea un riesgo en el siguiente período y lo relaciona con el riesgo actual.
  *
  * Validaciones:
+ * - El período destino debe existir y estar activo.
  * - El riesgo actual debe existir y no estar eliminado.
  * - El riesgo actual no debe tener ya una continuidad activa en el siguiente período.
  * - Si ya existe un riesgo activo con la misma referencia en el siguiente período, no se duplica.
@@ -952,6 +954,30 @@ exports.copiarSiguientePeriodo = async (req, res) => {
     try {
         conn = await pool.getConnection();
         await conn.beginTransaction();
+
+        // El período destino debe existir y estar activo; si no, el riesgo quedaría
+        // en un período que no aparece en los selectores.
+        const [[periodoDestinoRow]] = await conn.execute(
+            `
+            SELECT ACTIVO
+            FROM gestion_riesgos.riesgos_periodo
+            WHERE CODIGO_CIA = ?
+              AND CODIGO_PERIODO = ?
+            LIMIT 1
+            `,
+            [codigo_cia, periodoDestino]
+        );
+
+        if (!periodoDestinoRow || Number(periodoDestinoRow.ACTIVO) !== 1) {
+            await conn.rollback();
+            return res.status(409).json({
+                ok: false,
+                code: "PERIODO_DESTINO_NO_DISPONIBLE",
+                message: !periodoDestinoRow
+                    ? `El período ${periodoDestino} no existe. Debe crearse antes de continuar el riesgo.`
+                    : `El período ${periodoDestino} está inactivo. Debe activarse antes de continuar el riesgo.`
+            });
+        }
 
         const [[riesgoOrigen]] = await conn.execute(
             `
@@ -1165,7 +1191,8 @@ exports.relacionarRiesgoAnteriorPeriodo = async (req, res) => {
                 CODIGO_RIESGO,
                 PERIODO_ANTERIOR,
                 REF,
-                DESCRIPCION
+                DESCRIPCION,
+                ES_NUEVO
             FROM gestion_riesgos.riesgos_riesgo_extendido
             WHERE CODIGO_CIA = ?
               AND CODIGO_ENTIDAD = ?
@@ -1183,6 +1210,16 @@ exports.relacionarRiesgoAnteriorPeriodo = async (req, res) => {
             return res.status(404).json({
                 ok: false,
                 message: "El riesgo actual no existe o está eliminado."
+            });
+        }
+
+        // Un riesgo identificado en el período nace en ese período: no tiene origen en el año anterior
+        if (Number(riesgoActual.ES_NUEVO) === 1) {
+            await conn.rollback();
+            return res.status(409).json({
+                ok: false,
+                code: "RIESGO_IDENTIFICADO_EN_PERIODO",
+                message: "Este riesgo fue identificado en el período, por lo que no puede relacionarse con un riesgo del año anterior."
             });
         }
 
@@ -1686,49 +1723,77 @@ exports.obtenerSeguimientosPorCia = async (req, res) => {
         if (!Number.isNaN(n) && n >= 1 && n <= 12) mes_fin = n;
     }
 
-    let where = ' WHERE CODIGO_CIA = ? ';
+    let where = ' WHERE rs.CODIGO_CIA = ? ';
     const params = [codigo_cia];
 
     if (codigo_entidad !== undefined) {
-        where += ' AND CODIGO_ENTIDAD = ? ';
+        where += ' AND rs.CODIGO_ENTIDAD = ? ';
         params.push(codigo_entidad);
     }
 
     if (mes !== undefined) {
-        where += ' AND MES = ? ';
+        where += ' AND rs.MES = ? ';
         params.push(mes);
     } else {
         if (mes_inicio !== undefined && mes_fin === undefined) {
-            where += ' AND MES BETWEEN ? AND 12 ';
+            where += ' AND rs.MES BETWEEN ? AND 12 ';
             params.push(mes_inicio);
         } else if (mes_inicio === undefined && mes_fin !== undefined) {
-            where += ' AND MES BETWEEN 1 AND ? ';
+            where += ' AND rs.MES BETWEEN 1 AND ? ';
             params.push(mes_fin);
         } else if (mes_inicio !== undefined && mes_fin !== undefined) {
             const mi = Math.min(mes_inicio, mes_fin);
             const mf = Math.max(mes_inicio, mes_fin);
-            where += ' AND MES BETWEEN ? AND ? ';
+            where += ' AND rs.MES BETWEEN ? AND ? ';
             params.push(mi, mf);
         }
     }
 
-    where += ' AND codigo_periodo = ?'
+    where += ' AND rs.codigo_periodo = ?'
     params.push(codigo_periodo)
 
     const sql = `
-    SELECT
-      CODIGO_CIA,
-      CODIGO_ENTIDAD,
-      CODIGO_PERIODO,
-      MES,
-      SECCION1,
-      SECCION2,
-      SECCION3,
-      SECCION4
-    FROM gestion_riesgos.riesgos_seguimiento
-    ${where}
-    ORDER BY CODIGO_ENTIDAD ASC, MES ASC, CODIGO_PERIODO ASC
-  `;
+        SELECT
+            rs.CODIGO_CIA,
+            rs.CODIGO_ENTIDAD,
+            rs.CODIGO_PERIODO,
+            rs.MES,
+            rs.SECCION1,
+            rs.SECCION2,
+            rs.SECCION3,
+            rs.SECCION4,
+
+            CASE
+                WHEN COUNT(rsd.CODIGO_CIA) > 0 THEN 1
+                ELSE 0
+            END AS tiene_documentos
+
+        FROM gestion_riesgos.riesgos_seguimiento AS rs
+
+        LEFT JOIN gestion_riesgos.riesgos_seguimiento_docs AS rsd
+            ON rsd.CODIGO_CIA = rs.CODIGO_CIA
+            AND rsd.CODIGO_ENTIDAD = rs.CODIGO_ENTIDAD
+            AND rsd.CODIGO_PERIODO = rs.CODIGO_PERIODO
+            AND rsd.MES = rs.MES
+            AND rsd.ACTIVO = '1'
+
+        ${where}
+
+        GROUP BY
+            rs.CODIGO_CIA,
+            rs.CODIGO_ENTIDAD,
+            rs.CODIGO_PERIODO,
+            rs.MES,
+            rs.SECCION1,
+            rs.SECCION2,
+            rs.SECCION3,
+            rs.SECCION4
+
+        ORDER BY
+            rs.CODIGO_ENTIDAD ASC,
+            rs.MES ASC,
+            rs.CODIGO_PERIODO ASC
+    `;
 
     try {
         const [rows] = await pool.execute(sql, params);
@@ -1753,6 +1818,7 @@ exports.obtenerSeguimientosPorCia = async (req, res) => {
                 codigo_periodo: r.CODIGO_PERIODO,
                 periodo_trabajo: normalizado.seccion4?.periodo_trabajo ?? r.CODIGO_PERIODO,
                 mes: r.MES,
+                tiene_documentos: r.tiene_documentos === 1,
                 ...normalizado
             };
         });

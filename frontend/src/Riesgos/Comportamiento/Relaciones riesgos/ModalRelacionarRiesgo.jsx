@@ -31,6 +31,7 @@ import {
 } from "@mui/material";
 import MuiAlert from "@mui/material/Alert";
 import apiClient from "api/apiClient";
+import { EtiquetaTipoOrigen } from "funciones/OrigenRiesgo";
 
 const API_SEGUIMIENTOS = "/api/seguimientos-actualizados";
 
@@ -123,7 +124,7 @@ export default function ModalRelacionarRiesgo({
 
             const { data } = await apiClient.get(
                 "/api/riesgos-variables-actualizados/obtener-lista-riesgos-detalle",
-                { params: { periodo: periodoAnterior } }
+                { params: { periodo: periodoAnterior, incluir_nuevos: 1 } }
             );
 
             const lista = Array.isArray(data?.valores) ? data.valores : [];
@@ -335,6 +336,8 @@ export default function ModalRelacionarRiesgo({
                                                 <Typography sx={{ fontWeight: 700 }}>
                                                     {getRef(r)}
                                                 </Typography>
+
+                                                <EtiquetaTipoOrigen riesgo={r} />
 
                                                 {ocupado && (
                                                     <Chip

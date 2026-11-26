@@ -27,6 +27,8 @@ import { fmt } from 'funciones/Fechas';
 import { ReportePrimeraMatrizInst } from '../Reportes F/Institucionales/ReportePrimeraMatrizInst';
 import { asBlob } from 'html-docx-ts';
 import ExcelJS from 'exceljs';
+import { formatearHojaReporte } from 'funciones/ExcelFormato';
+import ReferenciaCelda, { codigoNorma } from './ReferenciaCelda';
 import { saveAs } from 'file-saver';
 
 const escapeHtmlWithBreaks = (value) => {
@@ -577,14 +579,19 @@ function Anexo1Institucional() {
     const exportExcelForMatrices = async (mats, filename) => {
         if (!mats || mats.length === 0) return;
         const workbook = new ExcelJS.Workbook();
+        const periodoTexto = periodo ? `Período ${periodo}` : 'Sin período';
 
         const resumenSheet = workbook.addWorksheet('Resumen');
-        resumenSheet.addRow(['Matriz', 'Título']);
+        resumenSheet.mergeCells(1, 1, 1, 2);
+        resumenSheet.getCell('A1').value = 'Anexo 1 — Resumen de tablas';
+        resumenSheet.mergeCells(2, 1, 2, 2);
+        resumenSheet.getCell('A2').value = periodoTexto;
+        resumenSheet.getRow(4).values = ['Matriz', 'Título'];
 
         mats.forEach((m, index) => {
             const num = Number(getMatProp(m, 'matriz')) || index + 1;
             const titulo = getMatProp(m, 'titulo') || `Tabla #${num}`;
-            resumenSheet.addRow([num, titulo]);
+            resumenSheet.getRow(5 + index).values = [num, titulo];
 
             let sheetName = `Matriz ${num} - ${titulo}`;
             sheetName = String(sheetName).replace(/[:\\/?*\[\]]/g, ' ');
@@ -595,31 +602,49 @@ function Anexo1Institucional() {
             const sheet = workbook.addWorksheet(sheetName);
             const headers = getMatProp(getMatProp(m, 'columnas'), 'headers') || [];
             const filas = getMatProp(m, 'filas') || [];
+            const colCount = Math.max(headers.length, 1);
+
+            // Fila 1: título de la tabla; fila 2: período; fila 4: encabezados
+            sheet.mergeCells(1, 1, 1, colCount);
+            sheet.getCell('A1').value = `Matriz ${num} - ${titulo}`;
+            sheet.mergeCells(2, 1, 2, colCount);
+            sheet.getCell('A2').value = periodoTexto;
+
+            const headerRowIndex = 4;
             if (headers.length > 0) {
-                sheet.addRow(headers);
+                sheet.getRow(headerRowIndex).values = headers;
             }
+
+            let totalFilas = 0;
             if (Array.isArray(filas) && filas.length > 0) {
-                filas.forEach(fila => {
+                filas.forEach((fila, i) => {
                     const arr = Array.isArray(fila) ? fila : [];
                     const padded = headers.length > 0
                         ? (arr.length < headers.length ? [...arr, ...Array(headers.length - arr.length).fill('')] : arr.slice(0, headers.length))
                         : arr;
-                    sheet.addRow(padded);
+                    sheet.getRow(headerRowIndex + 1 + i).values = padded;
+                    totalFilas++;
                 });
             }
-            if (sheet.columns) {
-                sheet.columns.forEach(column => {
-                    if (column && (!column.width || column.width < 20)) {
-                        column.width = 30;
-                    }
-                });
-            }
+
+            formatearHojaReporte(sheet, {
+                filaTitulo: 1,
+                filaSubtitulo: 2,
+                filaEncabezado: headerRowIndex,
+                ultimaFilaDatos: headerRowIndex + totalFilas,
+                ultimaColumna: colCount,
+                tituloImpresion: `Anexo 1 — Matriz ${num} — ${periodoTexto}`,
+            });
         });
 
-        if (resumenSheet.getColumn && resumenSheet.columns && resumenSheet.columns.length >= 2) {
-            resumenSheet.getColumn(1).width = 10;
-            resumenSheet.getColumn(2).width = 80;
-        }
+        formatearHojaReporte(resumenSheet, {
+            filaTitulo: 1,
+            filaSubtitulo: 2,
+            filaEncabezado: 4,
+            ultimaFilaDatos: 4 + mats.length,
+            ultimaColumna: 2,
+            tituloImpresion: `Anexo 1 — Resumen — ${periodoTexto}`,
+        });
 
         const buffer = await workbook.xlsx.writeBuffer();
         const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
@@ -849,6 +874,10 @@ function Anexo1Institucional() {
                                                             filas.map((fila, rIdx) => {
                                                                 const arr = Array.isArray(fila) ? fila : [];
                                                                 const padded = len > 0 ? (arr.length < len ? [...arr, ...Array(len - arr.length).fill(null)] : arr.slice(0, len)) : arr;
+                                                                // Posición de la fila entre las que comparten código de norma (p. ej. varias "2.3")
+                                                                const codigo = codigoNorma(arr[0]);
+                                                                const ocurrencia = filas.slice(0, rIdx)
+                                                                    .filter((f) => codigoNorma(Array.isArray(f) ? f[0] : null) === codigo).length;
                                                                 return (
                                                                     <TableRow key={rIdx}>
                                                                         {padded.map((celda, cIdx) => {
@@ -872,9 +901,17 @@ function Anexo1Institucional() {
                                                                             const meta = prov?.[rIdx]?.[cIdx] || null;
                                                                             return (
                                                                                 <TableCell key={cIdx} sx={{ minWidth: 220 }}>
+                                                                                    <ReferenciaCelda
+                                                                                        codigo={codigo}
+                                                                                        ocurrencia={ocurrencia}
+                                                                                        columna={cIdx - 1}
+                                                                                        titulo={`${arr[0] ?? ''} — ${headers[cIdx] ?? ''}`}
+                                                                                        valor={celda ?? ''}
+                                                                                        onAplicar={(texto) => handleCellChange(active, rIdx, cIdx, texto)}
+                                                                                    />
                                                                                     <Stack direction="row" spacing={0.5} alignItems="flex-start">
                                                                                         <TextField
-                                                                                            fullWidth multiline rows={isMobile ? 2 : 3} size="small"
+                                                                                            fullWidth multiline minRows={isMobile ? 2 : 3} maxRows={6} size="small"
                                                                                             value={celda ?? ''} placeholder="Escriba o use vista previa"
                                                                                             onChange={(e) => handleCellChange(active, rIdx, cIdx, e.target.value)}
                                                                                             inputProps={{ style: { lineHeight: 1.3 } }}

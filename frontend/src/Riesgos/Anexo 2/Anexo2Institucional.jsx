@@ -50,6 +50,7 @@ import DescriptionRounded from '@mui/icons-material/DescriptionRounded';
 import { ReporteSegundaMatrizInst } from '../Reportes F/Institucionales/ReporteSegundaMatrizInst';
 import { asBlob } from 'html-docx-ts';
 import ExcelJS from 'exceljs';
+import { formatearHojaReporte } from 'funciones/ExcelFormato';
 import { saveAs } from 'file-saver';
 
 const safefmt = (v) => {
@@ -711,17 +712,29 @@ export default function Anexo2Institucional() {
 
         const workbook = new ExcelJS.Workbook();
 
+        const periodoTexto = periodo ? `Período ${periodo}` : 'Sin período';
+
         // Hoja de resumen
         const resumenSheet = workbook.addWorksheet('Resumen');
-        resumenSheet.columns = [
-            { header: 'Matriz', key: 'matriz', width: 12 },
-            { header: 'Título', key: 'titulo', width: 80 },
-        ];
+        resumenSheet.mergeCells(1, 1, 1, 2);
+        resumenSheet.getCell('A1').value = 'Anexo 2 — Resumen de tablas';
+        resumenSheet.mergeCells(2, 1, 2, 2);
+        resumenSheet.getCell('A2').value = periodoTexto;
+        resumenSheet.getRow(4).values = ['Matriz', 'Título'];
 
         mats.forEach((m, index) => {
             const num = Number(H.get(m, 'matriz')) || index + 1;
             const titulo = (H.get(m, 'titulo') || '').toString().trim() || `Matriz ${num}`;
-            resumenSheet.addRow({ matriz: num, titulo });
+            resumenSheet.getRow(5 + index).values = [num, titulo];
+        });
+
+        formatearHojaReporte(resumenSheet, {
+            filaTitulo: 1,
+            filaSubtitulo: 2,
+            filaEncabezado: 4,
+            ultimaFilaDatos: 4 + mats.length,
+            ultimaColumna: 2,
+            tituloImpresion: `Anexo 2 — Resumen — ${periodoTexto}`,
         });
 
         const usedNames = new Set();
@@ -748,33 +761,42 @@ export default function Anexo2Institucional() {
             const sheetName = makeSheetName(m, index);
             const sheet = workbook.addWorksheet(sheetName);
 
+            const num = Number(H.get(m, 'matriz')) || index + 1;
+            const titulo = (H.get(m, 'titulo') || '').toString().trim() || `Matriz ${num}`;
             const hs = Array.isArray(m?.columnas?.headers) ? m.columnas.headers : [];
             const filas = Array.isArray(m?.filas) ? m.filas : [];
+            const colCount = Math.max(hs.length, 1);
 
+            // Fila 1: título de la tabla; fila 2: período; fila 4: encabezados
+            sheet.mergeCells(1, 1, 1, colCount);
+            sheet.getCell('A1').value = `Matriz ${num} - ${titulo}`;
+            sheet.mergeCells(2, 1, 2, colCount);
+            sheet.getCell('A2').value = periodoTexto;
+
+            const headerRowIndex = 4;
             if (hs.length > 0) {
-                sheet.addRow(hs);
+                sheet.getRow(headerRowIndex).values = hs;
             }
 
-            if (filas.length > 0) {
-                filas.forEach((fila) => {
-                    const arr = Array.isArray(fila) ? fila : [];
-                    const padded =
-                        hs.length > 0
-                            ? arr.length < hs.length
-                                ? [...arr, ...Array(hs.length - arr.length).fill('')]
-                                : arr.slice(0, hs.length)
-                            : arr;
-                    sheet.addRow(padded);
-                });
-            }
+            filas.forEach((fila, i) => {
+                const arr = Array.isArray(fila) ? fila : [];
+                const padded =
+                    hs.length > 0
+                        ? arr.length < hs.length
+                            ? [...arr, ...Array(hs.length - arr.length).fill('')]
+                            : arr.slice(0, hs.length)
+                        : arr;
+                sheet.getRow(headerRowIndex + 1 + i).values = padded;
+            });
 
-            if (sheet.columns) {
-                sheet.columns.forEach((col) => {
-                    if (col && (!col.width || col.width < 20)) {
-                        col.width = 30;
-                    }
-                });
-            }
+            formatearHojaReporte(sheet, {
+                filaTitulo: 1,
+                filaSubtitulo: 2,
+                filaEncabezado: headerRowIndex,
+                ultimaFilaDatos: headerRowIndex + filas.length,
+                ultimaColumna: colCount,
+                tituloImpresion: `Anexo 2 — Matriz ${num} — ${periodoTexto}`,
+            });
         });
 
         const buffer = await workbook.xlsx.writeBuffer();

@@ -26,14 +26,17 @@ exports.obtenerDirecciones = async (req, res) => {
 
     try {
         const sql = `
-        SELECT 
-            CODIGO_ENTIDAD,   
-            NOMBRE,
-            SIGLAS
-        FROM \`gestion_riesgos\`.\`seguridad_entidad\`
-        WHERE CODIGO_CIA = ?
-            AND ESTADO = '1'      
-        ORDER BY NOMBRE ASC
+            SELECT 
+                se.CODIGO_ENTIDAD,
+                se.NOMBRE,
+                se.SIGLAS,
+                rv.NOMBRE AS NOMBRE_VICEMINISTERIO
+            FROM \`gestion_riesgos\`.\`seguridad_entidad\` AS se
+            LEFT JOIN \`gestion_riesgos\`.\`riesgos_viceministerio\` AS rv
+                ON se.CODIGO_VICEMINISTERIO = rv.CODIGO_VICEMINISTERIO
+            WHERE se.CODIGO_CIA = ?
+                AND se.ESTADO = '1'
+            ORDER BY se.NOMBRE ASC
         `;
         const [rows] = await pool.execute(sql, [codigo_cia]);
         return res.json({ result: rows });

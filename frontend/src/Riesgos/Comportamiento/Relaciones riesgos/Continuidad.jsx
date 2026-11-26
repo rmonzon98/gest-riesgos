@@ -42,7 +42,8 @@ import {
     DialogTitle,
     DialogContent,
     DialogActions,
-    CircularProgress
+    CircularProgress,
+    Tooltip
 } from "@mui/material";
 
 import LinkIcon from "@mui/icons-material/Link";
@@ -53,6 +54,7 @@ import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 
 import ModalRelacionarRiesgo from "./ModalRelacionarRiesgo";
 import ModalContinuarRiesgo from "./ModalContinuarRiesgo";
+import { EtiquetaTipoOrigen } from "funciones/OrigenRiesgo";
 
 const API_SEGUIMIENTOS = "/api/seguimientos-actualizados";
 
@@ -218,7 +220,7 @@ export default function Continuidad() {
     const fetchRiesgosPeriodo = async () => {
         const { data } = await apiClient.get(
             "/api/riesgos-variables-actualizados/obtener-lista-riesgos-detalle",
-            { params: { periodo } }
+            { params: { periodo, incluir_nuevos: 1 } }
         );
 
         const lista = Array.isArray(data?.valores) ? data.valores : [];
@@ -229,6 +231,10 @@ export default function Continuidad() {
             ...(limpiarExtras(r.EXTRAS_MCE)),
             ...(limpiarExtras(r.EXTRAS_MC))
         }));
+
+        // Orden por año de origen (más antiguo primero); el sort es estable y conserva el orden por REF del backend
+        const anio = (r) => Number(r.ANIO_ORIGEN) || Number.MAX_SAFE_INTEGER;
+        normalizados.sort((a, b) => anio(a) - anio(b));
 
         setRiesgos(normalizados);
     };
@@ -773,9 +779,16 @@ export default function Continuidad() {
                                             spacing={1}
                                         >
                                             <Box>
-                                                <Typography sx={{ fontWeight: 800 }}>
-                                                    {getRefRiesgo(r)}
-                                                </Typography>
+                                                <Stack direction="row" spacing={1.5} alignItems="baseline">
+                                                    <Tooltip title="Año de origen">
+                                                        <Typography sx={{ fontWeight: 800, color: "text.secondary" }}>
+                                                            {r.ANIO_ORIGEN ?? "—"}
+                                                        </Typography>
+                                                    </Tooltip>
+                                                    <Typography sx={{ fontWeight: 800 }}>
+                                                        {getRefRiesgo(r)}
+                                                    </Typography>
+                                                </Stack>
 
                                                 <Typography sx={{ mb: 1 }}>
                                                     {getDescripcionRiesgo(r)}
@@ -783,6 +796,16 @@ export default function Continuidad() {
                                             </Box>
 
                                             <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                                                <EtiquetaTipoOrigen riesgo={r} />
+
+                                                {Number(r.ES_NUEVO) === 1 && !tieneSiguiente && (
+                                                    <Chip
+                                                        size="small"
+                                                        variant="outlined"
+                                                        label="Pendiente de arrastrar al año siguiente"
+                                                    />
+                                                )}
+
                                                 {tieneAnterior && (
                                                     <Chip
                                                         size="small"
@@ -899,18 +922,29 @@ export default function Continuidad() {
                                                 spacing={1}
                                                 sx={{ mt: 2 }}
                                             >
-                                                <Button
-                                                    variant="outlined"
-                                                    size="small"
-                                                    startIcon={<LinkIcon />}
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        handleAbrirRelacionar(r);
-                                                    }}
-                                                    disabled={loadingAccion}
+                                                {/* Un riesgo identificado en el período no tiene origen en el año anterior */}
+                                                <Tooltip
+                                                    title={
+                                                        Number(r.ES_NUEVO) === 1
+                                                            ? "Este riesgo fue identificado en el período: no puede relacionarse con un riesgo del año anterior"
+                                                            : ""
+                                                    }
                                                 >
-                                                    Relacionar con un riesgo del año pasado
-                                                </Button>
+                                                    <span>
+                                                        <Button
+                                                            variant="outlined"
+                                                            size="small"
+                                                            startIcon={<LinkIcon />}
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleAbrirRelacionar(r);
+                                                            }}
+                                                            disabled={loadingAccion || Number(r.ES_NUEVO) === 1}
+                                                        >
+                                                            Relacionar con un riesgo del año pasado
+                                                        </Button>
+                                                    </span>
+                                                </Tooltip>
 
                                                 <Button
                                                     variant="outlined"

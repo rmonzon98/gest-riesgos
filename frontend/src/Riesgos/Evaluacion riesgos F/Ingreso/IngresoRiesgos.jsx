@@ -78,6 +78,7 @@ function IngresoRiesgos({ tipo, titulo }) {
     const [reportModalOpen, setReportModalOpen] = useState(false);
     const [reportPayload, setReportPayload] = useState(null);
     const [reportCategory, setReportCategory] = useState(null);
+    const [reportSoloNuevos, setReportSoloNuevos] = useState(false);
     const [respNombre, setRespNombre] = useState("");
     const [respPuesto, setRespPuesto] = useState("");
     const [loadingReportData, setLoadingReportData] = useState(false);
@@ -201,20 +202,27 @@ function IngresoRiesgos({ tipo, titulo }) {
         }
     }, [periodo, cargarLista]);
 
-    const handleReporte = async () => {
+    // soloNuevos=true genera el reporte únicamente con los riesgos nuevos de la unidad (excluidos del reporte normal)
+    const handleReporte = async (soloNuevos = false) => {
         if (!periodo) return;
         setReportError("");
         setLoadingReportData(true);
         try {
             const { data } = await apiClient.get('/api/reportes-actualizados/informacion-riesgos', {
-                params: { periodo, categoria: tipo, unidad: 'propia' }
+                params: { periodo, categoria: tipo, unidad: 'propia', ...(soloNuevos ? { nuevos: 1 } : {}) }
             });
+
+            if (soloNuevos && !(data?.valores || []).length) {
+                openSnack("No hay riesgos identificados en el período para esta unidad.", "info");
+                return;
+            }
 
             const sup = data?.superior || {};
             setRespNombre(sup?.nombre || "");
             setRespPuesto(sup?.puesto || "");
             setReportPayload({ propiedades: data.propiedades, valores: data.valores });
             setReportCategory(tipo);
+            setReportSoloNuevos(soloNuevos);
             setReportModalOpen(true);
         } catch (error) {
             console.error('Error fetching data', error);
@@ -232,34 +240,37 @@ function IngresoRiesgos({ tipo, titulo }) {
                 nombre: opts.useEditedFields ? respNombre : (respNombre || ""),
                 puesto: opts.useEditedFields ? respPuesto : (respPuesto || "")
             };
+            const prefijoTitulo = reportSoloNuevos ? 'Riesgos identificados en el período - ' : '';
+            const prefijoArchivo = reportSoloNuevos ? 'Riesgos_identificados_periodo_' : '';
             if (reportCategory === 'MCE' || reportCategory === 'ME') {
                 MatrizEvaluacion(
                     { propiedades: reportPayload.propiedades, valores: reportPayload.valores },
                     null,
                     {
-                        titulo: reportCategory === 'ME' ? 'Matriz de Evaluación' : 'Matriz de continuidad y monitoreo',
+                        titulo: prefijoTitulo + (reportCategory === 'ME' ? 'Matriz de Evaluación' : 'Matriz de continuidad y monitoreo'),
                         pageSize: 'LEGAL',
                         subtitulo: `Periodo ${periodo}`,
                         responsable
                     },
-                    `${reportCategory === 'ME' ? 'Matriz_evaluacion' : 'Matriz_Continuidad_Monitoreo'}_${periodo}.pdf`
+                    `${prefijoArchivo}${reportCategory === 'ME' ? 'Matriz_evaluacion' : 'Matriz_Continuidad_Monitoreo'}_${periodo}.pdf`
                 );
             } else {
                 GenerarMapaCalor(
                     { propiedades: reportPayload.propiedades, valores: reportPayload.valores },
                     null,
                     {
-                        titulo: 'Mapa de Calor de Riesgos',
+                        titulo: prefijoTitulo + 'Mapa de Calor de Riesgos',
                         pageSize: 'LEGAL',
                         subtitulo: `Periodo ${periodo}`,
                         responsable
                     },
-                    `Mapa_residual_${periodo}.pdf`
+                    `${prefijoArchivo}Mapa_residual_${periodo}.pdf`
                 );
             }
             setReportModalOpen(false);
             setReportPayload(null);
             setReportCategory(null);
+            setReportSoloNuevos(false);
             openSnack("Reporte generado correctamente.", "success");
         } catch (e) {
             console.error("Error al generar el reporte", e);
@@ -315,8 +326,10 @@ function IngresoRiesgos({ tipo, titulo }) {
             openSnack(isEdit ? "Riesgo actualizado correctamente." : "Riesgo creado correctamente.", "success");
         } catch (e) {
             console.error(e);
-            setSaveError("No se pudo guardar el riesgo. Intenta nuevamente.");
-            openSnack("No se pudo guardar el riesgo. Intenta nuevamente.", "error");
+            // Las validaciones del backend (409) traen un mensaje explicativo
+            const msg = e?.response?.data?.error || "No se pudo guardar el riesgo. Intenta nuevamente.";
+            setSaveError(msg);
+            openSnack(msg, "error");
         } finally {
             setSaving(false);
         }
@@ -401,18 +414,32 @@ function IngresoRiesgos({ tipo, titulo }) {
                             spacing={1}
                             alignItems={{ xs: "stretch", sm: "center" }}
                         >
-                            {/* Botón para crear */}
-                            <Button variant="contained" onClick={handleCrear} disabled={!periodo || loadingCats}>
-                                Nuevo riesgo
-                            </Button>
+                            {/* Botón para crear: los riesgos solo se crean desde la entrada de evaluación y gestión (ME) */}
+                            {tipo === 'ME' && (
+                                <Button variant="contained" onClick={handleCrear} disabled={!periodo || loadingCats}>
+                                    Nuevo riesgo
+                                </Button>
+                            )}
 
                             {/* Botón para reporte (abre modal luego de fetch) */}
                             <Button
                                 variant="contained"
-                                onClick={handleReporte}
+                                onClick={() => handleReporte(false)}
                                 disabled={!periodo || loadingCats || loadingReportData}
                             >
                                 Generar reporte
+                            </Button>
+
+                            {/* Reporte aparte de los riesgos nuevos (no se incluyen en el reporte anterior) */}
+                            <Button
+                                variant="outlined"
+                                onClick={() => handleReporte(true)}
+                                disabled={
+                                    !periodo || loadingCats || loadingReportData ||
+                                    !riesgos.some((r) => Number(r.ES_NUEVO) === 1 && !r.ELIMINADO)
+                                }
+                            >
+                                Reporte de identificados en el período
                             </Button>
                         </Stack>
                     </Stack>
@@ -482,6 +509,11 @@ function IngresoRiesgos({ tipo, titulo }) {
                         <Alert severity="info">
                             Verifica o ajusta el nombre y el puesto que irán en el reporte.
                         </Alert>
+                        {reportSoloNuevos && (
+                            <Alert severity="warning">
+                                Este reporte incluye únicamente los riesgos identificados en el período.
+                            </Alert>
+                        )}
                         <TextField
                             label="Nombre del responsable"
                             fullWidth

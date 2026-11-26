@@ -42,8 +42,11 @@ import ExpandMore from "@mui/icons-material/ExpandMore";
 import ExpandLessRounded from "@mui/icons-material/ExpandLessRounded";
 import ExpandMoreRounded from "@mui/icons-material/ExpandMoreRounded";
 import GridOn from "@mui/icons-material/GridOn";
+import AccountTreeIcon from "@mui/icons-material/AccountTree";
+import FactCheckIcon from '@mui/icons-material/FactCheck';
 import { saveAs } from "file-saver";
 import * as ExcelJS from "exceljs";
+import { formatearHojaReporte } from "funciones/ExcelFormato";
 import SeguimientoDetalleModal from "./SeguimientoDetalleModal";
 import SeguimientoReportes from "./SeguimientoReportes";
 import CargaArchivos from "Riesgos/Carga Documentos/CargaArchivos";
@@ -94,6 +97,132 @@ const STATUS_XLSX_FILL = {
     done: { bg: "FF4CAF50", fg: "FFFFFFFF" }, // verde, texto blanco
     other: { bg: "FF90CAF9", fg: "FF000000" }, // azul claro, texto negro
     none: { bg: "FFBDBDBD", fg: "FF000000" }, // gris, texto negro
+};
+
+/**
+ * Columnas en las que se divide el estatus dentro del reporte por mes.
+ * Cada estatus se escribe y se colorea únicamente en la columna que le
+ * corresponde: Cumple (verde), Ejecución (amarillo) y Pendiente (rojo).
+ */
+const ESTATUS_COLUMNAS = [
+    { key: "estatus_cumple", etiqueta: "Cumple", kind: "done" },
+    { key: "estatus_ejecucion", etiqueta: "Ejecución", kind: "doing" },
+    { key: "estatus_pendiente", etiqueta: "Pendiente", kind: "pending" },
+];
+
+/**
+ * Colores del rango de tolerancia, en la misma línea que los del estatus:
+ * de 0 a 10 verde, de 10.1 a 15 amarillo y de 15.1 en adelante rojo.
+ */
+const TOLERANCIA_XLSX_FILL = [
+    { hasta: 10, bg: "FF4CAF50", fg: "FFFFFFFF" },
+    { hasta: 15, bg: "FFFFEB3B", fg: "FF000000" },
+    { hasta: Infinity, bg: "FFF44336", fg: "FFFFFFFF" },
+];
+
+/**
+ * Determina el color que corresponde a un rango de tolerancia.
+ * Acepta valores numéricos ("12.5") y rangos ("10.1 a 15"); en los rangos manda
+ * el límite superior. Si el valor no contiene números, no se colorea.
+ *
+ * @param {*} valor - Valor de la columna "Rango de tolerancia".
+ * @returns {{bg:string, fg:string}|null}
+ */
+const colorTolerancia = (valor) => {
+    const numeros = String(valor ?? "").replace(/,/g, ".").match(/[0-9]+(?:[.][0-9]+)?/g);
+    if (!numeros?.length) return null;
+
+    const tope = Math.max(...numeros.map(Number));
+    if (!Number.isFinite(tope)) return null;
+
+    return TOLERANCIA_XLSX_FILL.find((r) => tope <= r.hasta) ?? null;
+};
+
+/**
+ * Colorea la celda del rango de tolerancia de una fila ya agregada.
+ *
+ * @param {Object} row - Fila de ExcelJS.
+ * @param {*} valor - Valor del rango de tolerancia.
+ */
+const pintarTolerancia = (row, valor) => {
+    const color = colorTolerancia(valor);
+    if (!color) return;
+
+    const cell = row.getCell("tolerancia");
+    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: color.bg } };
+    cell.font = { bold: true, color: { argb: color.fg } };
+    cell.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
+};
+
+/**
+ * Escribe el estatus de una fila en la columna que le corresponde y colorea
+ * únicamente esa celda; las otras dos quedan vacías.
+ *
+ * @param {Object} row - Fila de ExcelJS.
+ * @param {*} estatus - Estatus del riesgo.
+ */
+const pintarEstatusDividido = (row, estatus) => {
+    const texto = String(estatus ?? "").trim();
+
+    // Sin estatus registrado se considera pendiente (mismo criterio que usa el
+    // consolidado por viceministerio).
+    let kind = statusKind(texto);
+    if (kind === "none") kind = "pending";
+
+    const destino = ESTATUS_COLUMNAS.find((c) => c.kind === kind);
+
+    ESTATUS_COLUMNAS.forEach((col) => {
+        const cell = row.getCell(col.key);
+        cell.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
+
+        if (col !== destino) return;
+
+        const { bg, fg } = STATUS_XLSX_FILL[kind] ?? STATUS_XLSX_FILL.none;
+        cell.value = texto || col.etiqueta;
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: bg } };
+        cell.font = { bold: true, color: { argb: fg } };
+    });
+
+    // Un estatus que no encaja en ninguna de las tres columnas se muestra en la
+    // última con color neutro, para no perder la información.
+    if (!destino) {
+        const cell = row.getCell(ESTATUS_COLUMNAS[ESTATUS_COLUMNAS.length - 1].key);
+        const { bg, fg } = STATUS_XLSX_FILL.other;
+        cell.value = texto;
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: bg } };
+        cell.font = { bold: true, color: { argb: fg } };
+    }
+};
+
+/**
+ * Prepara el encabezado de la columna de estatus: el título "Estatus" combinado
+ * sobre las tres columnas y, justo debajo, la leyenda de colores que indica a
+ * qué columna corresponde cada color.
+ *
+ * Debe llamarse inmediatamente después de definir ws.columns, antes de agregar
+ * las filas de datos.
+ *
+ * @param {Object} ws - Hoja de ExcelJS.
+ * @returns {number[]} Números de las tres columnas de estatus.
+ */
+const prepararEncabezadoEstatus = (ws) => {
+    const inicio = ws.getColumn(ESTATUS_COLUMNAS[0].key).number;
+    const fin = inicio + ESTATUS_COLUMNAS.length - 1;
+
+    ws.mergeCells(1, inicio, 1, fin);
+    ws.getCell(1, inicio).value = "Estatus";
+
+    ESTATUS_COLUMNAS.forEach((col, i) => {
+        const celda = ws.getCell(2, inicio + i);
+        const { bg, fg } = STATUS_XLSX_FILL[col.kind];
+
+        celda.value = col.etiqueta;
+        celda.fill = { type: "pattern", pattern: "solid", fgColor: { argb: bg } };
+        celda.font = { bold: true, size: 10, color: { argb: fg } };
+        celda.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+    });
+
+    return ESTATUS_COLUMNAS.map((_, i) => inicio + i);
 };
 
 /**
@@ -172,6 +301,7 @@ export default function VisualizacionSeguimientos() {
                     value: Number(d.CODIGO_ENTIDAD),
                     label: String(d.NOMBRE || "").trim(),
                     siglas: String(d.SIGLAS || "").trim(),
+                    viceministerio: String(d.NOMBRE_VICEMINISTERIO || "").trim(),
                 }));
                 setDirecciones(lista);
             } catch {
@@ -296,7 +426,6 @@ export default function VisualizacionSeguimientos() {
             setRowLabels({ direccionLabel, siglasLabel });
             setRowSel(r);
             setOpen(true);
-            console.log("Abrir modal seguimiento:", r);
         },
         [direcciones]
     );
@@ -576,17 +705,34 @@ export default function VisualizacionSeguimientos() {
     };
 
     /**
-     * Aplica estilos a los encabezados de una hoja de Excel generada.
+     * Aplica el formato institucional a una hoja ya poblada: encabezado con
+     * color, bordes marcados, filas alternas e impresión en oficio horizontal
+     * con las columnas ajustadas a una sola página.
+     *
+     * @param {Object} ws - Hoja de ExcelJS.
+     * @param {Object} [opciones]
+     * @param {string} [opciones.tituloImpresion] - Texto del pie de página.
+     * @param {number[]} [opciones.filasTotales] - Filas de totales a resaltar.
+     * @param {number|null} [opciones.filaSubEncabezado] - Segunda fila de encabezado (leyenda de estatus).
+     * @param {number[]} [opciones.columnasConSubEncabezado] - Columnas con sub-encabezado propio.
      */
-    const styleHeaders = (ws, fromA = "A1", toCol = "Z1") => {
-        const headerRow = ws.getRow(1);
-        headerRow.font = { bold: true };
-        headerRow.alignment = { vertical: "middle", wrapText: true };
-        headerRow.height = 20;
-        ws.autoFilter = { from: fromA, to: toCol };
-        ws.views = [{ state: "frozen", ySplit: 1 }];
-        ws.eachRow({ includeEmpty: false }, (row, rowNumber) => {
-            if (rowNumber > 1) row.alignment = { vertical: "top", wrapText: true };
+    const styleHeaders = (ws, opciones = {}) => {
+        const {
+            tituloImpresion = "",
+            filasTotales = [],
+            filaSubEncabezado = null,
+            columnasConSubEncabezado = [],
+        } = opciones;
+
+        formatearHojaReporte(ws, {
+            filaEncabezado: 1,
+            filaSubEncabezado,
+            columnasConSubEncabezado,
+            ultimaFilaDatos: ws.rowCount,
+            ultimaColumna: ws.columnCount,
+            recalcularAnchos: false, // los anchos ya vienen definidos en ws.columns
+            filasTotales,
+            tituloImpresion,
         });
     };
 
@@ -599,6 +745,986 @@ export default function VisualizacionSeguimientos() {
                 : `_MULTIMES`;
         return `_P${periodo}${dir}${time}`;
     };
+
+    /**
+     * Genera un archivo Excel con la información de seguimientos faltantes por mes, control y responsable.
+     */
+
+    const exportarSeguimientosXLSX = async () => {
+        if (!rows.length) {
+            openSnack("No hay datos para exportar.", "warning");
+            return;
+        }
+
+        try {
+
+            const wb = new ExcelJS.Workbook();
+
+            // ====== Hoja 1: Resumen de filtros ======
+            const dirResumen = codigoEntidad
+                ? `${nombreDireccion(codigoEntidad)} (${siglasDireccion(codigoEntidad) || "s/ siglas"})`
+                : "Todas";
+            const tiempoResumen = mes
+                ? `Mes: ${mesNombre(mes)}`
+                : mesInicio || mesFin
+                    ? `Rango: ${mesInicio ? mesNombre(mesInicio) : "—"} → ${mesFin ? mesNombre(mesFin) : "—"}`
+                    : "Sin filtro de mes";
+
+            const ahora = new Date();
+            const fechaGeneracion = ahora.toLocaleString("es-GT", {
+                year: "numeric",
+                month: "2-digit",
+                day: "2-digit",
+                hour: "2-digit",
+                minute: "2-digit",
+            });
+
+            const wsResumen = wb.addWorksheet("Resumen");
+            wsResumen.columns = [
+                { header: "Campo", key: "campo", width: 30 },
+                { header: "Valor", key: "valor", width: 90 },
+            ];
+            wsResumen.addRow({ campo: "Período seleccionado", valor: periodo || "—" });
+            wsResumen.addRow({ campo: "Dirección", valor: dirResumen });
+            wsResumen.addRow({ campo: "Filtro de tiempo", valor: tiempoResumen });
+            wsResumen.addRow({
+                campo: "Total direcciones consideradas",
+                valor: String(totalConsideradas),
+            });
+            wsResumen.addRow({
+                campo: "Direcciones con datos",
+                valor: String(totalConDatos),
+            });
+            wsResumen.addRow({
+                campo: "Direcciones sin información",
+                valor: String(direccionesSinInfo.length),
+            });
+            wsResumen.addRow({
+                campo: "Fecha y hora de generación",
+                valor: fechaGeneracion,
+            });
+
+            styleHeaders(wsResumen, {
+                tituloImpresion: `Resumen de filtros — Período ${periodo || "—"}`,
+            });
+
+
+            // ============================================================
+            // REPORTE DE CUMPLIMIENTO DE SEGUIMIENTOS POR DIRECCIÓN
+            // ============================================================
+
+            const anioActual = new Date().getFullYear();
+            const mesActual = new Date().getMonth() + 1;
+
+            let ultimoMesEvaluado;
+
+            // Si el período es anterior al año actual,
+            // se evalúa todo el año.
+            if (Number(periodo) < anioActual) {
+                ultimoMesEvaluado = 12;
+            }
+            // Si es el año actual,
+            // solo se evalúa hasta el mes anterior.
+            else if (Number(periodo) === anioActual) {
+                ultimoMesEvaluado = mesActual - 1;
+            }
+            // Si por alguna razón es un período futuro,
+            // no se deberían generar meses.
+            else {
+                ultimoMesEvaluado = 0;
+            }
+
+
+            // ============================================================
+            // CREAR HOJA
+            // ============================================================
+
+            const wsReporte = wb.addWorksheet(
+                "Control de Seguimientos"
+            );
+
+
+            // ============================================================
+            // COLUMNAS
+            // ============================================================
+
+            const columnas = [
+                {
+                    header: "No.",
+                    key: "no",
+                    width: 6
+                },
+
+                {
+                    header: "Dirección",
+                    key: "direccion",
+                    width: 55
+                }
+            ];
+
+
+            // Agregar meses
+            for (let mes = 1; mes <= ultimoMesEvaluado; mes++) {
+
+                columnas.push({
+                    header: mesNombre(mes),
+                    key: `mes_${mes}`,
+                    width: 18
+                });
+            }
+
+
+            // Columnas resumen
+            columnas.push(
+                {
+                    header: "Meses faltantes",
+                    key: "meses_faltantes",
+                    width: 35
+                },
+                {
+                    header: "Sin documento de soporte",
+                    key: "sin_soporte",
+                    width: 35
+                },
+                {
+                    header: "Estado",
+                    key: "estado",
+                    width: 18
+                }
+            );
+
+
+            wsReporte.columns = columnas;
+
+
+            // ============================================================
+            // MAPA DE SEGUIMIENTOS
+            //
+            // DIRECCIÓN → MES → REGISTRO
+            // ============================================================
+
+            const mapaSeguimientos = new Map();
+
+
+            for (const r of rows) {
+
+                const codigoEntidad =
+                    String(
+                        r?.CODIGO_ENTIDAD ??
+                        r?.codigo_entidad ??
+                        ""
+                    ).trim();
+
+
+                const mes =
+                    Number(
+                        r?.MES ??
+                        r?.mes
+                    );
+
+
+                if (!codigoEntidad || !mes) {
+                    continue;
+                }
+
+
+                if (!mapaSeguimientos.has(codigoEntidad)) {
+
+                    mapaSeguimientos.set(
+                        codigoEntidad,
+                        new Map()
+                    );
+                }
+
+
+                mapaSeguimientos
+                    .get(codigoEntidad)
+                    .set(mes, r);
+            }
+
+
+            // ============================================================
+            // AGREGAR TODAS LAS DIRECCIONES
+            //
+            // Esto es importante:
+            // aunque una dirección no tenga seguimientos,
+            // igualmente aparecerá.
+            // ============================================================
+
+            let numero = 1;
+
+
+            for (const direccion of direcciones) {
+
+                const codigoEntidad =
+                    String(
+                        direccion?.value ??
+                        direccion?.codigo_entidad ??
+                        ""
+                    ).trim();
+
+
+                if (!codigoEntidad) {
+                    continue;
+                }
+
+
+                const nombre =
+                    safe(
+                        direccion?.label ??
+                        direccion?.nombre ??
+                        nombreDireccion(codigoEntidad)
+                    ) || "Sin dirección";
+
+
+                const seguimientos =
+                    mapaSeguimientos.get(codigoEntidad)
+                    || new Map();
+
+
+                // ========================================================
+                // DATOS DE LA FILA
+                // ========================================================
+
+                const data = {
+
+                    no: numero++,
+
+                    direccion: nombre,
+
+                    meses_faltantes: [],
+
+                    sin_soporte: [],
+
+                    estado: "COMPLETO"
+                };
+
+
+                // ========================================================
+                // REVISAR CADA MES
+                // ========================================================
+
+                for (
+                    let mes = 1;
+                    mes <= ultimoMesEvaluado;
+                    mes++
+                ) {
+
+                    const seguimiento =
+                        seguimientos.get(mes);
+
+
+                    // ----------------------------------------------------
+                    // NO EXISTE SEGUIMIENTO
+                    // ----------------------------------------------------
+
+                    if (!seguimiento) {
+
+                        data[`mes_${mes}`] =
+                            "—";
+
+                        data.meses_faltantes.push(
+                            mesNombre(mes)
+                        );
+
+                        continue;
+                    }
+
+
+                    // ----------------------------------------------------
+                    // EXISTE SEGUIMIENTO
+                    // ----------------------------------------------------
+
+                    const tieneDocumentos =
+                        Number(
+                            seguimiento?.tiene_documentos ?? 0
+                        );
+
+
+                    // ----------------------------------------------------
+                    // TIENE DOCUMENTO
+                    // ----------------------------------------------------
+
+                    if (tieneDocumentos === 1) {
+
+                        data[`mes_${mes}`] =
+                            "✓";
+
+                    }
+
+                    // ----------------------------------------------------
+                    // NO TIENE DOCUMENTO
+                    // ----------------------------------------------------
+
+                    else {
+
+                        data[`mes_${mes}`] =
+                            "⚠";
+
+                        data.sin_soporte.push(
+                            mesNombre(mes)
+                        );
+                    }
+                }
+
+
+                // ========================================================
+                // DETERMINAR ESTADO GENERAL
+                // ========================================================
+
+                if (data.meses_faltantes.length > 0) {
+
+                    data.estado =
+                        "PENDIENTE";
+
+                }
+                else if (data.sin_soporte.length > 0) {
+
+                    data.estado =
+                        "SIN SOPORTE";
+
+                }
+                else {
+
+                    data.estado =
+                        "COMPLETO";
+                }
+
+
+                // ========================================================
+                // CONVERTIR ARRAYS A TEXTO
+                // ========================================================
+
+                data.meses_faltantes =
+                    data.meses_faltantes.length > 0
+                        ? data.meses_faltantes.join(", ")
+                        : "—";
+
+
+                data.sin_soporte =
+                    data.sin_soporte.length > 0
+                        ? data.sin_soporte.join(", ")
+                        : "—";
+
+
+                // ========================================================
+                // AGREGAR FILA
+                // ========================================================
+
+                const row =
+                    wsReporte.addRow(data);
+
+
+                // ========================================================
+                // ESTILO DE MESES
+                // ========================================================
+
+                for (
+                    let mes = 1;
+                    mes <= ultimoMesEvaluado;
+                    mes++
+                ) {
+
+                    const cell =
+                        row.getCell(`mes_${mes}`);
+
+
+                    cell.alignment = {
+                        horizontal: "center",
+                        vertical: "middle"
+                    };
+
+
+                    if (cell.value === "✓") {
+
+                        cell.font = {
+                            bold: true,
+                            color: {
+                                argb: "FF008000"
+                            }
+                        };
+
+                    }
+                    else if (cell.value === "⚠") {
+
+                        cell.font = {
+                            bold: true,
+                            color: {
+                                argb: "FFFF9900"
+                            }
+                        };
+
+                    }
+                    else {
+
+                        cell.font = {
+                            color: {
+                                argb: "FF808080"
+                            }
+                        };
+                    }
+                }
+
+
+                // ========================================================
+                // ESTADO
+                // ========================================================
+
+                const estadoCell =
+                    row.getCell("estado");
+
+
+                estadoCell.font = {
+                    bold: true
+                };
+
+
+                estadoCell.alignment = {
+                    horizontal: "center",
+                    vertical: "middle"
+                };
+
+
+                if (data.estado === "COMPLETO") {
+
+                    estadoCell.font = {
+                        bold: true,
+                        color: {
+                            argb: "FF008000"
+                        }
+                    };
+
+                }
+                else if (data.estado === "SIN SOPORTE") {
+
+                    estadoCell.font = {
+                        bold: true,
+                        color: {
+                            argb: "FFFF9900"
+                        }
+                    };
+
+                }
+                else {
+
+                    estadoCell.font = {
+                        bold: true,
+                        color: {
+                            argb: "FFC00000"
+                        }
+                    };
+                }
+            }
+
+
+            // ============================================================
+            // HEADER
+            // ============================================================
+
+            const ultimaColumna =
+                wsReporte.columnCount;
+
+
+            const headerRow =
+                wsReporte.getRow(1);
+
+
+            headerRow.height = 35;
+
+
+            for (
+                let col = 1;
+                col <= ultimaColumna;
+                col++
+            ) {
+
+                const cell =
+                    headerRow.getCell(col);
+
+
+                cell.font = {
+                    bold: true,
+                    color: {
+                        argb: "FFFFFFFF"
+                    }
+                };
+
+
+                cell.alignment = {
+                    horizontal: "center",
+                    vertical: "middle",
+                    wrapText: true
+                };
+
+
+                cell.fill = {
+                    type: "pattern",
+                    pattern: "solid",
+                    fgColor: {
+                        argb: "FF1F4E78"
+                    }
+                };
+
+
+                cell.border = {
+
+                    top: {
+                        style: "thin",
+                        color: {
+                            argb: "FFFFFFFF"
+                        }
+                    },
+
+                    bottom: {
+                        style: "thin",
+                        color: {
+                            argb: "FFFFFFFF"
+                        }
+                    },
+
+                    left: {
+                        style: "thin",
+                        color: {
+                            argb: "FFFFFFFF"
+                        }
+                    },
+
+                    right: {
+                        style: "thin",
+                        color: {
+                            argb: "FFFFFFFF"
+                        }
+                    }
+                };
+            }
+
+
+            // ============================================================
+            // BORDES Y ALINEACIÓN
+            // ============================================================
+
+            for (
+                let i = 2;
+                i <= wsReporte.rowCount;
+                i++
+            ) {
+
+                const row =
+                    wsReporte.getRow(i);
+
+
+                row.alignment = {
+                    vertical: "middle",
+                    wrapText: true
+                };
+
+
+                row.height = 25;
+
+
+                for (
+                    let col = 1;
+                    col <= wsReporte.columnCount;
+                    col++
+                ) {
+
+                    row.getCell(col).border = {
+
+                        top: {
+                            style: "thin",
+                            color: {
+                                argb: "FFD9D9D9"
+                            }
+                        },
+
+                        bottom: {
+                            style: "thin",
+                            color: {
+                                argb: "FFD9D9D9"
+                            }
+                        },
+
+                        left: {
+                            style: "thin",
+                            color: {
+                                argb: "FFD9D9D9"
+                            }
+                        },
+
+                        right: {
+                            style: "thin",
+                            color: {
+                                argb: "FFD9D9D9"
+                            }
+                        }
+                    };
+                }
+            }
+
+
+            // ============================================================
+            // CONGELAR HEADER
+            // ============================================================
+
+            wsReporte.views = [
+                {
+                    state: "frozen",
+                    ySplit: 1
+                }
+            ];
+
+
+            // ============================================================
+            // FILTRO AUTOMÁTICO
+            // ============================================================
+
+            wsReporte.autoFilter = {
+                from: "A1",
+                to: `${wsReporte.getColumn(wsReporte.columnCount).letter}1`
+            };
+
+            styleHeaders(wsReporte, {
+                tituloImpresion: `Seguimientos por dirección — ${mesNombre(mes)} ${periodo || ""}`.trim()
+            });
+
+            // ESCRIBIR EXCEL
+
+            const buf = await wb.xlsx.writeBuffer();
+            saveAs(
+                new Blob([buf], {
+                    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                }),
+                `ReporteSeguimientos_POR_MES${filenameSuffix()}.xlsx`
+            );
+            openSnack("Excel por mes, resumen y consolidado generado correctamente.", "success");
+        } catch (e) {
+            console.error(e);
+            openSnack("No fue posible generar el Excel por mes.", "error");
+        }
+
+    }
+
+    /**
+     * Genera un archivo Excel con la información de riesgos por estructura organizacional.
+     */
+
+    const exportarEstructuraXLSX = async () => {
+        if (!rows.length) {
+            openSnack("No hay datos para exportar.", "warning");
+            return;
+        }
+
+        try {
+
+            const wb = new ExcelJS.Workbook();
+
+            // ====== Hoja 1: Resumen de filtros ======
+            const dirResumen = codigoEntidad
+                ? `${nombreDireccion(codigoEntidad)} (${siglasDireccion(codigoEntidad) || "s/ siglas"})`
+                : "Todas";
+            const tiempoResumen = mes
+                ? `Mes: ${mesNombre(mes)}`
+                : mesInicio || mesFin
+                    ? `Rango: ${mesInicio ? mesNombre(mesInicio) : "—"} → ${mesFin ? mesNombre(mesFin) : "—"}`
+                    : "Sin filtro de mes";
+
+            const ahora = new Date();
+            const fechaGeneracion = ahora.toLocaleString("es-GT", {
+                year: "numeric",
+                month: "2-digit",
+                day: "2-digit",
+                hour: "2-digit",
+                minute: "2-digit",
+            });
+
+            const wsResumen = wb.addWorksheet("Resumen");
+            wsResumen.columns = [
+                { header: "Campo", key: "campo", width: 30 },
+                { header: "Valor", key: "valor", width: 90 },
+            ];
+            wsResumen.addRow({ campo: "Período seleccionado", valor: periodo || "—" });
+            wsResumen.addRow({ campo: "Dirección", valor: dirResumen });
+            wsResumen.addRow({ campo: "Filtro de tiempo", valor: tiempoResumen });
+            wsResumen.addRow({
+                campo: "Total direcciones consideradas",
+                valor: String(totalConsideradas),
+            });
+            wsResumen.addRow({
+                campo: "Direcciones con datos",
+                valor: String(totalConDatos),
+            });
+            wsResumen.addRow({
+                campo: "Direcciones sin información",
+                valor: String(direccionesSinInfo.length),
+            });
+            wsResumen.addRow({
+                campo: "Fecha y hora de generación",
+                valor: fechaGeneracion,
+            });
+
+            styleHeaders(wsResumen, {
+                tituloImpresion: `Resumen de filtros — Período ${periodo || "—"}`,
+            });
+
+            // ====== Hojas por mes + datos para consolidado ======
+
+            // Viceministerios que SIEMPRE deben aparecer
+            const VICEMINISTERIOS = [
+                "Viceministerio de Inversión y Competencia",
+                "Viceministerio de Asuntos Registrales",
+                "Viceministerio de Integración y Comercio Exterior",
+                "Viceministerio de Desarrollo de la Microempresa, Pequeña y Mediana Empresa",
+                "Viceministerio Administrativo y Financiero",
+                "Despacho Superior"
+            ];
+
+
+            // ==========================================
+            // 1. Agrupar: MES → VICEMINISTERIO → registros
+            // ==========================================
+
+            const gruposPorMes = new Map();
+
+            for (const direccion of direcciones) {
+
+                const vice = String(direccion.viceministerio ?? "—").trim();
+                const entidad = String(direccion.value ?? "—").trim();
+
+                const registros = grupos.get(entidad);
+
+                if (!registros?.length) continue;
+
+                for (const row of registros) {
+
+                    const mes = getMesNum(row);
+
+                    if (!mes) continue;
+
+                    // Crear mes
+                    if (!gruposPorMes.has(mes)) {
+                        gruposPorMes.set(mes, new Map());
+                    }
+
+                    const gruposPorVice = gruposPorMes.get(mes);
+
+                    // Crear viceministerio usando EL NOMBRE como llave
+                    if (!gruposPorVice.has(vice)) {
+                        gruposPorVice.set(vice, []);
+                    }
+
+                    gruposPorVice.get(vice).push(row);
+                }
+            }
+
+
+            // ==========================================
+            // 2. Ordenar meses
+            // ==========================================
+
+            const gruposM = new Map(
+                [...gruposPorMes.entries()]
+                    .sort(([mesA], [mesB]) => Number(mesA) - Number(mesB))
+            );
+
+
+            // ==========================================
+            // 3. Crear una hoja por cada mes
+            // ==========================================
+
+            for (const [mes, gruposPorVice] of gruposM) {
+
+                const sheetName = `${String(mes).padStart(2, "0")} - ${mesNombre(mes)}`
+                    .slice(0, 31);
+
+                const ws = wb.addWorksheet(sheetName);
+
+
+                // ==========================================
+                // COLUMNAS
+                // ==========================================
+
+                ws.columns = [
+                    {
+                        header: "Descripción",
+                        key: "descripcion",
+                        width: 65
+                    },
+                    {
+                        header: "Total riesgos",
+                        key: "totalR",
+                        width: 20
+                    },
+                    {
+                        header: "Baja Severidad - Cumple (Tolerable)",
+                        key: "severidadb",
+                        width: 30
+                    },
+                    {
+                        header: "Severidad Media - Ejecución (Tolerable)",
+                        key: "severidadm",
+                        width: 30
+                    },
+                    {
+                        header: "Alta Severidad - Pendiente",
+                        key: "severidada",
+                        width: 30
+                    }
+                ];
+
+                // ==========================================
+                // TOTALES DEL MES
+                // ==========================================
+
+                let totalMes = 0;
+                let cumpleMes = 0;
+                let ejecucionMes = 0;
+                let pendienteMes = 0;
+
+
+                // ==========================================
+                // RECORRER SIEMPRE LOS 6 VICEMINISTERIOS
+                // ==========================================
+
+                for (const vice of VICEMINISTERIOS) {
+
+                    // IMPORTANTE:
+                    // gruposPorVice utiliza el NOMBRE como llave
+                    const registros = gruposPorVice.get(vice) ?? [];
+
+
+                    let totalVice = 0;
+                    let cumpleVice = 0;
+                    let ejecucionVice = 0;
+                    let pendienteVice = 0;
+
+
+                    // ==========================================
+                    // PROCESAR REGISTROS
+                    // ==========================================
+
+                    for (const registro of registros) {
+
+                        if (!Array.isArray(registro.seccion3)) {
+                            continue;
+                        }
+
+
+                        for (const seccion of registro.seccion3) {
+
+                            if (!Array.isArray(seccion.resultados)) {
+                                continue;
+                            }
+
+
+                            const cantidad = seccion.resultados.length;
+
+                            totalVice += cantidad;
+
+
+                            const estatus = String(
+                                seccion.estatus ?? ""
+                            )
+                                .trim()
+                                .toLowerCase();
+
+
+                            if (estatus === "cumple") {
+
+                                cumpleVice += cantidad;
+
+                            }
+                            else if (
+                                estatus === "ejecución" ||
+                                estatus === "ejecucion"
+                            ) {
+
+                                ejecucionVice += cantidad;
+
+                            }
+                            else if (
+                                estatus === "pendiente" ||
+                                estatus === ""
+                            ) {
+
+                                pendienteVice += cantidad;
+                            }
+                        }
+                    }
+
+
+                    // ==========================================
+                    // TOTALES DEL MES
+                    // ==========================================
+
+                    totalMes += totalVice;
+                    cumpleMes += cumpleVice;
+                    ejecucionMes += ejecucionVice;
+                    pendienteMes += pendienteVice;
+
+
+                    // ==========================================
+                    // AGREGAR VICEMINISTERIO
+                    // ==========================================
+
+                    const fila = ws.addRow({
+                        descripcion: vice,
+                        totalR: totalVice,
+                        severidadb: cumpleVice,
+                        severidadm: ejecucionVice,
+                        severidada: pendienteVice
+                    });
+
+
+                    fila.font = {
+                        bold: true
+                    };
+                }
+
+
+                // ==========================================
+                // TOTAL DEL MES
+                // ==========================================
+
+                const filaTotal = ws.addRow({
+                    descripcion: "TOTAL",
+                    totalR: totalMes,
+                    severidadb: cumpleMes,
+                    severidadm: ejecucionMes,
+                    severidada: pendienteMes
+                });
+
+
+                filaTotal.font = {
+                    bold: true
+                };
+
+
+                // ==========================================
+                // FORMATO E IMPRESIÓN (oficio horizontal)
+                // ==========================================
+
+                styleHeaders(ws, {
+                    tituloImpresion: `Seguimientos por viceministerio — ${mesNombre(mes)} ${periodo || ""}`.trim(),
+                    filasTotales: [filaTotal.number],
+                });
+            }
+
+            // ESCRIBIR EXCEL
+
+            const buf = await wb.xlsx.writeBuffer();
+            saveAs(
+                new Blob([buf], {
+                    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                }),
+                `SeguimientosPorEstructura_POR_MES${filenameSuffix()}.xlsx`
+            );
+            openSnack("Excel por mes, resumen y consolidado generado correctamente.", "success");
+        } catch (e) {
+            console.error(e);
+            openSnack("No fue posible generar el Excel por mes.", "error");
+        }
+
+    }
 
     /**
      * Genera un archivo Excel con la información de seguimiento agrupada por mes.
@@ -670,131 +1796,675 @@ export default function VisualizacionSeguimientos() {
                 valor: fechaGeneracion,
             });
 
-            styleHeaders(wsResumen, "A1", "B1");
+            styleHeaders(wsResumen, {
+                tituloImpresion: `Resumen de filtros — Período ${periodo || "—"}`,
+            });
 
             // ====== Hojas por mes + datos para consolidado ======
-            const mesesOrdenados = Array.from(gruposMes.keys()).sort((a, b) => a - b);
+            // ============================================================
+            // HOJAS POR MES
+            // ============================================================
+
+            const mesesOrdenados = Array.from(gruposMes.keys())
+                .sort((a, b) => Number(a) - Number(b));
+
             const registrosConsolidados = [];
 
+
+            // ============================================================
+            // MAPA: CODIGO_ENTIDAD → VICEMINISTERIO
+            // ============================================================
+
+            const mapaViceministerios = new Map();
+
+            for (const direccion of direcciones) {
+
+                const codigoEntidad = String(
+                    direccion?.value ?? ""
+                ).trim();
+
+                const viceministerio = String(
+                    direccion?.viceministerio ?? ""
+                ).trim();
+
+                if (codigoEntidad) {
+                    mapaViceministerios.set(
+                        codigoEntidad,
+                        viceministerio || "Sin viceministerio"
+                    );
+                }
+            }
+
+
+            // DEBUG
+            /* console.log(
+                "MAPA DE VICEMINISTERIOS:",
+                [...mapaViceministerios.entries()]
+            ); */
+
+
+            // ============================================================
+            // RECORRER MESES
+            // ============================================================
+
             for (const m of mesesOrdenados) {
+
                 const items = gruposMes.get(m) || [];
-                const sheetName = `${String(m).padStart(2, "0")} - ${mesNombre(m)}`.slice(0, 31);
+
+                const sheetName =
+                    `${String(m).padStart(2, "0")} - ${mesNombre(m)}`
+                        .slice(0, 31);
+
                 const ws = wb.addWorksheet(sheetName);
 
+
+                // ========================================================
+                // COLUMNAS
+                // ========================================================
+
                 ws.columns = [
-                    { header: "No.", key: "no", width: 6 },
-                    { header: "Órgano", key: "organo", width: 28 },
-                    { header: "Viceministerio", key: "viceministerio", width: 34 },
-                    { header: "Dirección", key: "direccion", width: 42 },
-                    { header: "Siglas", key: "siglas", width: 12 },
-                    { header: "Período", key: "periodo_riesgo", width: 14 },
-                    { header: "Objetivo", key: "objetivo", width: 40 },
-                    { header: "Descripción del riesgo", key: "descripcion", width: 52 },
-                    { header: "Ref.", key: "ref", width: 16 },
-                    { header: "Rango de tolerancia", key: "tolerancia", width: 22 },
-                    { header: "Severidad del riesgo", key: "severidad", width: 40 },
+
+                    {
+                        header: "No.",
+                        key: "no",
+                        width: 6
+                    },
+
+                    {
+                        header: "Objetivo",
+                        key: "objetivo",
+                        width: 35
+                    },
+
+                    {
+                        header: "Descripción del riesgo",
+                        key: "descripcion",
+                        width: 35
+                    },
+
+                    {
+                        header: "Período",
+                        key: "periodo_riesgo",
+                        width: 10
+                    },
+
+                    {
+                        header: "Ref.",
+                        key: "ref",
+                        width: 10
+                    },
+
+                    {
+                        header: "Rango de tolerancia",
+                        key: "tolerancia",
+                        width: 15
+                    },
+
+                    {
+                        header: "Severidad del riesgo",
+                        key: "severidad",
+                        width: 35
+                    },
+
                     {
                         header: "Control interno para mitigar (gestionar) el riesgo",
                         key: "control",
-                        width: 48,
+                        width: 35
                     },
-                    { header: "Método de monitoreo", key: "monitoreo", width: 34 },
-                    { header: "Frecuencia del monitoreo", key: "frecuencia", width: 24 },
-                    { header: "Responsable", key: "responsable", width: 34 },
-                    { header: "Estatus", key: "estatus", width: 16 },
-                    { header: "Comentario", key: "comentario", width: 36 },
+
+                    {
+                        header: "Método de monitoreo",
+                        key: "monitoreo",
+                        width: 30
+                    },
+
+                    {
+                        header: "Frecuencia del monitoreo",
+                        key: "frecuencia",
+                        width: 20
+                    },
+
+                    {
+                        header: "Responsable",
+                        key: "responsable",
+                        width: 20
+                    },
+
+                    // El estatus se divide en tres columnas (Cumple / Ejecución /
+                    // Pendiente); el título combinado y la leyenda de colores los
+                    // arma prepararEncabezadoEstatus.
+                    {
+                        header: "Estatus",
+                        key: "estatus_cumple",
+                        width: 11
+                    },
+
+                    {
+                        header: "",
+                        key: "estatus_ejecucion",
+                        width: 11
+                    },
+
+                    {
+                        header: "",
+                        key: "estatus_pendiente",
+                        width: 11
+                    },
+
+                    {
+                        header: "Comentario",
+                        key: "comentario",
+                        width: 30
+                    }
                 ];
 
-                const mesTexto = `${String(m).padStart(2, "0")} - ${mesNombre(m)}`;
-                let i = 1;
+
+                const columnasEstatus = prepararEncabezadoEstatus(ws);
+
+
+                const mesTexto =
+                    `${String(m).padStart(2, "0")} - ${mesNombre(m)}`;
+
+
+                let numero = 1;
+
+
+                // ========================================================
+                // AGRUPAR LOS REGISTROS DEL MES POR VICEMINISTERIO
+                // ========================================================
+
+                const gruposPorViceministerio = new Map();
+
 
                 for (const r of items) {
-                    const dirTxt = safe(nombreDireccion(r?.codigo_entidad));
-                    const siglas = safe(siglasDireccion(r?.codigo_entidad));
-                    const s1 = Array.isArray(r?.seccion1) ? r.seccion1 : [];
-                    const mapS2 = latestS2ByRisk(r);
 
-                    for (const it of s1) {
-                        const s2 = buscarPorRiesgo(mapS2, it);
-                        const responsable = safe(it?.responsable) || findResponsableInS3(r, it);
-                        const estatusRiesgo = findEstatusInS3(r, it);
+                    const codigoEntidad = String(
+                        r?.codigo_entidad ?? ""
+                    ).trim();
 
-                        const baseData = {
-                            mes_num: m,
-                            mes_texto: mesTexto,
-                            mes_periodo: `${periodo || ""} - ${mesTexto}`.trim(),
-                            organo: safe(it?.organo),
-                            viceministerio: safe(it?.viceministerio),
-                            direccion: dirTxt,
-                            siglas,
-                            periodo_riesgo: safe(getPeriodoRaizFila(it, it?.periodo)),
-                            objetivo: safe(it?.objetivo),
-                            descripcion: safe(it?.descripcion),
-                            ref: safe(it?.ref),
-                            tolerancia: safe(it?.tolerancia),
-                            severidad: safe(it?.severidad_narracion),
-                            control: safe(s2?.control_interno ?? it?.control_interno),
-                            monitoreo: safe(s2?.metodo_monitoreo ?? it?.metodo_monitoreo),
-                            frecuencia: safe(s2?.frecuencia ?? it?.frecuencia),
-                            responsable,
-                            estatus: estatusRiesgo,
-                            comentario: "",
+
+                    // Buscar viceministerio por código de entidad
+                    const viceministerio =
+                        mapaViceministerios.get(codigoEntidad)
+                        || "Sin viceministerio";
+
+
+                    if (!gruposPorViceministerio.has(viceministerio)) {
+
+                        gruposPorViceministerio.set(
+                            viceministerio,
+                            []
+                        );
+                    }
+
+
+                    gruposPorViceministerio
+                        .get(viceministerio)
+                        .push(r);
+                }
+
+
+                // ========================================================
+                // DEBUG
+                // ========================================================
+
+                /* console.log(
+                    `MES ${m} - GRUPOS:`,
+                    [...gruposPorViceministerio.entries()]
+                        .map(([vice, registros]) => ({
+                            viceministerio: vice,
+                            registros: registros.length
+                        }))
+                ); */
+
+
+                // ========================================================
+                // RECORRER CADA VICEMINISTERIO
+                // ========================================================
+
+                for (
+                    const [viceministerio, registros]
+                    of gruposPorViceministerio
+                ) {
+
+
+                    // ====================================================
+                    // FILA DEL VICEMINISTERIO
+                    // ====================================================
+
+                    const filaVice = ws.addRow([]);
+
+                    const numeroFilaVice = filaVice.number;
+
+
+                    // Combinar toda la fila
+                    ws.mergeCells(
+                        numeroFilaVice,
+                        1,
+                        numeroFilaVice,
+                        ws.columnCount
+                    );
+
+
+                    const celdaVice =
+                        ws.getCell(numeroFilaVice, 1);
+
+
+                    celdaVice.value =
+                        viceministerio;
+
+
+                    celdaVice.font = {
+                        bold: true,
+                        size: 12,
+                        color: {
+                            argb: "FFFFFFFF"
+                        }
+                    };
+
+
+                    celdaVice.fill = {
+                        type: "pattern",
+                        pattern: "solid",
+                        fgColor: {
+                            argb: "FF1F4E78"
+                        }
+                    };
+
+
+                    celdaVice.alignment = {
+                        vertical: "middle",
+                        horizontal: "center",
+                        wrapText: true
+                    };
+
+
+                    filaVice.height = 28;
+
+
+                    // ====================================================
+                    // PROCESAR REGISTROS DEL VICEMINISTERIO
+                    // ====================================================
+
+                    // ====================================================
+                    // AGRUPAR REGISTROS POR DIRECCIÓN
+                    // ====================================================
+
+                    const gruposPorDireccion = new Map();
+
+                    for (const r of registros) {
+
+                        const codigoEntidad = String(
+                            r?.codigo_entidad ?? ""
+                        ).trim();
+
+                        const direccion =
+                            safe(
+                                nombreDireccion(codigoEntidad)
+                            ) || "Sin dirección";
+
+
+                        if (!gruposPorDireccion.has(direccion)) {
+
+                            gruposPorDireccion.set(
+                                direccion,
+                                []
+                            );
+                        }
+
+
+                        gruposPorDireccion
+                            .get(direccion)
+                            .push(r);
+                    }
+
+
+                    // ====================================================
+                    // RECORRER DIRECCIONES
+                    // ====================================================
+
+                    for (
+                        const [direccion, registrosDireccion]
+                        of gruposPorDireccion
+                    ) {
+
+
+                        // ==================================================
+                        // FILA DE DIRECCIÓN
+                        // ==================================================
+
+                        const filaDireccion =
+                            ws.addRow([]);
+
+                        const numeroFilaDireccion =
+                            filaDireccion.number;
+
+
+                        // Combinar toda la fila
+                        ws.mergeCells(
+                            numeroFilaDireccion,
+                            1,
+                            numeroFilaDireccion,
+                            ws.columnCount
+                        );
+
+
+                        const celdaDireccion =
+                            ws.getCell(
+                                numeroFilaDireccion,
+                                1
+                            );
+
+
+                        celdaDireccion.value =
+                            direccion;
+
+
+                        // Estilo diferente al viceministerio
+                        celdaDireccion.font = {
+                            bold: true,
+                            size: 11,
+                            color: {
+                                argb: "FF1F1F1F"
+                            }
                         };
 
-                        // Fila hoja mes
-                        const row = ws.addRow({
-                            no: i++,
-                            organo: baseData.organo,
-                            viceministerio: baseData.viceministerio,
-                            direccion: baseData.direccion,
-                            siglas: baseData.siglas,
-                            periodo_riesgo: baseData.periodo_riesgo,
-                            objetivo: baseData.objetivo,
-                            descripcion: baseData.descripcion,
-                            ref: baseData.ref,
-                            tolerancia: baseData.tolerancia,
-                            severidad: baseData.severidad,
-                            control: baseData.control,
-                            monitoreo: baseData.monitoreo,
-                            frecuencia: baseData.frecuencia,
-                            responsable: baseData.responsable,
-                            estatus: baseData.estatus,
-                            comentario: baseData.comentario,
-                        });
 
-                        const kind = statusKind(baseData.estatus);
-                        const { bg, fg } = STATUS_XLSX_FILL[kind] ?? STATUS_XLSX_FILL.none;
-                        const estatusCell = row.getCell("estatus");
-                        estatusCell.fill = {
+                        celdaDireccion.fill = {
                             type: "pattern",
                             pattern: "solid",
-                            fgColor: { argb: bg },
-                        };
-                        estatusCell.font = { bold: true, color: { argb: fg } };
-                        estatusCell.alignment = {
-                            vertical: "middle",
-                            horizontal: "center",
-                            wrapText: true,
+                            fgColor: {
+                                argb: "FFD9E2F3"
+                            }
                         };
 
-                        registrosConsolidados.push(baseData);
+
+                        celdaDireccion.alignment = {
+                            vertical: "middle",
+                            horizontal: "center",
+                            wrapText: true
+                        };
+
+
+                        filaDireccion.height = 24;
+
+
+                        // Aplicar fondo a toda la fila
+                        for (
+                            let col = 1;
+                            col <= ws.columnCount;
+                            col++
+                        ) {
+
+                            const cell =
+                                filaDireccion.getCell(col);
+
+                            cell.fill = {
+                                type: "pattern",
+                                pattern: "solid",
+                                fgColor: {
+                                    argb: "FFD9E2F3"
+                                }
+                            };
+
+                            cell.border = {
+                                bottom: {
+                                    style: "thin",
+                                    color: {
+                                        argb: "FF9EADBF"
+                                    }
+                                }
+                            };
+                        }
+
+
+                        // ==================================================
+                        // PROCESAR RIESGOS DE LA DIRECCIÓN
+                        // ==================================================
+
+                        for (
+                            const r of registrosDireccion
+                        ) {
+
+                            const dirTxt =
+                                safe(
+                                    nombreDireccion(
+                                        r?.codigo_entidad
+                                    )
+                                );
+
+
+                            const siglas =
+                                safe(
+                                    siglasDireccion(
+                                        r?.codigo_entidad
+                                    )
+                                );
+
+
+                            const s1 =
+                                Array.isArray(r?.seccion1)
+                                    ? r.seccion1
+                                    : [];
+
+
+                            const mapS2 =
+                                latestS2ByRisk(r);
+
+
+                            // ==============================================
+                            // RECORRER RIESGOS
+                            // ==============================================
+
+                            for (const it of s1) {
+
+                                const s2 =
+                                    buscarPorRiesgo(
+                                        mapS2,
+                                        it
+                                    );
+
+
+                                const responsable =
+                                    safe(it?.responsable)
+                                    ||
+                                    findResponsableInS3(
+                                        r,
+                                        it
+                                    );
+
+
+                                const estatusRiesgo =
+                                    findEstatusInS3(
+                                        r,
+                                        it
+                                    );
+
+
+                                // ==========================================
+                                // DATOS
+                                // ==========================================
+
+                                const baseData = {
+
+                                    mes_num: m,
+
+                                    mes_texto: mesTexto,
+
+                                    mes_periodo:
+                                        `${periodo || ""} - ${mesTexto}`
+                                            .trim(),
+
+                                    organo:
+                                        safe(it?.organo),
+
+                                    viceministerio:
+                                        viceministerio,
+
+                                    direccion:
+                                        dirTxt,
+
+                                    siglas,
+
+                                    periodo_riesgo:
+                                        safe(
+                                            getPeriodoRaizFila(
+                                                it,
+                                                it?.periodo
+                                            )
+                                        ),
+
+                                    objetivo:
+                                        safe(it?.objetivo),
+
+                                    descripcion:
+                                        safe(it?.descripcion),
+
+                                    ref:
+                                        safe(it?.ref),
+
+                                    tolerancia:
+                                        safe(it?.tolerancia),
+
+                                    severidad:
+                                        safe(
+                                            it?.severidad_narracion
+                                        ),
+
+                                    control:
+                                        safe(
+                                            s2?.control_interno
+                                            ??
+                                            it?.control_interno
+                                        ),
+
+                                    monitoreo:
+                                        safe(
+                                            s2?.metodo_monitoreo
+                                            ??
+                                            it?.metodo_monitoreo
+                                        ),
+
+                                    frecuencia:
+                                        safe(
+                                            s2?.frecuencia
+                                            ??
+                                            it?.frecuencia
+                                        ),
+
+                                    responsable,
+
+                                    estatus:
+                                        estatusRiesgo,
+
+                                    comentario: ""
+                                };
+
+
+                                // ==========================================
+                                // FILA DEL RIESGO
+                                // ==========================================
+
+                                const row =
+                                    ws.addRow({
+
+                                        no:
+                                            numero++,
+
+                                        objetivo:
+                                            baseData.objetivo,
+
+                                        descripcion:
+                                            baseData.descripcion,
+
+                                        periodo_riesgo:
+                                            baseData.periodo_riesgo,
+
+                                        ref:
+                                            baseData.ref,
+
+                                        tolerancia:
+                                            baseData.tolerancia,
+
+                                        severidad:
+                                            baseData.severidad,
+
+                                        control:
+                                            baseData.control,
+
+                                        monitoreo:
+                                            baseData.monitoreo,
+
+                                        frecuencia:
+                                            baseData.frecuencia,
+
+                                        responsable:
+                                            baseData.responsable,
+
+                                        comentario:
+                                            baseData.comentario
+                                    });
+
+
+                                // ==========================================
+                                // ESTILO ESTATUS
+                                // (solo se colorea la columna que corresponde)
+                                // ==========================================
+
+                                pintarEstatusDividido(
+                                    row,
+                                    baseData.estatus
+                                );
+
+
+                                // ==========================================
+                                // ESTILO RANGO DE TOLERANCIA
+                                // ==========================================
+
+                                pintarTolerancia(
+                                    row,
+                                    baseData.tolerancia
+                                );
+
+
+                                // ==========================================
+                                // CONSOLIDADO
+                                // ==========================================
+
+                                registrosConsolidados.push(
+                                    baseData
+                                );
+                            }
+                        }
                     }
                 }
 
-                styleHeaders(ws, "A1", "Q1");
+
+                // ========================================================
+                // ESTILO DEL HEADER
+                // ========================================================
+
+                styleHeaders(ws, {
+                    tituloImpresion:
+                        `Seguimientos ${mesTexto} — Período ${periodo || "—"}`,
+                    filaSubEncabezado: 2,
+                    columnasConSubEncabezado: columnasEstatus
+                });
             }
+
 
             // ====== Hoja final: Consolidado ======
             if (registrosConsolidados.length) {
+
                 const wsAll = wb.addWorksheet("Consolidado");
 
                 wsAll.columns = [
                     { header: "No.", key: "no", width: 6 },
                     { header: "Período - Mes", key: "mes", width: 24 },
-                    { header: "Órgano", key: "organo", width: 28 },
-                    { header: "Viceministerio", key: "viceministerio", width: 34 },
-                    { header: "Dirección", key: "direccion", width: 42 },
-                    { header: "Siglas", key: "siglas", width: 12 },
+                    /* { header: "Órgano", key: "organo", width: 28 }, */
+                    /* { header: "Viceministerio", key: "viceministerio", width: 34 }, */
+                    /* { header: "Dirección", key: "direccion", width: 42 }, */
+                    /* { header: "Siglas", key: "siglas", width: 12 }, */
                     { header: "Período", key: "periodo_riesgo", width: 14 },
                     { header: "Objetivo", key: "objetivo", width: 40 },
                     { header: "Descripción del riesgo", key: "descripcion", width: 52 },
@@ -809,13 +2479,246 @@ export default function VisualizacionSeguimientos() {
                     { header: "Método de monitoreo", key: "monitoreo", width: 34 },
                     { header: "Frecuencia del monitoreo", key: "frecuencia", width: 24 },
                     { header: "Responsable", key: "responsable", width: 34 },
-                    { header: "Estatus", key: "estatus", width: 16 },
+                    // El estatus se divide en tres columnas (Cumple / Ejecución /
+                    // Pendiente); el título combinado y la leyenda de colores los
+                    // arma prepararEncabezadoEstatus.
+                    { header: "Estatus", key: "estatus_cumple", width: 12 },
+                    { header: "", key: "estatus_ejecucion", width: 12 },
+                    { header: "", key: "estatus_pendiente", width: 12 },
                     { header: "Comentario", key: "comentario", width: 36 },
                 ];
 
-                registrosConsolidados.forEach((reg, idx) => {
+
+                const columnasEstatus = prepararEncabezadoEstatus(wsAll);
+
+
+                // =========================================================
+                // ORDENAR
+                // VICEMINISTERIO → DIRECCIÓN → MES
+                // =========================================================
+
+                const registrosOrdenados = [...registrosConsolidados].sort((a, b) => {
+
+                    const viceA = String(a.viceministerio ?? "");
+                    const viceB = String(b.viceministerio ?? "");
+
+                    const cmpVice = viceA.localeCompare(
+                        viceB,
+                        "es",
+                        { sensitivity: "base" }
+                    );
+
+                    if (cmpVice !== 0) {
+                        return cmpVice;
+                    }
+
+
+                    const dirA = String(a.direccion ?? "");
+                    const dirB = String(b.direccion ?? "");
+
+                    const cmpDir = dirA.localeCompare(
+                        dirB,
+                        "es",
+                        { sensitivity: "base" }
+                    );
+
+                    if (cmpDir !== 0) {
+                        return cmpDir;
+                    }
+
+
+                    return Number(a.mes_num ?? 0) -
+                        Number(b.mes_num ?? 0);
+                });
+
+
+                // =========================================================
+                // VARIABLES DE CONTROL
+                // =========================================================
+
+                let numero = 1;
+
+                let ultimoViceministerio = null;
+                let ultimaDireccion = null;
+
+
+                // =========================================================
+                // RECORRER REGISTROS
+                // =========================================================
+
+                for (const reg of registrosOrdenados) {
+
+                    const viceministerio =
+                        String(reg.viceministerio ?? "Sin viceministerio").trim();
+
+                    const direccion =
+                        String(reg.direccion ?? "Sin dirección").trim();
+
+
+                    // =====================================================
+                    // CAMBIO DE VICEMINISTERIO
+                    // =====================================================
+
+                    if (viceministerio !== ultimoViceministerio) {
+
+                        // Reiniciar dirección
+                        ultimaDireccion = null;
+
+
+                        // Agregar fila de Viceministerio
+                        const filaVice = wsAll.addRow({
+                            no: "",
+                            mes: "",
+                            organo: reg.organo || "",
+                            viceministerio: viceministerio,
+                            direccion: "",
+                            siglas: "",
+                            periodo_riesgo: "",
+                            objetivo: "",
+                            descripcion: "",
+                            ref: "",
+                            tolerancia: "",
+                            severidad: "",
+                            control: "",
+                            monitoreo: "",
+                            frecuencia: "",
+                            responsable: "",
+                            estatus: "",
+                            comentario: "",
+                        });
+
+
+                        // Combinar toda la fila
+                        wsAll.mergeCells(
+                            filaVice.number,
+                            1,
+                            filaVice.number,
+                            wsAll.columnCount
+                        );
+
+
+                        const cellVice =
+                            filaVice.getCell(1);
+
+                        cellVice.value =
+                            `VICEMINISTERIO: ${viceministerio}`;
+
+
+                        cellVice.font = {
+                            bold: true,
+                            size: 12,
+                            color: {
+                                argb: "FFFFFFFF"
+                            }
+                        };
+
+
+                        cellVice.fill = {
+                            type: "pattern",
+                            pattern: "solid",
+                            fgColor: {
+                                argb: "FF1F4E78"
+                            }
+                        };
+
+
+                        cellVice.alignment = {
+                            vertical: "middle",
+                            horizontal: "center"
+                        };
+
+
+                        filaVice.height = 28;
+
+
+                        ultimoViceministerio =
+                            viceministerio;
+                    }
+
+
+                    // =====================================================
+                    // CAMBIO DE DIRECCIÓN
+                    // =====================================================
+
+                    if (direccion !== ultimaDireccion) {
+
+                        const filaDireccion = wsAll.addRow({
+                            no: "",
+                            mes: "",
+                            organo: "",
+                            viceministerio: "",
+                            direccion: direccion,
+                            siglas: "",
+                            periodo_riesgo: "",
+                            objetivo: "",
+                            descripcion: "",
+                            ref: "",
+                            tolerancia: "",
+                            severidad: "",
+                            control: "",
+                            monitoreo: "",
+                            frecuencia: "",
+                            responsable: "",
+                            estatus: "",
+                            comentario: "",
+                        });
+
+
+                        // Combinar desde Dirección hasta el final
+                        wsAll.mergeCells(
+                            filaDireccion.number,
+                            1,
+                            filaDireccion.number,
+                            wsAll.columnCount
+                        );
+
+
+                        const cellDireccion =
+                            filaDireccion.getCell(4);
+
+                        cellDireccion.value =
+                            `DIRECCIÓN: ${direccion}`;
+
+
+                        cellDireccion.font = {
+                            bold: true,
+                            italic: true,
+                            size: 11,
+                            color: {
+                                argb: "FF1F1F1F"
+                            }
+                        };
+
+
+                        cellDireccion.fill = {
+                            type: "pattern",
+                            pattern: "solid",
+                            fgColor: {
+                                argb: "FFD9EAF7"
+                            }
+                        };
+
+
+                        cellDireccion.alignment = {
+                            vertical: "middle",
+                            horizontal: "center"
+                        };
+
+
+                        filaDireccion.height = 24;
+
+
+                        ultimaDireccion =
+                            direccion;
+                    }
+
+
+                    // =====================================================
+                    // FILA NORMAL DEL RIESGO
+                    // =====================================================
+
                     const row = wsAll.addRow({
-                        no: idx + 1,
+                        no: numero++,
                         mes: reg.mes_periodo || reg.mes_texto,
                         organo: reg.organo,
                         viceministerio: reg.viceministerio,
@@ -831,27 +2734,51 @@ export default function VisualizacionSeguimientos() {
                         monitoreo: reg.monitoreo,
                         frecuencia: reg.frecuencia,
                         responsable: reg.responsable,
-                        estatus: reg.estatus,
                         comentario: reg.comentario,
                     });
 
-                    const kind = statusKind(reg.estatus);
-                    const { bg, fg } = STATUS_XLSX_FILL[kind] ?? STATUS_XLSX_FILL.none;
-                    const estatusCell = row.getCell("estatus");
-                    estatusCell.fill = {
-                        type: "pattern",
-                        pattern: "solid",
-                        fgColor: { argb: bg },
-                    };
-                    estatusCell.font = { bold: true, color: { argb: fg } };
-                    estatusCell.alignment = {
-                        vertical: "middle",
-                        horizontal: "center",
-                        wrapText: true,
-                    };
-                });
 
-                styleHeaders(wsAll, "A1", "R1");
+                    // =====================================================
+                    // ALINEACIÓN GENERAL
+                    // (antes de los colores, porque row.alignment afecta a
+                    //  todas las celdas de la fila)
+                    // =====================================================
+
+                    row.alignment = {
+                        vertical: "middle",
+                        wrapText: true
+                    };
+
+
+                    // =====================================================
+                    // ESTILO DEL ESTATUS
+                    // (solo se colorea la columna que corresponde)
+                    // =====================================================
+
+                    pintarEstatusDividido(row, reg.estatus);
+
+
+                    // =====================================================
+                    // ESTILO DEL RANGO DE TOLERANCIA
+                    // =====================================================
+
+                    pintarTolerancia(row, reg.tolerancia);
+
+
+                    /* row.height = 30; */
+                }
+
+
+                // =========================================================
+                // HEADER
+                // =========================================================
+
+                styleHeaders(wsAll, {
+                    tituloImpresion:
+                        `Consolidado de seguimientos — Período ${periodo || "—"}`,
+                    filaSubEncabezado: 2,
+                    columnasConSubEncabezado: columnasEstatus,
+                });
             }
 
             const buf = await wb.xlsx.writeBuffer();
@@ -859,7 +2786,7 @@ export default function VisualizacionSeguimientos() {
                 new Blob([buf], {
                     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 }),
-                `Seguimientos_POR_MES${filenameSuffix()}.xlsx`
+                `CONSOLIDADO_POR_MES${filenameSuffix()}.xlsx`
             );
             openSnack("Excel por mes, resumen y consolidado generado correctamente.", "success");
         } catch (e) {
@@ -1078,6 +3005,22 @@ export default function VisualizacionSeguimientos() {
                                 spacing={1}
                                 alignItems="center"
                             >
+                                <Button
+                                    startIcon={< FactCheckIcon />}
+                                    variant="outlined"
+                                    onClick={exportarSeguimientosXLSX}
+                                    disabled={!rows.length}
+                                >
+                                    Seguimientos completos y faltantes
+                                </Button>
+                                <Button
+                                    startIcon={< AccountTreeIcon />}
+                                    variant="outlined"
+                                    onClick={exportarEstructuraXLSX}
+                                    disabled={!rows.length}
+                                >
+                                    Riesgos por estructura organizacional
+                                </Button>
                                 <Button
                                     startIcon={<GridOn />}
                                     variant="outlined"

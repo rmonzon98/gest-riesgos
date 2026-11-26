@@ -23,6 +23,7 @@ import { MapaCalorInst } from './Institucionales/MapaCalorInst';
 
 import { saveAs } from 'file-saver';
 import * as ExcelJS from 'exceljs';
+import { formatearHojaReporte } from 'funciones/ExcelFormato';
 import {
     Document, Packer, Paragraph, Table as DTable, TableRow as DTR, TableCell as DTC,
     HeadingLevel, AlignmentType, TextRun, WidthType, PageOrientation
@@ -49,7 +50,13 @@ function ReportesInstitucionalesCard({ periodos = [], logoBase64, institucion = 
     const [tipo, setTipo] = useState('');
     const [periodo, setPeriodo] = useState('');
     const [mostrarUnidades, setMostrarUnidades] = useState(false);
+    // Solo riesgos nuevos (ES_NUEVO = 1); aplica a ME/MC/MCE (tipos 3, 4 y 5)
+    const [soloNuevos, setSoloNuevos] = useState(false);
     const [alerta, setAlerta] = useState({ open: false, tipo: 'warning', mensaje: '' });
+
+    const aplicaNuevos = soloNuevos && (tipo === 3 || tipo === 4 || tipo === 5);
+    const tituloConNuevos = (txt) => (aplicaNuevos ? `Riesgos identificados en el período - ${txt}` : txt);
+    const archivoConNuevos = (nombre) => (aplicaNuevos ? `Riesgos_identificados_periodo_${nombre}` : nombre);
 
     const [openSup, setOpenSup] = useState(false);
     const [supNombre, setSupNombre] = useState('');
@@ -257,7 +264,7 @@ function ReportesInstitucionalesCard({ periodos = [], logoBase64, institucion = 
      */
     const fetchInstME_MC_MCE = async (categoria) => {
         const { data } = await apiClient.get('/api/reportes-actualizados/matriz-evaluacion-riesgos-inst', {
-            params: { periodo, categoria }
+            params: { periodo, categoria, ...(aplicaNuevos ? { nuevos: 1 } : {}) }
         });
         return data;
     };
@@ -361,14 +368,15 @@ function ReportesInstitucionalesCard({ periodos = [], logoBase64, institucion = 
                     { propiedades: data.propiedades, valores: data.valores },
                     logoBase64,
                     {
-                        titulo: `Matriz de evaluación institucional ${periodo}`,
+                        titulo: tituloConNuevos(`Matriz de evaluación institucional ${periodo}`),
                         periodo,
                         dividirPorUnidad: mostrarUnidades,
                         pageSize: 'LEGAL',
                         nombre: data.institucion?.[0]?.NOMBRE,
                         tipo: data.institucion?.[0]?.TIPO,
                         responsable
-                    }
+                    },
+                    aplicaNuevos ? archivoConNuevos('Matriz_Evaluacion_Institucional.pdf') : undefined
                 );
             } else if (tipo === 4) {
                 const data = await fetchInstME_MC_MCE('MC');
@@ -376,14 +384,15 @@ function ReportesInstitucionalesCard({ periodos = [], logoBase64, institucion = 
                     { propiedades: data.propiedades, valores: data.valores },
                     logoBase64,
                     {
-                        titulo: `Mapa de calor residual ${periodo}`,
+                        titulo: tituloConNuevos(`Mapa de calor residual ${periodo}`),
                         periodo,
                         dividirPorUnidad: mostrarUnidades,
                         pageSize: 'LEGAL',
                         nombre: data.institucion?.[0]?.NOMBRE,
                         tipo: data.institucion?.[0]?.TIPO,
                         responsable
-                    }
+                    },
+                    aplicaNuevos ? archivoConNuevos('Mapa_de_Calor_Institucional.pdf') : undefined
                 );
             } else if (tipo === 5) {
                 const data = await fetchInstME_MC_MCE('MCE');
@@ -391,14 +400,15 @@ function ReportesInstitucionalesCard({ periodos = [], logoBase64, institucion = 
                     { propiedades: data.propiedades, valores: data.valores },
                     logoBase64,
                     {
-                        titulo: `Matriz de continuidad y evaluación ${periodo}`,
+                        titulo: tituloConNuevos(`Matriz de continuidad y evaluación ${periodo}`),
                         periodo,
                         dividirPorUnidad: mostrarUnidades,
                         pageSize: 'LEGAL',
                         nombre: data.institucion?.[0]?.NOMBRE,
                         tipo: data.institucion?.[0]?.TIPO,
                         responsable
-                    }
+                    },
+                    aplicaNuevos ? archivoConNuevos('Matriz_Evaluacion_Institucional.pdf') : undefined
                 );
             }
         } catch (e) {
@@ -426,17 +436,17 @@ function ReportesInstitucionalesCard({ periodos = [], logoBase64, institucion = 
             const tituloPorTipo = (t) => {
                 if (t === 1) return 'Matriz de evaluación de la eficiencia del control interno y gobernanza';
                 if (t === 2) return 'Matriz de riesgos de fraude o corrupción';
-                if (t === 3) return 'Matriz de Evaluación de Riesgos (Institucional)';
-                if (t === 4) return 'Mapa de Calor de Riesgos (Residual) Institucional';
-                if (t === 5) return 'Matriz de Continuidad y Evaluación (Institucional)';
+                if (t === 3) return tituloConNuevos('Matriz de Evaluación de Riesgos (Institucional)');
+                if (t === 4) return tituloConNuevos('Mapa de Calor de Riesgos (Residual) Institucional');
+                if (t === 5) return tituloConNuevos('Matriz de Continuidad y Evaluación (Institucional)');
                 return 'Reporte';
             };
             const nombreBase = (t) => {
                 if (t === 1) return `Primera_Matriz_${periodo}`;
                 if (t === 2) return `Segunda_Matriz_${periodo}`;
-                if (t === 3) return `Matriz_Evaluacion_${periodo}`;
-                if (t === 4) return `Mapa_de_calor_de_riesgos_${periodo}`;
-                if (t === 5) return `Matriz_Continuidad_Y_Monitoreo_${periodo}`;
+                if (t === 3) return archivoConNuevos(`Matriz_Evaluacion_${periodo}`);
+                if (t === 4) return archivoConNuevos(`Mapa_de_calor_de_riesgos_${periodo}`);
+                if (t === 5) return archivoConNuevos(`Matriz_Continuidad_Y_Monitoreo_${periodo}`);
                 return `Reporte_${periodo}`;
             };
 
@@ -593,35 +603,30 @@ function ReportesInstitucionalesCard({ periodos = [], logoBase64, institucion = 
                     const colCount = Math.max(headersX.length, 1);
                     const endCol = toCol(colCount || 1);
 
+                    const tituloMatriz = (m.titulo ? `${m.matriz}. ${m.titulo}` : `Matriz ${m.matriz}`);
+
                     ws.mergeCells(`A1:${endCol}1`);
-                    ws.getCell('A1').value = (m.titulo ? `${m.matriz}. ${m.titulo}` : `Matriz ${m.matriz}`);
-                    ws.getCell('A1').font = { bold: true, size: 14 };
-                    ws.getCell('A1').alignment = { horizontal: 'center' };
+                    ws.getCell('A1').value = tituloMatriz;
 
                     ws.mergeCells(`A2:${endCol}2`);
                     ws.getCell('A2').value = periodoTexto;
-                    ws.getCell('A2').alignment = { horizontal: 'center' };
 
                     const headerRowIndex = 4;
                     ws.getRow(headerRowIndex).values = headersX;
-                    ws.getRow(headerRowIndex).font = { bold: true };
-                    ws.getRow(headerRowIndex).alignment = { horizontal: 'center' };
 
                     (m.filas ?? []).forEach((filaArr, i) => {
                         const arr = Array.isArray(filaArr) ? filaArr.map(safe) : [];
                         ws.getRow(headerRowIndex + 1 + i).values = arr;
                     });
 
-                    for (let i = 1; i <= colCount; i++) {
-                        let max = (headersX[i - 1] ?? '').toString().length;
-                        for (let r = headerRowIndex + 1; r <= headerRowIndex + (m.filas ?? []).length; r++) {
-                            const v = ws.getRow(r).getCell(i).value;
-                            const s = (v == null ? '' : String(v));
-                            if (s.length > max) max = s.length;
-                        }
-                        ws.getColumn(i).width = Math.min(Math.max(max + 2, 10), 60);
-                    }
-                    ws.views = [{ state: 'frozen', ySplit: headerRowIndex }];
+                    formatearHojaReporte(ws, {
+                        filaTitulo: 1,
+                        filaSubtitulo: 2,
+                        filaEncabezado: headerRowIndex,
+                        ultimaFilaDatos: headerRowIndex + (m.filas ?? []).length,
+                        ultimaColumna: colCount,
+                        tituloImpresion: `${tituloMatriz} — ${periodoTexto}`,
+                    });
                 });
 
                 const blob = await wb.xlsx.writeBuffer();
@@ -637,10 +642,11 @@ function ReportesInstitucionalesCard({ periodos = [], logoBase64, institucion = 
 
             const { groups, order } = mostrarUnidades ? groupByUnidad(rows, {}) : { groups: { 'Institucional': rows }, order: ['Institucional'] };
 
-            const tituloDoc =
+            const tituloDoc = tituloConNuevos(
                 (tipo === 3 && 'Matriz de Evaluación de Riesgos (Institucional)') ||
                 (tipo === 4 && 'Mapa de Calor de Riesgos (Residual) Institucional') ||
-                'Matriz de Continuidad y Evaluación (Institucional)';
+                'Matriz de Continuidad y Evaluación (Institucional)'
+            );
 
             const colCount = Math.max(propiedades.length + 1, 2);
             const endCol = toCol(colCount);
@@ -650,49 +656,42 @@ function ReportesInstitucionalesCard({ periodos = [], logoBase64, institucion = 
 
                 ws.mergeCells(`A1:${endCol}1`);
                 ws.getCell('A1').value = tituloDoc;
-                ws.getCell('A1').font = { bold: true, size: 14 };
-                ws.getCell('A1').alignment = { horizontal: 'center' };
 
                 ws.mergeCells(`A2:${endCol}2`);
                 ws.getCell('A2').value = periodoTexto;
-                ws.getCell('A2').alignment = { horizontal: 'center' };
 
                 ws.getCell('A4').value = 'Unidad';
-                ws.getCell('A4').font = { bold: true };
                 ws.getCell('B4').value = safe(gName);
 
                 ws.getCell('A5').value = 'Período';
-                ws.getCell('A5').font = { bold: true };
                 ws.getCell('B5').value = safe(periodoTexto);
 
                 const headerRowIndex = 7;
                 const headersX = ['No.', ...propiedades.map(p => p?.label ?? p?.key ?? '—')];
                 ws.getRow(headerRowIndex).values = headersX;
-                ws.getRow(headerRowIndex).font = { bold: true };
-                ws.getRow(headerRowIndex).alignment = { horizontal: 'center' };
 
                 groups[gName].forEach((r, i) => {
                     const arr = [String(i + 1), ...propiedades.map(p => getCellValue(r, p))];
                     ws.getRow(headerRowIndex + 1 + i).values = arr;
                 });
 
-                for (let i = 1; i <= colCount; i++) {
-                    let max = (headersX[i - 1] ?? '').toString().length;
-                    for (let r = headerRowIndex + 1; r <= headerRowIndex + groups[gName].length; r++) {
-                        const v = ws.getRow(r).getCell(i).value;
-                        const s = (v == null ? '' : String(v));
-                        if (s.length > max) max = s.length;
-                    }
-                    ws.getColumn(i).width = Math.min(Math.max(max + 2, 10), 60);
-                }
-                ws.views = [{ state: 'frozen', ySplit: headerRowIndex }];
+                formatearHojaReporte(ws, {
+                    filaTitulo: 1,
+                    filaSubtitulo: 2,
+                    ficha: { desde: 4, hasta: 5 },
+                    filaEncabezado: headerRowIndex,
+                    ultimaFilaDatos: headerRowIndex + groups[gName].length,
+                    ultimaColumna: colCount,
+                    tituloImpresion: `${tituloDoc} — ${safe(gName)}`,
+                });
             });
 
             const blob = await wb.xlsx.writeBuffer();
-            const nombre =
+            const nombre = archivoConNuevos(
                 (tipo === 3 && `Matriz_Evaluacion_${periodo}`) ||
                 (tipo === 4 && `Mapa_de_calor_de_riesgos_${periodo}`) ||
-                `Matriz_Continuidad_Y_Monitoreo_${periodo}`;
+                `Matriz_Continuidad_Y_Monitoreo_${periodo}`
+            );
             saveAs(new Blob([blob], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
                 `${nombre}.xlsx`);
         } catch (e) {
@@ -705,6 +704,7 @@ function ReportesInstitucionalesCard({ periodos = [], logoBase64, institucion = 
         setTipo('');
         setPeriodo('');
         setMostrarUnidades(false);
+        setSoloNuevos(false);
     };
 
     return (
@@ -755,6 +755,16 @@ function ReportesInstitucionalesCard({ periodos = [], logoBase64, institucion = 
                             <FormControlLabel
                                 control={<Checkbox checked={mostrarUnidades} onChange={(e) => setMostrarUnidades(e.target.checked)} />}
                                 label="Dividir por unidades"
+                            />
+                        </Grid>
+                    )}
+
+                    {/* Solo riesgos nuevos (solo ME/MC/MCE) */}
+                    {(tipo === 3 || tipo === 4 || tipo === 5) && (
+                        <Grid item xs={12} md={6}>
+                            <FormControlLabel
+                                control={<Checkbox checked={soloNuevos} onChange={(e) => setSoloNuevos(e.target.checked)} />}
+                                label="Solo identificados en el período (marcados como General)"
                             />
                         </Grid>
                     )}

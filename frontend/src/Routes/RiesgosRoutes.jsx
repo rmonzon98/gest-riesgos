@@ -78,7 +78,7 @@ export default function RiesgosRoutes() {
             <Route path="metricas" element={<MetricasDashboard />} />
 
             {/* Módulo de Control Interno y Gobernanza */}
-            <Route path="control-interno-gobernanza-consolidado" element={<ConsolidacionReporteModulos categoria={1} titulo={'Consolidado de documentos de evaluación de la eficiencia del control interno y gobernanza'} />} />
+            <Route path="control-interno-gobernanza-consolidado" element={<ConsolidacionReporteModulos key="control-interno-gobernanza-consolidado" categoria={1} titulo={'Consolidado de documentos de evaluación de la eficiencia del control interno y gobernanza'} />} />
             <Route path="control-interno-gobernanza" element={<Anexo1Form />} />
             <Route path="control-interno-gobernanza-institucional" element={<Anexo1Institucional />} />
             <Route path="control-interno-gobernanza-mantenimiento" element={<Anexo1Mant />} />
@@ -86,7 +86,7 @@ export default function RiesgosRoutes() {
             <Route path="control-interno-gobernanza-revision-superior" element={<Anexo1Superior />} />
 
             {/* Módulo de Evaluación de Riesgos asociados al Fraude o Corrupción */}
-            <Route path="riesgos-fraude-corrupcion-consolidado" element={<ConsolidacionReporteModulos categoria={2} titulo={'Consolidado de documentos de riesgos de fraude o corrupción'} />} />
+            <Route path="riesgos-fraude-corrupcion-consolidado" element={<ConsolidacionReporteModulos key="riesgos-fraude-corrupcion-consolidado" categoria={2} titulo={'Consolidado de documentos de riesgos de fraude o corrupción'} />} />
             <Route path="riesgos-fraude-corrupcion" element={<Anexo2Form />} />
             <Route path="riesgos-fraude-corrupcion-institucional" element={<Anexo2Institucional />} />
             <Route path="riesgos-fraude-corrupcion-mantenimiento" element={<Anexo2Mant />} />
@@ -94,24 +94,24 @@ export default function RiesgosRoutes() {
             <Route path="riesgos-fraude-corrupcion-revision" element={<Anexo2Sup />} />
 
             {/* Módulo de Evaluación y Gestión del Riesgo */}
-            <Route path="evaluacion-gestion-riesgos-consolidado" element={<ConsolidacionReporteModulos categoria={3} titulo={'Consolidación de evaluación y gestión de riesgos'} />} />
-            <Route path="evaluacion-gestion-riesgos" element={<IngresoRiesgos tipo={'ME'} titulo={'Entrada de evaluación y gestión de riesgos'} />} />
-            <Route path="evaluacion-gestion-riesgos-revision" element={<RiesgosRevision tipo={'ME'} titulo={'Revisión de evaluación y gestión de riesgos'} />} />
-            <Route path="evaluacion-gestion-riesgos-revision-superior" element={<RiesgosRevisionSuperior tipo={'ME'} titulo={'Revisión de superior de evaluación y gestión de riesgos'} />} />
+            <Route path="evaluacion-gestion-riesgos-consolidado" element={<ConsolidacionReporteModulos key="evaluacion-gestion-riesgos-consolidado" categoria={3} titulo={'Consolidación de evaluación y gestión de riesgos'} />} />
+            <Route path="evaluacion-gestion-riesgos" element={<IngresoRiesgos key="evaluacion-gestion-riesgos" tipo={'ME'} titulo={'Entrada de evaluación y gestión de riesgos'} />} />
+            <Route path="evaluacion-gestion-riesgos-revision" element={<RiesgosRevision key="evaluacion-gestion-riesgos-revision" tipo={'ME'} titulo={'Revisión de evaluación y gestión de riesgos'} />} />
+            <Route path="evaluacion-gestion-riesgos-revision-superior" element={<RiesgosRevisionSuperior key="evaluacion-gestion-riesgos-revision-superior" tipo={'ME'} titulo={'Revisión de superior de evaluación y gestión de riesgos'} />} />
             <Route path="riesgos-institucional" element={<RiesgoInstitucional />} />
 
 
             {/* Módulo de Continuidad y monitoreo */}
-            <Route path="continuidad-monitoreo-consolidado" element={<ConsolidacionReporteModulos categoria={3} titulo={'Consolidación de continuidad y monitoreo'} />} />
-            <Route path="continuidad-monitoreo-revision" element={<RiesgosRevision tipo={'MCE'} titulo={'Revisión de continuidad y monitoreo'} />} />
-            <Route path="continuidad-monitoreo-revision-superior" element={<RiesgosRevisionSuperior tipo={'MCE'} titulo={'Revisión de superior de continuidad y monitoreo'} />} />
-            <Route path="continuidad-monitoreo" element={<IngresoRiesgos tipo={'MCE'} titulo={'Entrada de continuidad y monitoreo'} />} />
+            <Route path="continuidad-monitoreo-consolidado" element={<ConsolidacionReporteModulos key="continuidad-monitoreo-consolidado" categoria={3} titulo={'Consolidación de continuidad y monitoreo'} />} />
+            <Route path="continuidad-monitoreo-revision" element={<RiesgosRevision key="continuidad-monitoreo-revision" tipo={'MCE'} titulo={'Revisión de continuidad y monitoreo'} />} />
+            <Route path="continuidad-monitoreo-revision-superior" element={<RiesgosRevisionSuperior key="continuidad-monitoreo-revision-superior" tipo={'MCE'} titulo={'Revisión de superior de continuidad y monitoreo'} />} />
+            <Route path="continuidad-monitoreo" element={<IngresoRiesgos key="continuidad-monitoreo" tipo={'MCE'} titulo={'Entrada de continuidad y monitoreo'} />} />
 
             {/* Módulo de Mapa de Riesgos */}
-            <Route path="mapa-riesgos-consolidado" element={<ConsolidacionReporteModulos categoria={3} titulo={'Consolidación de mapa de riesgos'} />} />
-            <Route path="mapa-riesgos-revision" element={<RiesgosRevision tipo={'MC'} titulo={'Revisión de mapa de riesgos'} />} />
-            <Route path="/mapa-riesgos-revision-superior" element={<RiesgosRevisionSuperior tipo={'MC'} titulo={'Revisión de superior de mapa de riesgos'} />} />
-            <Route path="mapa-riesgos" element={<IngresoRiesgos tipo={'MC'} titulo={'Entrada de mapa de riesgos'} />} />
+            <Route path="mapa-riesgos-consolidado" element={<ConsolidacionReporteModulos key="mapa-riesgos-consolidado" categoria={3} titulo={'Consolidación de mapa de riesgos'} />} />
+            <Route path="mapa-riesgos-revision" element={<RiesgosRevision key="mapa-riesgos-revision" tipo={'MC'} titulo={'Revisión de mapa de riesgos'} />} />
+            <Route path="mapa-riesgos-revision-superior" element={<RiesgosRevisionSuperior key="mapa-riesgos-revision-superior" tipo={'MC'} titulo={'Revisión de superior de mapa de riesgos'} />} />
+            <Route path="mapa-riesgos" element={<IngresoRiesgos key="mapa-riesgos" tipo={'MC'} titulo={'Entrada de mapa de riesgos'} />} />
 
             {/* Módulo de Informe Anual */}
             <Route path="informe-anual" element={<InformeAnual />} />

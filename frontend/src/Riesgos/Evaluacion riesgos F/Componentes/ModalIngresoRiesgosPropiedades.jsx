@@ -13,7 +13,7 @@ import {
     Dialog, DialogTitle, DialogContent, DialogActions,
     TextField, Grid, Button, Stack, Alert, IconButton, Snackbar,
     Divider, Typography, Select, MenuItem, FormControl,
-    InputLabel, Chip, LinearProgress,
+    InputLabel, Chip, LinearProgress, Switch, FormControlLabel,
     Table, TableHead, TableRow, TableCell, TableBody, TableContainer
 } from "@mui/material";
 import CloseRounded from "@mui/icons-material/CloseRounded";
@@ -39,6 +39,8 @@ function ModalIngresoRiesgosPropiedades({
 }) {
 
     const isEdit = Boolean(initialData?.CODIGO_RIESGO);
+    // Si continúa de un riesgo del año anterior, no puede marcarse como identificado en el período
+    const tieneRiesgoAnterior = isEdit && initialData?.PERIODO_ANTERIOR != null && initialData?.PERIODO_ANTERIOR !== "";
 
     const [objetivos, setObjetivos] = useState([]); // [{CODIGO, DESCRIPCION}]
     const [loadingObj, setLoadingObj] = useState(false);
@@ -47,6 +49,7 @@ function ModalIngresoRiesgosPropiedades({
     const [form, setForm] = useState({
         VICEMINISTERIO: "",
         ORGANO: "",
+        ES_NUEVO: false,
 
         TIPO_CODIGO: "",
         REF_NUM: "",
@@ -76,6 +79,7 @@ function ModalIngresoRiesgosPropiedades({
         setForm({
             VICEMINISTERIO: "",
             ORGANO: "",
+            ES_NUEVO: false,
 
             TIPO_CODIGO: "",
             REF_NUM: "",
@@ -185,6 +189,7 @@ function ModalIngresoRiesgosPropiedades({
             setForm({
                 VICEMINISTERIO: d?.VICEMINISTERIO ?? "",
                 ORGANO: d?.ORGANO ?? "",
+                ES_NUEVO: Number(d?.ES_NUEVO) === 1,
 
                 TIPO_CODIGO: tipo || "",
                 REF_NUM: refNum,
@@ -225,6 +230,7 @@ function ModalIngresoRiesgosPropiedades({
                 ...s,
                 VICEMINISTERIO: "",
                 ORGANO: "",
+                ES_NUEVO: false,
                 TIPO_CODIGO: "",
                 OBJETIVO: "",
                 REF_NUM: "",
@@ -353,6 +359,7 @@ function ModalIngresoRiesgosPropiedades({
             // NUEVOS
             viceministerioCodigo: form.VICEMINISTERIO || (isEdit ? prev?.VICEMINISTERIO : null) || null,
             organoCodigo: form.ORGANO || (isEdit ? prev?.ORGANO : null) || null,
+            esNuevo: form.ES_NUEVO ? 1 : 0,
 
             // Códigos
             tipoObjetivoCodigo: pick(keysSet.has("CODIGO_TIPO_OBJETIVO"), form.TIPO_CODIGO || null, prev?.CODIGO_TIPO_OBJETIVO ?? null),
@@ -479,6 +486,30 @@ function ModalIngresoRiesgosPropiedades({
 
                     <Stack spacing={2}>
                         {!!error && <Alert severity="error">{error}</Alert>}
+
+                        {/* ======= Riesgo nuevo: se registra en el período pero no cuenta en sus métricas ni seguimiento ======= */}
+                        <Stack spacing={1}>
+                            <FormControlLabel
+                                control={
+                                    <Switch
+                                        checked={form.ES_NUEVO}
+                                        onChange={(e) => setForm(s => ({ ...s, ES_NUEVO: e.target.checked }))}
+                                        disabled={tieneRiesgoAnterior && !form.ES_NUEVO}
+                                    />
+                                }
+                                label="Riesgo identificado en el período (no forma parte de la evaluación)"
+                            />
+                            {tieneRiesgoAnterior && !form.ES_NUEVO && (
+                                <Typography variant="caption" color="text.secondary">
+                                    Este riesgo continúa de un riesgo del año anterior. Para marcarlo como identificado en el período, primero quite la relación en Continuidad.
+                                </Typography>
+                            )}
+                            {isEdit && form.ES_NUEVO !== (Number(initialData?.ES_NUEVO) === 1) && (
+                                <Alert severity="warning">
+                                    Al cambiar esta opción, el riesgo volverá a revisión del supervisor y del superior en todas las matrices.
+                                </Alert>
+                            )}
+                        </Stack>
 
                         {/* ======= Viceministerio / Órgano (tomados de cats) ======= */}
                         <Grid container spacing={2}>

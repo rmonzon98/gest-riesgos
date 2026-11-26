@@ -428,7 +428,7 @@ export default function Anexo2Sup() {
                                                 <TableCell style={{ fontWeight: 700 }}>Nombre Superior</TableCell>
                                                 <TableCell style={{ fontWeight: 700 }}>Comentario</TableCell>
                                                 <TableCell style={{ fontWeight: 700 }}>Estado</TableCell>
-                                                <TableCell style={{ fontWeight: 700 }}>Nombre Supervisor</TableCell>
+                                                <TableCell style={{ fontWeight: 700 }}>Nombre Consolidador</TableCell>
                                                 <TableCell style={{ fontWeight: 700 }}>Comentario</TableCell>
                                             </TableRow>
                                         </TableHead>

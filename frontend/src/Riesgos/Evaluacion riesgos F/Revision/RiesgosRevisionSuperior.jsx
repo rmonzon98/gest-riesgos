@@ -30,6 +30,7 @@ import {
 import ExpandMoreRounded from '@mui/icons-material/ExpandMoreRounded';
 import ExpandLessRounded from '@mui/icons-material/ExpandLessRounded';
 import { fmt } from 'funciones/Fechas';
+import { EtiquetaTipoOrigen } from 'funciones/OrigenRiesgo';
 
 const MAX_RAZON = 250;
 
@@ -191,6 +192,10 @@ function RiesgosRevisionSuperior({ tipo = '', titulo = 'Revisión superior de ri
 
             const arr = Array.isArray(data?.riesgos) ? data.riesgos : [];
             const props = Array.isArray(data?.propiedades) ? data.propiedades : [];
+
+            // Orden por año de origen (más antiguo primero); el sort es estable y conserva el orden del backend (estado, REF)
+            const anio = (r) => Number(r.ANIO_ORIGEN) || Number.MAX_SAFE_INTEGER;
+            arr.sort((a, b) => anio(a) - anio(b));
 
             setRiesgos(arr);
             setPropiedades(props);
@@ -441,6 +446,13 @@ function RiesgosRevisionSuperior({ tipo = '', titulo = 'Revisión superior de ri
                                                 <Stack direction="row" alignItems="center" justifyContent="space-between">
                                                     <Stack direction="row" alignItems="center" spacing={2}>
 
+                                                        {/* Año de origen */}
+                                                        <Tooltip title="Año de origen">
+                                                            <Typography variant="subtitle2" sx={{ fontWeight: 700, color: 'text.secondary' }}>
+                                                                {r.ANIO_ORIGEN ?? '—'}
+                                                            </Typography>
+                                                        </Tooltip>
+
                                                         {/* Ref */}
                                                         <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
                                                             {safeGet(r, 'Ref.') || '—'}
@@ -454,21 +466,25 @@ function RiesgosRevisionSuperior({ tipo = '', titulo = 'Revisión superior de ri
                                                             <Chip size="small" color={ss.color} label={ss.label} />
                                                         </Stack>
 
-                                                        {/* Estado Supervisor */}
+                                                        {/* Estado Consolidador */}
                                                         <Stack direction="row" alignItems="center" spacing={1}>
                                                             <Typography variant="body2">
-                                                                Estado Supervisor
+                                                                Estado Consolidador
                                                             </Typography>
                                                             <Chip size="small" color={si.color} label={si.label} />
                                                         </Stack>
 
                                                     </Stack>
 
-                                                    <Tooltip title={expanded ? 'Ocultar detalles' : 'Ver detalles'}>
-                                                        <IconButton size="small">
-                                                            {expanded ? <ExpandLessRounded fontSize="small" /> : <ExpandMoreRounded fontSize="small" />}
-                                                        </IconButton>
-                                                    </Tooltip>
+                                                    {/* Tipo de origen a la derecha, junto al botón de detalle */}
+                                                    <Stack direction="row" alignItems="center" spacing={1}>
+                                                        <EtiquetaTipoOrigen riesgo={r} />
+                                                        <Tooltip title={expanded ? 'Ocultar detalles' : 'Ver detalles'}>
+                                                            <IconButton size="small">
+                                                                {expanded ? <ExpandLessRounded fontSize="small" /> : <ExpandMoreRounded fontSize="small" />}
+                                                            </IconButton>
+                                                        </Tooltip>
+                                                    </Stack>
                                                 </Stack>
 
                                                 <Collapse in={expanded} timeout="auto" unmountOnExit>

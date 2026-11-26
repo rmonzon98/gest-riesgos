@@ -4,7 +4,7 @@
  *
  * Permite:
  * - Consultar todos los riesgos del período a nivel institucional.
- * - Filtrar por dirección y por bandera “Solo General”.
+ * - Filtrar por dirección y por banderas “Solo General” y “Solo nuevos”.
  * - Marcar qué riesgos se muestran en el reporte institucional general.
  * - Visualizar detalle completo del riesgo, incluyendo propiedades extra (ME, MC, MCE).
  *
@@ -23,6 +23,7 @@ import {
 import ExpandMoreRounded from '@mui/icons-material/ExpandMoreRounded';
 import ExpandLessRounded from '@mui/icons-material/ExpandLessRounded';
 import { fmt } from 'funciones/Fechas';
+import { EtiquetaTipoOrigen } from 'funciones/OrigenRiesgo';
 
 
 /* ======= Helpers ======= */
@@ -150,6 +151,9 @@ export default function RiesgosInstitucional() {
     // Filtro “Solo General”
     const [soloGeneral, setSoloGeneral] = useState(false);
 
+    // Filtro “Solo nuevos” (riesgos con ES_NUEVO = 1)
+    const [soloNuevos, setSoloNuevos] = useState(false);
+
     // Expand/collapse por fila
     const [expandIds, setExpandIds] = useState(new Set());
 
@@ -258,7 +262,8 @@ export default function RiesgosInstitucional() {
         const dirNombre = String(r.DIRECCION_NOMBRE ?? r.Dirección ?? '—');
         const pasaDireccion = (direccionFiltro === 'TODAS') ? true : dirNombre === String(direccionFiltro);
         const pasaGeneral = soloGeneral ? isRowGeneral(r) : true;
-        return pasaDireccion && pasaGeneral;
+        const pasaNuevos = soloNuevos ? Number(r.ES_NUEVO) === 1 : true;
+        return pasaDireccion && pasaGeneral && pasaNuevos;
     });
 
     const grupos = (() => {
@@ -326,6 +331,17 @@ export default function RiesgosInstitucional() {
                                 />
                             }
                             label="Solo General"
+                        />
+
+                        <FormControlLabel
+                            control={
+                                <Switch
+                                    checked={soloNuevos}
+                                    onChange={(e) => setSoloNuevos(e.target.checked)}
+                                    disabled={!periodo}
+                                />
+                            }
+                            label="Solo identificados en el período"
                         />
                     </Stack>
 
@@ -396,11 +412,18 @@ export default function RiesgosInstitucional() {
 
                                                     </Stack>
 
-                                                    <Tooltip title={expanded ? 'Ocultar detalles' : 'Ver detalles'}>
-                                                        <IconButton size="small">
-                                                            {expanded ? <ExpandLessRounded fontSize="small" /> : <ExpandMoreRounded fontSize="small" />}
-                                                        </IconButton>
-                                                    </Tooltip>
+                                                    {/* Tipo de origen a la derecha, junto al botón de detalle (igual que en las revisiones) */}
+                                                    <Stack direction="row" alignItems="center" spacing={1}>
+                                                        <EtiquetaTipoOrigen
+                                                            riesgo={r}
+                                                            tooltip="Riesgo identificado durante el período: en el informe anual aparece solo en las secciones de riesgos identificados en el período"
+                                                        />
+                                                        <Tooltip title={expanded ? 'Ocultar detalles' : 'Ver detalles'}>
+                                                            <IconButton size="small">
+                                                                {expanded ? <ExpandLessRounded fontSize="small" /> : <ExpandMoreRounded fontSize="small" />}
+                                                            </IconButton>
+                                                        </Tooltip>
+                                                    </Stack>
                                                 </Stack>
 
                                                 <Collapse in={expanded} timeout="auto" unmountOnExit>

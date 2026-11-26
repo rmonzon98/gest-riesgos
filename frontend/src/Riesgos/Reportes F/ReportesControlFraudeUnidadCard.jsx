@@ -30,6 +30,7 @@ import { GenerarReporteAnexo2DesdeUltimo } from './Matrices/ReportesAnexo2';
 
 import { saveAs } from 'file-saver';
 import * as ExcelJS from 'exceljs';
+import { formatearHojaReporte } from 'funciones/ExcelFormato';
 import {
     Document,
     Packer,
@@ -445,34 +446,32 @@ function ReportesControlFraudeUnidadCard({ unidades = [], periodos = [], logoBas
             const resumen = wb.addWorksheet('Resumen_matrices');
 
             const headerResumen = ['Matriz', 'Título', 'Obligatorio', 'Observaciones'];
-            resumen.addRow(headerResumen);
-            const headerRowResumen = resumen.getRow(1);
-            headerRowResumen.font = { bold: true };
-            headerRowResumen.alignment = { horizontal: 'center' };
 
-            matrices.forEach((m) => {
-                resumen.addRow([
+            resumen.mergeCells(1, 1, 1, headerResumen.length);
+            resumen.getCell('A1').value = 'Resumen de matrices';
+            resumen.mergeCells(2, 1, 2, headerResumen.length);
+            resumen.getCell('A2').value = `Período: ${periodoTexto} | Dirección: ${unidadTexto}`;
+
+            const headerRowResumenIndex = 4;
+            resumen.getRow(headerRowResumenIndex).values = headerResumen;
+
+            matrices.forEach((m, idx) => {
+                resumen.getRow(headerRowResumenIndex + 1 + idx).values = [
                     m.matriz,
                     m.titulo || '',
                     m.obligatorio ? 'Sí' : 'No',
                     m.observaciones || '',
-                ]);
+                ];
             });
 
-            // Auto ancho para resumen
-            for (let i = 1; i <= headerResumen.length; i++) {
-                let max = headerResumen[i - 1].length;
-                resumen.eachRow((row) => {
-                    const cell = row.getCell(i);
-                    let val = cell.value;
-                    if (val && typeof val === 'object' && 'text' in val) {
-                        val = val.text;
-                    }
-                    const str = val == null ? '' : String(val);
-                    if (str.length > max) max = str.length;
-                });
-                resumen.getColumn(i).width = Math.min(Math.max(max + 2, 10), 60);
-            }
+            formatearHojaReporte(resumen, {
+                filaTitulo: 1,
+                filaSubtitulo: 2,
+                filaEncabezado: headerRowResumenIndex,
+                ultimaFilaDatos: headerRowResumenIndex + matrices.length,
+                ultimaColumna: headerResumen.length,
+                tituloImpresion: `Resumen de matrices — ${periodoTexto}`,
+            });
 
             /* ===== Hoja por matriz ===== */
             matrices.forEach((m) => {
@@ -487,19 +486,11 @@ function ReportesControlFraudeUnidadCard({ unidades = [], periodos = [], logoBas
                     headers.length || (Array.isArray(filas[0]) ? filas[0].length : 1) || 1;
 
                 // Fila 1: título de la matriz
-                const rowTitulo = ws.addRow([`Matriz ${m.matriz} - ${m.titulo || ''}`]);
-                rowTitulo.font = { bold: true, size: 14 };
-                rowTitulo.alignment = { horizontal: 'center' };
-                if (colCount > 1) {
-                    ws.mergeCells(1, 1, 1, colCount);
-                }
+                const tituloMatriz = `Matriz ${m.matriz} - ${m.titulo || ''}`;
+                ws.addRow([tituloMatriz]);
 
                 // Fila 2: período y unidad
-                const rowInfo = ws.addRow([`Período: ${periodoTexto} | Dirección: ${unidadTexto}`]);
-                rowInfo.alignment = { horizontal: 'center' };
-                if (colCount > 1) {
-                    ws.mergeCells(2, 1, 2, colCount);
-                }
+                ws.addRow([`Período: ${periodoTexto} | Dirección: ${unidadTexto}`]);
 
                 // Fila 3: en blanco
                 ws.addRow([]);
@@ -512,32 +503,21 @@ function ReportesControlFraudeUnidadCard({ unidades = [], periodos = [], logoBas
                     const genericos = Array.from({ length: colCount }, (_, i) => `Col ${i + 1}`);
                     ws.getRow(headerRowIndex).values = genericos;
                 }
-                const headerRow = ws.getRow(headerRowIndex);
-                headerRow.font = { bold: true };
-                headerRow.alignment = { horizontal: 'center' };
 
                 // Filas de datos a partir de la fila 5
                 filas.forEach((fila) => {
                     ws.addRow(Array.isArray(fila) ? fila : []);
                 });
 
-                // Auto ancho de columnas
-                for (let i = 1; i <= colCount; i++) {
-                    let max = 10;
-                    ws.eachRow((row) => {
-                        const cell = row.getCell(i);
-                        let val = cell.value;
-                        if (val && typeof val === 'object' && 'text' in val) {
-                            val = val.text;
-                        }
-                        const str = val == null ? '' : String(val);
-                        if (str.length > max) max = str.length;
-                    });
-                    ws.getColumn(i).width = Math.min(Math.max(max + 2, 10), 80);
-                }
-
-                // Congelar encabezado (hasta la fila de headers)
-                ws.views = [{ state: 'frozen', ySplit: headerRowIndex }];
+                // Formato institucional + impresión en oficio horizontal
+                formatearHojaReporte(ws, {
+                    filaTitulo: 1,
+                    filaSubtitulo: 2,
+                    filaEncabezado: headerRowIndex,
+                    ultimaFilaDatos: headerRowIndex + filas.length,
+                    ultimaColumna: colCount,
+                    tituloImpresion: `${tituloMatriz} — ${unidadTexto}`,
+                });
             });
 
             const buffer = await wb.xlsx.writeBuffer();

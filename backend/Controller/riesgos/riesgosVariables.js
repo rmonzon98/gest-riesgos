@@ -10,6 +10,60 @@
 const pool = require('../../bd/mySQLConnection');
 const { param } = require('../../Routes/riesgos/riesgosVariables');
 
+// Normaliza el flag ES_NUEVO recibido del front (true/'1'/1 → 1, false/'0'/0 → 0).
+// Devuelve null cuando no viene, para conservar el valor actual en actualizaciones.
+function normalizarEsNuevo(valor) {
+    if (valor === undefined || valor === null || valor === '') return null;
+    return (valor === true || valor === 'true' || Number(valor) === 1) ? 1 : 0;
+}
+
+// Año de origen de cada riesgo de una unidad/período: recorre la cadena de continuidad
+// (PERIODO_ANTERIOR) hacia atrás y toma el período más antiguo. Sin relación anterior,
+// el origen es el propio período. Devuelve Map<CODIGO_RIESGO, año>.
+async function obtenerAniosOrigen(codigo_cia, codigo_entidad, codigo_periodo) {
+    const [rows] = await pool.execute(
+        `
+        WITH RECURSIVE cadena AS (
+            SELECT
+                r.CODIGO_CIA,
+                r.CODIGO_ENTIDAD,
+                r.CODIGO_RIESGO AS RIESGO_SEMILLA,
+                r.CODIGO_PERIODO,
+                r.PERIODO_ANTERIOR
+            FROM gestion_riesgos.riesgos_riesgo_extendido r
+            WHERE r.CODIGO_CIA = ?
+              AND r.CODIGO_ENTIDAD = ?
+              AND r.CODIGO_PERIODO = ?
+
+            UNION ALL
+
+            SELECT
+                c.CODIGO_CIA,
+                c.CODIGO_ENTIDAD,
+                c.RIESGO_SEMILLA,
+                p.CODIGO_PERIODO,
+                p.PERIODO_ANTERIOR
+            FROM cadena c
+            JOIN gestion_riesgos.riesgos_riesgo_extendido p
+              ON p.CODIGO_CIA = c.CODIGO_CIA
+             AND p.CODIGO_ENTIDAD = c.CODIGO_ENTIDAD
+             AND p.CODIGO_PERIODO = c.CODIGO_PERIODO - 1
+             AND p.CODIGO_RIESGO = c.PERIODO_ANTERIOR
+            WHERE c.PERIODO_ANTERIOR IS NOT NULL
+              AND COALESCE(p.ELIMINADO, 0) != 1
+        )
+        SELECT RIESGO_SEMILLA AS CODIGO_RIESGO, MIN(CODIGO_PERIODO) AS ANIO_ORIGEN
+        FROM cadena
+        GROUP BY RIESGO_SEMILLA
+        `,
+        [codigo_cia, codigo_entidad, codigo_periodo]
+    );
+    return new Map(rows.map(r => [Number(r.CODIGO_RIESGO), Number(r.ANIO_ORIGEN)]));
+}
+
+const agregarAnioOrigen = (riesgos, anios, periodo) =>
+    riesgos.map(r => ({ ...r, ANIO_ORIGEN: anios.get(Number(r.CODIGO_RIESGO)) ?? Number(periodo) }));
+
 // INFORMACIÓN GENERAL
 async function obtenerPeriodosEs(codigo_cia) {
     const conn = await pool.getConnection();
@@ -914,8 +968,9 @@ exports.obtenerRiesgos = async (req, res) => {
             rr.ESTADO_${tipo} AS ESTADO,
             rr.COMENTARIO_SUPERIOR_${tipo} AS COMENTARIO_SUPERIOR,
             rr.ESTADO_${tipo}_SUPERIOR AS ESTADO_SUPERIOR,
-            ELIMINADO
-        FROM 
+            ELIMINADO,
+            rr.ES_NUEVO
+        FROM
             gestion_riesgos.riesgos_riesgo_extendido rr
         WHERE 
             rr.CODIGO_CIA = ?
@@ -928,9 +983,10 @@ exports.obtenerRiesgos = async (req, res) => {
             Number(codigo_entidad),
             periodo,
         ]);
+        const anios = await obtenerAniosOrigen(codigo_cia, Number(codigo_entidad), periodo);
 
         return res.json({
-            riesgos: riesgosRows,
+            riesgos: agregarAnioOrigen(riesgosRows, anios, periodo),
         });
     } catch (err) {
         console.error("obtenerRiesgos:", err);
@@ -975,7 +1031,8 @@ exports.crearRiesgo = async (req, res) => {
         objetivoCodigo,
         extras,
         organoCodigo,
-        viceministerioCodigo
+        viceministerioCodigo,
+        esNuevo
     } = req.body || {};
 
     const codigo_cia = req.codigo_cia;
@@ -1024,16 +1081,16 @@ exports.crearRiesgo = async (req, res) => {
                 FECHA_CREACION, SEVERIDAD_NARRACION, PROBABILIDAD_AJUSTADA, SEVERIDAD_AJUSTADA,
                 RIESGO_RESIDUAL, RIESGO_INHERENTE, EVENTO, CONTROL, 
                 MONITOREO, CODIGO_FRECUENCIA, RESPONSABLE, EXTRAS_ME,
-                ORGANO, VICEMINISTERIO
+                ORGANO, VICEMINISTERIO, ES_NUEVO
             ) VALUES (
                 ?, ?, ?, ?,
-                ?, ?, ?, ?, 
-                ?, ?, ?, ?, 
-                ?, ?, ?, ?, 
-                CURRENT_TIMESTAMP, ?, ?, ?,
-                ?, ?, ?, ?, 
                 ?, ?, ?, ?,
-                ?, ?
+                ?, ?, ?, ?,
+                ?, ?, ?, ?,
+                CURRENT_TIMESTAMP, ?, ?, ?,
+                ?, ?, ?, ?,
+                ?, ?, ?, ?,
+                ?, ?, ?
             )
             `;
         await conn.execute(sql, [
@@ -1044,7 +1101,7 @@ exports.crearRiesgo = async (req, res) => {
             severidadNarracion || null, Number(probabilidadAjustada) || null, Number(severidadAjustada) || null,
             Number(riesgoResidual) || null, Number(riesgoInherente) || null, evento || null, control || null,
             monitoreo || null, pFreq || null, responsable || null, extras ? JSON.stringify(extras) : null,
-            organoCodigo || null, viceministerioCodigo || null
+            organoCodigo || null, viceministerioCodigo || null, normalizarEsNuevo(esNuevo) ?? 0
         ]);
 
         await conn.commit();
@@ -1056,7 +1113,8 @@ exports.crearRiesgo = async (req, res) => {
                 codigo_entidad: Number(codigo_entidad),
                 codigoPeriodo: pPeriodo,
                 codigoArea: pArea,
-                codigoRiesgo: codigo_riesgo
+                codigoRiesgo: codigo_riesgo,
+                esNuevo: normalizarEsNuevo(esNuevo) ?? 0
             }
         });
     } catch (err) {
@@ -1131,7 +1189,8 @@ exports.obtenerRiesgoPorId = async (req, res) => {
             EXTRAS_${tipo} AS EXTRAS,
             VICEMINISTERIO,
             ORGANO,
-            PERIODO_ANTERIOR
+            PERIODO_ANTERIOR,
+            ES_NUEVO
         FROM gestion_riesgos.riesgos_riesgo_extendido
         WHERE CODIGO_CIA = ?
             AND CODIGO_ENTIDAD = ?
@@ -1197,6 +1256,7 @@ exports.obtenerRiesgoPorId = async (req, res) => {
             VICEMINISTERIO: r.VICEMINISTERIO ?? '',
             ORGANO: r.ORGANO ?? '',
             PERIODO_ANTERIOR: r.PERIODO_ANTERIOR ?? '',
+            ES_NUEVO: Number(r.ES_NUEVO) === 1 ? 1 : 0,
 
             EXTRAS_JSON: extrasObj,
             PROP_EXTRA_JSON: extrasObj
@@ -1423,11 +1483,13 @@ exports.actualizarRiesgoMe = async (req, res) => {
 
         tipo,
         organoCodigo,
-        viceministerioCodigo
+        viceministerioCodigo,
+        esNuevo
     } = req.body || {};
 
     const pPeriodo = Number(codigoPeriodo);
     const pRiesgo = Number(codigoRiesgo);
+    const pEsNuevo = normalizarEsNuevo(esNuevo);
     const pArea = Number(areaCodigo);
     const pObj = objetivoCodigo ?? null;
     const pProb = Number(probabilidad);
@@ -1459,6 +1521,34 @@ exports.actualizarRiesgoMe = async (req, res) => {
     try {
         conn = await pool.getConnection();
 
+        // Si cambia ES_NUEVO, el riesgo vuelve a revisión en los tres tipos (ME, MC, MCE);
+        // si no, solo se reinicia el estado del tipo que se está editando.
+        let cambiaEsNuevo = false;
+        if (pEsNuevo !== null) {
+            const [[actual]] = await conn.execute(
+                `
+            SELECT ES_NUEVO, PERIODO_ANTERIOR
+            FROM gestion_riesgos.riesgos_riesgo_extendido
+            WHERE CODIGO_CIA = ? AND CODIGO_ENTIDAD = ? AND CODIGO_PERIODO = ? AND CODIGO_RIESGO = ?
+            LIMIT 1
+                `,
+                [codigo_cia, Number(codigo_entidad), pPeriodo, pRiesgo]
+            );
+            if (!actual) {
+                return res.status(404).json({ error: 'Riesgo no encontrado con los identificadores proporcionados.' });
+            }
+            // Un riesgo que continúa de un año anterior no puede marcarse como identificado en el período
+            if (pEsNuevo === 1 && actual.PERIODO_ANTERIOR != null) {
+                return res.status(409).json({
+                    error: 'Este riesgo está relacionado con un riesgo del año anterior. Quite la relación en Continuidad antes de marcarlo como identificado en el período.'
+                });
+            }
+            cambiaEsNuevo = Number(actual.ES_NUEVO) !== pEsNuevo;
+        }
+        const reinicioEstados = (cambiaEsNuevo ? ['ME', 'MC', 'MCE'] : [tipo])
+            .map(t => `ESTADO_${t} = 0, ESTADO_${t}_SUPERIOR = 0`)
+            .join(', ');
+
         const sql = `
       UPDATE gestion_riesgos.riesgos_riesgo_extendido
       SET
@@ -1468,7 +1558,8 @@ exports.actualizarRiesgoMe = async (req, res) => {
         SEVERIDAD_AJUSTADA   = ?, RIESGO_INHERENTE     = ?, RIESGO_RESIDUAL      = ?, EVENTO               = ?,
         CONTROL              = ?, MONITOREO            = ?, CODIGO_FRECUENCIA    = ?, RESPONSABLE          = ?,
         SEVERIDAD_NARRACION  = ?, EXTRAS_${tipo}               = ?, USUARIO_MODIFICACION = ?, FECHA_MODIFICACION   = CURRENT_TIMESTAMP,
-        ESTADO_${tipo} = 0, ESTADO_${tipo}_SUPERIOR = 0,       VICEMINISTERIO       = ?,         ORGANO = ?
+        ${reinicioEstados},       VICEMINISTERIO       = ?,         ORGANO = ?,
+        ES_NUEVO             = COALESCE(?, ES_NUEVO)
       WHERE
         CODIGO_CIA     = ? AND CODIGO_ENTIDAD = ? AND CODIGO_PERIODO = ? AND CODIGO_RIESGO  = ?
       LIMIT 1
@@ -1486,6 +1577,7 @@ exports.actualizarRiesgoMe = async (req, res) => {
             control || null, monitoreo || null, pFreq || null, responsable || null,
             severidadNarracion || null, extrasStr || null, usuario_modificacion,
             viceministerioCodigo || null, organoCodigo || null,
+            pEsNuevo,
 
             codigo_cia, Number(codigo_entidad), pPeriodo, pRiesgo
         ];
@@ -1707,7 +1799,8 @@ exports.obtenerRiesgosUnidadPeriodo = async (req, res) => {
                 ELSE JSON_OBJECT('EXTRAS_${tipo}', JSON_ARRAY())
             END AS EXTRAS,
             rrx.ESTADO_${tipo} AS ESTADO_SUPERVISOR,
-            rrx.ESTADO_${tipo}_SUPERIOR AS ESTADO_SUPERIOR
+            rrx.ESTADO_${tipo}_SUPERIOR AS ESTADO_SUPERIOR,
+            rrx.ES_NUEVO
         FROM gestion_riesgos.riesgos_riesgo_extendido rrx
         -- Área del riesgo
         LEFT JOIN gestion_riesgos.riesgos_area ra
@@ -1749,8 +1842,9 @@ exports.obtenerRiesgosUnidadPeriodo = async (req, res) => {
     `;
         const params = [cia, entidad, periodoNum];
         const [rows] = await pool.execute(sql, params);
+        const anios = await obtenerAniosOrigen(cia, entidad, periodoNum);
 
-        return res.status(200).json({ riesgos: rows, propiedades });
+        return res.status(200).json({ riesgos: agregarAnioOrigen(rows, anios, periodoNum), propiedades });
     } catch (err) {
         console.error('❌ obtenerRiesgosUnidadPeriodo:', err);
         return res.status(500).json({ ok: false, msg: 'Error interno al obtener riesgos por unidad/período.' });
@@ -1840,7 +1934,8 @@ exports.obtenerRiesgosUnidadPeriodoSuperior = async (req, res) => {
             rrx.ESTADO_${tipo} AS ESTADO_SUPERVISOR,
             rrx.ESTADO_${tipo}_SUPERIOR AS ESTADO_SUPERIOR,
             rrx.COMENTARIO_SUPERVISOR_${tipo}            AS 'Comentario supervisor',
-            rrx.COMENTARIO_SUPERIOR_${tipo}              AS 'Comentario superior'
+            rrx.COMENTARIO_SUPERIOR_${tipo}              AS 'Comentario superior',
+            rrx.ES_NUEVO
         FROM gestion_riesgos.riesgos_riesgo_extendido rrx
         -- Área del riesgo
         LEFT JOIN gestion_riesgos.riesgos_area ra
@@ -1882,8 +1977,9 @@ exports.obtenerRiesgosUnidadPeriodoSuperior = async (req, res) => {
     `;
         const params = [cia, entidad, periodoNum];
         const [rows] = await pool.execute(sql, params);
+        const anios = await obtenerAniosOrigen(cia, entidad, periodoNum);
 
-        return res.status(200).json({ riesgos: rows, propiedades });
+        return res.status(200).json({ riesgos: agregarAnioOrigen(rows, anios, periodoNum), propiedades });
     } catch (err) {
         console.error('❌ obtenerRiesgosUnidadPeriodo:', err);
         return res.status(500).json({ ok: false, msg: 'Error interno al obtener riesgos por unidad/período.' });
@@ -2018,6 +2114,8 @@ exports.comentarRiesgoSuperior = async (req, res) => {
 exports.obtenerDetalleRiesgos = async (req, res, next) => {
     const codigo_cia = req.codigo_cia
     const { periodo } = req.query
+    // Seguimiento no incluye riesgos nuevos; Continuidad/Relacionar envían incluir_nuevos=1 para poder arrastrarlos
+    const incluirNuevos = normalizarEsNuevo(req.query.incluir_nuevos) === 1
     let sql = `
     SELECT
         rrx.CODIGO_ENTIDAD,
@@ -2054,7 +2152,8 @@ exports.obtenerDetalleRiesgos = async (req, res, next) => {
         rrx.RESPONSABLE                              AS 'Responsable',
         rrx.codigo_periodo                           AS 'Periodo',
         PERIODO_ANTERIOR                             AS 'Riesgo año pasado',
-        CASE 
+        rrx.ES_NUEVO,
+        CASE
             WHEN JSON_VALID(rrx.EXTRAS_ME) THEN JSON_EXTRACT(rrx.EXTRAS_ME, '$')
             ELSE JSON_OBJECT('EXTRAS_ME', JSON_ARRAY())
         END AS EXTRAS_ME,
@@ -2106,13 +2205,15 @@ exports.obtenerDetalleRiesgos = async (req, res, next) => {
         AND rrx.CODIGO_PERIODO = ?
         AND rrx.codigo_entidad = ?
         AND eliminado != 1
+        ${incluirNuevos ? '' : 'AND COALESCE(rrx.ES_NUEVO, 0) = 0'}
     ORDER BY rrx.REF ASC`
     let parametros = [codigo_cia, Number(periodo), req.codigo_entidad]
     const conn = await pool.getConnection();
     try {
         await conn.query("SET SESSION lc_time_names = 'es_ES'");
         const [rows] = await conn.execute(sql, parametros);
-        res.json({ valores: rows })
+        const anios = await obtenerAniosOrigen(codigo_cia, req.codigo_entidad, Number(periodo));
+        res.json({ valores: agregarAnioOrigen(rows, anios, periodo) })
     } finally {
         conn.release();
     }
@@ -2189,7 +2290,8 @@ exports.obtenerRiesgosPeriodo = async (req, res) => {
             END                                           AS 'EXTRAS_MCE',
 
             rrx.ESTADO_MCE                                AS 'ESTADO_MCE',
-            rrx.MOSTRAR_GENERAL
+            rrx.MOSTRAR_GENERAL,
+            rrx.ES_NUEVO
 
         FROM gestion_riesgos.riesgos_riesgo_extendido rrx
 

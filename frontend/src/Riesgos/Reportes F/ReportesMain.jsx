@@ -8,7 +8,7 @@
  * @author Equipo de Desarrollo
  */
 
-import { Box, Stack, Typography } from '@mui/material';
+import { Box, Chip, Stack, Typography } from '@mui/material';
 import ReportesRiesgosUnidadCard from './ReportesRiesgosUnidadCard';
 import ReportesInstitucionalesCard from './ReportesInstitucionalesCard';
 import apiClient from 'api/apiClient';
@@ -86,9 +86,13 @@ function ReportesMain() {
   return (
     <Box p={1}>
       <Stack spacing={2} direction="column" mt={2}>
-        <Typography variant="h5" sx={{ fontWeight: 700, mb: 2 }}>
-          Reportes
-        </Typography>
+        <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}>
+          <Typography variant="h5" sx={{ fontWeight: 700 }}>
+            Reportes
+          </Typography>
+          {/* TODO: retirar cuando se validen los cambios de reportes traídos de MINECO (PR #11 SIGERI-2) */}
+          <Chip label="PENDIENTE DE REVISIÓN" color="warning" size="small" sx={{ fontWeight: 700 }} />
+        </Stack>
 
         <ReportesControlFraudeUnidadCard unidades={unidades} periodos={periodos} tipos={tipos} logoBase64={logo} />
         <ReportesRiesgosUnidadCard unidades={unidades} periodos={periodos} tipos={tipos} logoBase64={logo} />

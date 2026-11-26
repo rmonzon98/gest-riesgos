@@ -21,6 +21,7 @@ import { GenerarReporteAnexo1 } from '../Reportes F/Matrices/ReportesAnexo1';
 import { safefmt as fmt } from "funciones/Fechas";
 import Anexo1ExcelIO from './Anexo1ExcelIO';
 import CargaArchivos from 'Riesgos/Carga Documentos/CargaArchivos';
+import ReferenciaCelda, { codigoNorma } from './ReferenciaCelda';
 
 /**
  * Formulario de captura/edición del Anexo 1 para la unidad del usuario.
@@ -479,7 +480,7 @@ function Anexo1Form() {
                                             <TableCell style={{ fontWeight: 700 }}>Nombre Superior</TableCell>
                                             <TableCell style={{ fontWeight: 700 }}>Comentario</TableCell>
                                             <TableCell style={{ fontWeight: 700 }}>Estado</TableCell>
-                                            <TableCell style={{ fontWeight: 700 }}>Nombre Supervisor</TableCell>
+                                            <TableCell style={{ fontWeight: 700 }}>Nombre Consolidador</TableCell>
                                             <TableCell style={{ fontWeight: 700 }}>Comentario</TableCell>
                                         </TableRow>
                                     </TableHead>
@@ -665,6 +666,10 @@ function Anexo1Form() {
                                                             (m.filas ?? m.FILAS).map((fila, rIdx) => {
                                                                 const arr = Array.isArray(fila) ? fila : [];
                                                                 const padded = arr.length < len ? [...arr, ...Array(len - arr.length).fill(null)] : arr.slice(0, len);
+                                                                // Posición de la fila entre las que comparten código de norma (p. ej. varias "2.3")
+                                                                const codigo = codigoNorma(arr[0]);
+                                                                const ocurrencia = (m.filas ?? m.FILAS).slice(0, rIdx)
+                                                                    .filter((f) => codigoNorma(Array.isArray(f) ? f[0] : null) === codigo).length;
                                                                 return (
                                                                     <TableRow key={rIdx}>
                                                                         {padded.map((celda, cIdx) => {
@@ -678,10 +683,19 @@ function Anexo1Form() {
                                                                             const isNull = celda === null || celda === undefined;
                                                                             return (
                                                                                 <TableCell key={cIdx} sx={{ minWidth: 220 }}>
+                                                                                    <ReferenciaCelda
+                                                                                        codigo={codigo}
+                                                                                        ocurrencia={ocurrencia}
+                                                                                        columna={cIdx - 1}
+                                                                                        titulo={`${arr[0] ?? ''} — ${headersM[cIdx] ?? ''}`}
+                                                                                        valor={isNull ? '' : celda}
+                                                                                        onAplicar={(texto) => handleCellChange(rIdx, cIdx, texto)}
+                                                                                    />
                                                                                     <TextField
                                                                                         fullWidth
                                                                                         multiline
-                                                                                        rows={isMobile ? 2 : 3}
+                                                                                        minRows={isMobile ? 2 : 3}
+                                                                                        maxRows={6}
                                                                                         size="small"
                                                                                         value={isNull ? '' : celda}
                                                                                         placeholder="Escriba aquí"

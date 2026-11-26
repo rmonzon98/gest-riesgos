@@ -7,9 +7,26 @@ import {
 import EditRounded from "@mui/icons-material/EditRounded";
 import DeleteRounded from "@mui/icons-material/DeleteRounded";
 import RestoreRounded from "@mui/icons-material/RestoreRounded";
+import OrigenRiesgo, { ORIGEN, ORIGEN_LABEL, tipoOrigen } from "funciones/OrigenRiesgo";
 
 const normalize = (str = "") =>
     str.toString().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+
+// Estado de revisi\u00f3n (0 pendiente, 1 aprobado/recibido, 2 rechazado/revisi\u00f3n) con su comentario debajo
+function EstadoConComentario({ estado, labels, comentario }) {
+    const color = estado === 1 ? "success" : estado === 2 ? "error" : "warning";
+    const label = labels[estado === 1 || estado === 2 ? estado : 0];
+    return (
+        <Stack spacing={0.5} alignItems="flex-start">
+            <Chip size="small" color={color} label={label} />
+            {comentario && (
+                <Typography variant="caption" color="text.secondary">
+                    {comentario}
+                </Typography>
+            )}
+        </Stack>
+    );
+}
 
 export default function TablaRiesgosBasica({ rows = [], onEdit, onDelete, onRestore }) {
     const [filters, setFilters] = useState({
@@ -18,7 +35,8 @@ export default function TablaRiesgosBasica({ rows = [], onEdit, onDelete, onRest
         comentario: "",
         estado: "",
         estadoSuperior: "",
-        comentarioSuperior: ""
+        comentarioSuperior: "",
+        origen: "" // "" todos | ORIGEN.SEGUIMIENTO | ORIGEN.EN_PERIODO
     });
 
     const filtered = useMemo(() => {
@@ -29,7 +47,14 @@ export default function TablaRiesgosBasica({ rows = [], onEdit, onDelete, onRest
         const fEstadoSuperior = filters.estadoSuperior;
         const fComentarioSuperior = normalize(filters.comentarioSuperior);
 
-        return (Array.isArray(rows) ? rows : []).filter((r) => {
+        // Orden: por año de origen (más antiguo primero); los eliminados siempre al final.
+        // El sort es estable, así que dentro del mismo año se conserva el orden del backend.
+        const anio = (r) => Number(r.ANIO_ORIGEN) || Number.MAX_SAFE_INTEGER;
+        const ordenados = [...(Array.isArray(rows) ? rows : [])].sort(
+            (a, b) => (Number(!!a.ELIMINADO) - Number(!!b.ELIMINADO)) || (anio(a) - anio(b))
+        );
+
+        return ordenados.filter((r) => {
             const ref = normalize(r.REF ?? "");
             const desc = normalize(r.DESCRIPCION ?? "");
             const com = normalize(r.COMENTARIO_SUPERVISOR ?? "");
@@ -43,6 +68,7 @@ export default function TablaRiesgosBasica({ rows = [], onEdit, onDelete, onRest
                 fEstadoSuperior === "" || Number(r.ESTADO_SUPERIOR) === Number(fEstadoSuperior);
             const okComentarioSuperior =
                 !fComentarioSuperior || comSuperior.includes(fComentarioSuperior);
+            const okOrigen = filters.origen === "" || tipoOrigen(r) === filters.origen;
 
             return (
                 okRef &&
@@ -50,7 +76,8 @@ export default function TablaRiesgosBasica({ rows = [], onEdit, onDelete, onRest
                 okCom &&
                 okEstado &&
                 okEstadoSuperior &&
-                okComentarioSuperior
+                okComentarioSuperior &&
+                okOrigen
             );
         });
     }, [rows, filters]);
@@ -58,20 +85,41 @@ export default function TablaRiesgosBasica({ rows = [], onEdit, onDelete, onRest
     return (
         <Paper elevation={3} sx={{ borderRadius: 2 }}>
             <TableContainer sx={{ maxHeight: 520 }}>
-                <Table stickyHeader size="small">
+                {/* Ancho fijo al 100%: las columnas se reparten el espacio y el texto hace salto de línea (sin scroll horizontal) */}
+                <Table
+                    stickyHeader
+                    size="small"
+                    sx={{
+                        tableLayout: "fixed",
+                        width: "100%",
+                        "& td, & th": { wordBreak: "break-word", verticalAlign: "top" }
+                    }}
+                >
                     <TableHead>
                         <TableRow>
-                            <TableCell sx={{ width: 140 }}>Acciones</TableCell>
-                            <TableCell sx={{ minWidth: 140 }}>Referencia</TableCell>
-                            <TableCell sx={{ minWidth: 360 }}>Descripción</TableCell>                            
-                            <TableCell sx={{ minWidth: 240 }}>Estado superior</TableCell>
-                            <TableCell sx={{ minWidth: 240 }}>Comentario superior</TableCell>
-                            <TableCell sx={{ minWidth: 150 }}>Estado supervisor</TableCell>
-                            <TableCell sx={{ minWidth: 240 }}>Comentario supervisor</TableCell>
+                            <TableCell sx={{ width: 88 }}>Acciones</TableCell>
+                            <TableCell sx={{ width: "13%" }}>Origen</TableCell>
+                            <TableCell sx={{ width: "13%" }}>Referencia</TableCell>
+                            <TableCell>Descripción</TableCell>
+                            <TableCell sx={{ width: "20%" }}>Revisión superior</TableCell>
+                            <TableCell sx={{ width: "20%" }}>Revisión consolidador</TableCell>
                         </TableRow>
 
                         <TableRow>
                             <TableCell />
+                            <TableCell>
+                                <Select
+                                    fullWidth
+                                    size="small"
+                                    displayEmpty
+                                    value={filters.origen}
+                                    onChange={(e) => setFilters((s) => ({ ...s, origen: e.target.value }))}
+                                >
+                                    <MenuItem value=""><em>Todos</em></MenuItem>
+                                    <MenuItem value={ORIGEN.SEGUIMIENTO}>{ORIGEN_LABEL[ORIGEN.SEGUIMIENTO]}</MenuItem>
+                                    <MenuItem value={ORIGEN.EN_PERIODO}>{ORIGEN_LABEL[ORIGEN.EN_PERIODO]}</MenuItem>
+                                </Select>
+                            </TableCell>
                             <TableCell>
                                 <TextField
                                     fullWidth
@@ -91,51 +139,37 @@ export default function TablaRiesgosBasica({ rows = [], onEdit, onDelete, onRest
                                 />
                             </TableCell>
                             <TableCell>
-                                <Select
-                                    fullWidth
-                                    size="small"
-                                    displayEmpty
-                                    value={filters.estadoSuperior}
-                                    onChange={(e) => setFilters((s) => ({ ...s, estadoSuperior: e.target.value }))}
-                                >
-                                    <MenuItem value=""><em>Todos</em></MenuItem>
-                                    <MenuItem value={0}>Pendiente revisión</MenuItem>
-                                    <MenuItem value={1}>Aprobado</MenuItem>
-                                    <MenuItem value={2}>Rechazado</MenuItem>
-                                </Select>
+                                <Stack spacing={1}>
+                                    <Select
+                                        fullWidth
+                                        size="small"
+                                        displayEmpty
+                                        value={filters.estadoSuperior}
+                                        onChange={(e) => setFilters((s) => ({ ...s, estadoSuperior: e.target.value }))}
+                                    >
+                                        <MenuItem value=""><em>Todos los estados</em></MenuItem>
+                                        <MenuItem value={0}>Pendiente revisión</MenuItem>
+                                        <MenuItem value={1}>Aprobado</MenuItem>
+                                        <MenuItem value={2}>Rechazado</MenuItem>
+                                    </Select>
+                                </Stack>
                             </TableCell>
                             <TableCell>
-                                <TextField
-                                    fullWidth
-                                    size="small"
-                                    placeholder="Filtrar comentario superior"
-                                    value={filters.comentarioSuperior}
-                                    onChange={(e) => setFilters((s) => ({ ...s, comentarioSuperior: e.target.value }))}
-                                />
+                                <Stack spacing={1}>
+                                    <Select
+                                        fullWidth
+                                        size="small"
+                                        displayEmpty
+                                        value={filters.estado}
+                                        onChange={(e) => setFilters((s) => ({ ...s, estado: e.target.value }))}
+                                    >
+                                        <MenuItem value=""><em>Todos los estados</em></MenuItem>
+                                        <MenuItem value={0}>Pendiente revisión</MenuItem>
+                                        <MenuItem value={1}>Recibido</MenuItem>
+                                        <MenuItem value={2}>Se necesita revisión</MenuItem>
+                                    </Select>
+                                </Stack>
                             </TableCell>
-                            <TableCell>
-                                <Select
-                                    fullWidth
-                                    size="small"
-                                    displayEmpty
-                                    value={filters.estado}
-                                    onChange={(e) => setFilters((s) => ({ ...s, estado: e.target.value }))}
-                                >
-                                    <MenuItem value=""><em>Todos</em></MenuItem>
-                                    <MenuItem value={0}>Pendiente revisión</MenuItem>
-                                    <MenuItem value={1}>Recibido</MenuItem>
-                                    <MenuItem value={2}>Se necesita revisión</MenuItem>
-                                </Select>
-                            </TableCell>
-                            <TableCell>
-                                <TextField
-                                    fullWidth
-                                    size="small"
-                                    placeholder="Filtrar comentario"
-                                    value={filters.comentario}
-                                    onChange={(e) => setFilters((s) => ({ ...s, comentario: e.target.value }))}
-                                />
-                            </TableCell>                           
                         </TableRow>
                     </TableHead>
 
@@ -185,50 +219,32 @@ export default function TablaRiesgosBasica({ rows = [], onEdit, onDelete, onRest
                                         </Stack>
                                     </TableCell>
 
+                                    <TableCell>
+                                        <OrigenRiesgo riesgo={r} />
+                                    </TableCell>
                                     <TableCell>{r.REF}</TableCell>
-                                    <TableCell>{r.DESCRIPCION}</TableCell>                           
+                                    <TableCell>{r.DESCRIPCION}</TableCell>
 
                                     <TableCell>
-                                        <Chip
-                                            size="small"
-                                            color={
-                                                r.ESTADO_SUPERIOR === 1 ? "success" :
-                                                    r.ESTADO_SUPERIOR === 2 ? "error" :
-                                                        "warning"
-                                            }
-                                            label={
-                                                r.ESTADO_SUPERIOR === 1 ? "Aprobado" :
-                                                    r.ESTADO_SUPERIOR === 2 ? "Rechazado" :
-                                                        "Pendiente revisión"
-                                            }
+                                        <EstadoConComentario
+                                            estado={r.ESTADO_SUPERIOR}
+                                            labels={["Pendiente revisión", "Aprobado", "Rechazado"]}
+                                            comentario={r.COMENTARIO_SUPERIOR}
                                         />
                                     </TableCell>
 
-                                    <TableCell>{r.COMENTARIO_SUPERIOR}</TableCell>
-
                                     <TableCell>
-                                        <Chip
-                                            size="small"
-                                            color={
-                                                r.ESTADO === 1 ? "success" :
-                                                    r.ESTADO === 2 ? "error" :
-                                                        "warning"
-                                            }
-                                            label={
-                                                r.ESTADO === 1 ? "Recbido" :
-                                                    r.ESTADO === 2 ? "Se necesita revisión" :
-                                                        "Pendiente revisión"
-                                            }
+                                        <EstadoConComentario
+                                            estado={r.ESTADO}
+                                            labels={["Pendiente revisión", "Recibido", "Se necesita revisión"]}
+                                            comentario={r.COMENTARIO_SUPERVISOR}
                                         />
                                     </TableCell>
-
-                                    <TableCell>{r.COMENTARIO_SUPERVISOR}</TableCell>
-                                    
                                 </TableRow>
                             ))
                         ) : (
                             <TableRow>
-                                <TableCell colSpan={7} align="center">
+                                <TableCell colSpan={6} align="center">
                                     <Box py={2}>
                                         <Typography variant="body2" color="text.secondary">
                                             No hay resultados con los filtros actuales.

@@ -13,7 +13,7 @@ import {
     Button, Select, MenuItem, Grid, FormControl, InputLabel,
     Card, CardHeader, CardContent, ButtonGroup,
     Dialog, DialogTitle, DialogContent, DialogActions,
-    TextField, Alert, LinearProgress
+    TextField, Alert, LinearProgress, FormControlLabel, Checkbox
 } from '@mui/material';
 import AlertaMensaje from '../Alerta F/AlertaMensaje';
 import { MatrizEvaluacion } from './Riesgos/MatrizEvaluacion';
@@ -21,6 +21,7 @@ import { GenerarMapaCalor } from './Riesgos/GenerarMapaCalor';
 
 import { saveAs } from 'file-saver';
 import * as ExcelJS from 'exceljs';
+import { formatearHojaReporte } from 'funciones/ExcelFormato';
 import {
     Document, Packer, Paragraph, Table, TableRow, TableCell,
     HeadingLevel, AlignmentType, TextRun, WidthType
@@ -49,6 +50,8 @@ function ReportesRiesgosUnidadCard({ tipos = [], unidades = [], periodos = [], l
     const [unidad, setUnidad] = useState('');
     const [tipo, setTipo] = useState('');
     const [reporteTitulo, setReporteTitulo] = useState('');
+    // Solo riesgos nuevos (ES_NUEVO = 1); por defecto los reportes los excluyen
+    const [soloNuevos, setSoloNuevos] = useState(false);
     const [alerta, setAlerta] = useState({ open: false, tipo: 'warning', mensaje: '' });
 
     const mostrarAlerta = (mensaje, tipo = 'warning') => {
@@ -60,6 +63,7 @@ function ReportesRiesgosUnidadCard({ tipos = [], unidades = [], periodos = [], l
         setUnidad('');
         setTipo('');
         setReporteTitulo('');
+        setSoloNuevos(false);
     };
 
     /* ===================== Helpers ===================== */
@@ -74,6 +78,16 @@ function ReportesRiesgosUnidadCard({ tipos = [], unidades = [], periodos = [], l
      * @returns {{categoria:string,pdfFn:'MATRIZ'|'MAPA',nombreBase:string,tituloDoc:string}|null}
      */
     const mapTituloToConfig = (tituloSel) => {
+        const cfg = mapTituloToConfigBase(tituloSel);
+        if (!cfg || !soloNuevos) return cfg;
+        return {
+            ...cfg,
+            nombreBase: `Riesgos_identificados_periodo_${cfg.nombreBase}`,
+            tituloDoc: `Riesgos identificados en el período - ${cfg.tituloDoc}`
+        };
+    };
+
+    const mapTituloToConfigBase = (tituloSel) => {
         switch (tituloSel) {
             case '1. Matriz de evaluación de riesgos':
                 return {
@@ -115,7 +129,7 @@ function ReportesRiesgosUnidadCard({ tipos = [], unidades = [], periodos = [], l
      */
     const fetchReporte = async (categoria) => {
         const { data } = await apiClient.get('/api/reportes-actualizados/informacion-riesgos', {
-            params: { periodo, tipo, unidad, categoria }
+            params: { periodo, tipo, unidad, categoria, ...(soloNuevos ? { nuevos: 1 } : {}) }
         });
         return data;
     };
@@ -494,26 +508,19 @@ function ReportesRiesgosUnidadCard({ tipos = [], unidades = [], periodos = [], l
                 // Título y subtítulo
                 ws.mergeCells(`A1:${endCol}1`);
                 ws.getCell('A1').value = tituloDoc;
-                ws.getCell('A1').font = { bold: true, size: 14 };
-                ws.getCell('A1').alignment = { horizontal: 'center' };
 
                 ws.mergeCells(`A2:${endCol}2`);
                 ws.getCell('A2').value = periodoTexto;
-                ws.getCell('A2').alignment = { horizontal: 'center' };
 
                 ws.getCell('A4').value = 'Unidad';
-                ws.getCell('A4').font = { bold: true };
                 ws.getCell('B4').value = safe(gName);
 
                 ws.getCell('A5').value = 'Período';
-                ws.getCell('A5').font = { bold: true };
                 ws.getCell('B5').value = safe(periodoTexto);
 
                 const headerRowIndex = 7;
                 const headers = ['No.', ...propiedades.map(p => p?.label ?? p?.key ?? '—')];
                 ws.getRow(headerRowIndex).values = headers;
-                ws.getRow(headerRowIndex).font = { bold: true };
-                ws.getRow(headerRowIndex).alignment = { horizontal: 'center' };
 
                 // Filas
                 groups[gName].forEach((r, i) => {
@@ -521,19 +528,16 @@ function ReportesRiesgosUnidadCard({ tipos = [], unidades = [], periodos = [], l
                     ws.getRow(headerRowIndex + 1 + i).values = arr;
                 });
 
-                // Auto ancho
-                for (let i = 1; i <= colCount; i++) {
-                    let max = (headers[i - 1] ?? '').toString().length;
-                    for (let r = headerRowIndex + 1; r <= headerRowIndex + groups[gName].length; r++) {
-                        const v = ws.getRow(r).getCell(i).value;
-                        const s = (v == null ? '' : String(v));
-                        if (s.length > max) max = s.length;
-                    }
-                    ws.getColumn(i).width = Math.min(Math.max(max + 2, 10), 60);
-                }
-
-                // Congelar encabezado
-                ws.views = [{ state: 'frozen', ySplit: headerRowIndex }];
+                // Formato institucional + impresión en oficio horizontal
+                formatearHojaReporte(ws, {
+                    filaTitulo: 1,
+                    filaSubtitulo: 2,
+                    ficha: { desde: 4, hasta: 5 },
+                    filaEncabezado: headerRowIndex,
+                    ultimaFilaDatos: headerRowIndex + groups[gName].length,
+                    ultimaColumna: colCount,
+                    tituloImpresion: `${tituloDoc} — ${safe(gName)}`,
+                });
             });
 
             const blob = await wb.xlsx.writeBuffer();
@@ -637,6 +641,18 @@ function ReportesRiesgosUnidadCard({ tipos = [], unidades = [], periodos = [], l
                                 ))}
                             </Select>
                         </FormControl>
+                    </Grid>
+
+                    <Grid item xs={12}>
+                        <FormControlLabel
+                            control={
+                                <Checkbox
+                                    checked={soloNuevos}
+                                    onChange={(e) => setSoloNuevos(e.target.checked)}
+                                />
+                            }
+                            label="Solo identificados en el período (no incluidos en la evaluación)"
+                        />
                     </Grid>
 
                     {/* Acciones */}

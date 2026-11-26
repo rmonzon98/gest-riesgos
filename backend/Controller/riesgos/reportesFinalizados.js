@@ -13,6 +13,24 @@ const fsp = fs.promises;
 const path = require('path');
 const { DOCS_DIR } = require('./../../services/paths');
 
+// Los reportes muestran solo riesgos del periodo (ES_NUEVO = 0); con nuevos=1 muestran solo los riesgos nuevos.
+const soloNuevos = (valor) => (String(valor) === '1' || valor === 'true') ? 1 : 0;
+
+// Agrega los filtros opcionales por unidad y tipo de objetivo como parámetros de la consulta.
+function filtrosUnidadTipo(req, unidad, tipo, parametros) {
+    let filtros = ``
+    if (unidad) {
+        filtros += `
+        AND rrx.codigo_entidad = ?`
+        parametros.push(unidad === 'propia' ? req.codigo_entidad : Number(unidad))
+    }
+    if (tipo) {
+        filtros += `
+        AND rrx.codigo_tipo_objetivo = ?`
+        parametros.push(String(tipo))
+    }
+    return filtros
+}
 
 /**
  * obtenerSuperiorInfo
@@ -363,25 +381,12 @@ exports.obtenerValores = async (req, res, next) => {
         ON rrx.codigo_entidad = sent.codigo_entidad AND rrx.codigo_cia = sent.codigo_cia
     WHERE rrx.CODIGO_CIA = ?
         AND rrx.CODIGO_PERIODO = ?
-        AND eliminado != 1`
+        AND eliminado != 1
+        AND COALESCE(rrx.ES_NUEVO, 0) = ?`
     const orden = `
         ORDER BY rrx.REF ASC`
-    let filtros = ``
-    let parametros = [codigo_cia, Number(periodo)]
-    if (unidad) {
-        if (unidad === 'propia') {
-            filtros += `
-        AND rrx.codigo_entidad = ${req.codigo_entidad}`
-        } else {
-            filtros += `
-        AND rrx.codigo_entidad = ${unidad}`
-        }
-    }
-    if (tipo) {
-        filtros += `
-        AND rrx.codigo_tipo_objetivo = '${tipo}'`
-    }
-    sql = sql + filtros + orden
+    let parametros = [codigo_cia, Number(periodo), soloNuevos(req.query.nuevos)]
+    sql = sql + filtrosUnidadTipo(req, unidad, tipo, parametros) + orden
     const conn = await pool.getConnection();
     try {
         await conn.query("SET SESSION lc_time_names = 'es_ES'");
@@ -549,25 +554,12 @@ exports.obtenerValoresInst = async (req, res, next) => {
     WHERE rrx.CODIGO_CIA = ?
         AND rrx.CODIGO_PERIODO = ?
         AND eliminado != 1
-        AND MOSTRAR_GENERAL = 'S'`
+        AND MOSTRAR_GENERAL = 'S'
+        AND COALESCE(rrx.ES_NUEVO, 0) = ?`
     const orden = `
         ORDER BY rrx.REF ASC`
-    let filtros = ``
-    let parametros = [codigo_cia, Number(periodo)]
-    if (unidad) {
-        if (unidad === 'propia') {
-            filtros += `
-        AND rrx.codigo_entidad = ${req.codigo_entidad}`
-        } else {
-            filtros += `
-        AND rrx.codigo_entidad = ${unidad}`
-        }
-    }
-    if (tipo) {
-        filtros += `
-        AND rrx.codigo_tipo_objetivo = '${tipo}'`
-    }
-    sql = sql + filtros + orden
+    let parametros = [codigo_cia, Number(periodo), soloNuevos(req.query.nuevos)]
+    sql = sql + filtrosUnidadTipo(req, unidad, tipo, parametros) + orden
     const conn = await pool.getConnection();
     try {
         await conn.query("SET SESSION lc_time_names = 'es_ES'");

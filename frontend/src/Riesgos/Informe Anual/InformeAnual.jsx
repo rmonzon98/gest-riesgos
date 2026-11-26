@@ -348,7 +348,16 @@ const TIPOS = {
   MATRIZ_EVAL: "MATRIZ_EVAL",
   MAPA_CALOR: "MAPA_CALOR",
   MATRIZ_CONT: "MATRIZ_CONT",
+  RIESGOS_NUEVOS: "RIESGOS_NUEVOS",
+  MAPA_CALOR_NUEVOS: "MAPA_CALOR_NUEVOS",
 };
+
+// Categoría de reporte (columnas/extras) que usa cada sección de riesgos institucional
+const categoriaDeTipo = (t) =>
+  (t === TIPOS.MAPA_CALOR || t === TIPOS.MAPA_CALOR_NUEVOS) ? "MC" : t === TIPOS.MATRIZ_CONT ? "MCE" : "ME";
+// Secciones que muestran solo riesgos nuevos (ES_NUEVO = 1)
+const esTipoNuevos = (t) => t === TIPOS.RIESGOS_NUEVOS || t === TIPOS.MAPA_CALOR_NUEVOS;
+const esTipoMapa = (t) => t === TIPOS.MAPA_CALOR || t === TIPOS.MAPA_CALOR_NUEVOS;
 
 const TIPO_LABEL = {
   [TIPOS.TEXTO]: "Sección de texto",
@@ -358,6 +367,8 @@ const TIPO_LABEL = {
   [TIPOS.MATRIZ_EVAL]: "Matriz de Evaluación de Riesgos (Institucional)",
   [TIPOS.MAPA_CALOR]: "Mapa de calor de riesgo residual (Institucional)",
   [TIPOS.MATRIZ_CONT]: "Matriz de Continuidad de Evaluación de Riesgos (Institucional)",
+  [TIPOS.RIESGOS_NUEVOS]: "Riesgos identificados en el período",
+  [TIPOS.MAPA_CALOR_NUEVOS]: "Mapa de calor de riesgos identificados en el período (residual)",
 };
 
 /* ===== Toolbar personalizada (solo TEXTO) ===== */
@@ -480,9 +491,10 @@ const fetchSegundaMatriz = async (periodo) => {
   return { matrices, institucion: data?.institucion };
 };
 
-const fetchInstME_MC_MCE = async (periodo, categoria) => {
+// nuevos=true trae solo los riesgos nuevos del período (excluidos de las demás matrices)
+const fetchInstME_MC_MCE = async (periodo, categoria, nuevos = false) => {
   const { data } = await apiClient.get("/api/reportes-actualizados/matriz-evaluacion-riesgos-inst", {
-    params: { periodo, categoria }
+    params: { periodo, categoria, ...(nuevos ? { nuevos: 1 } : {}) }
   });
   return data; // {propiedades, valores, institucion:[{NOMBRE, TIPO}]}
 };
@@ -751,7 +763,7 @@ export default function InformeAnual({ titulo = "Informe anual" }) {
 
   const agregarSeccion = () => {
     if (!periodo) return;
-    const tipoUnico = [TIPOS.INDICE, TIPOS.MATRIZ_EVAL, TIPOS.MAPA_CALOR, TIPOS.MATRIZ_CONT, TIPOS.MATRIZ_CI_GOB, TIPOS.MATRIZ_FRAUDE];
+    const tipoUnico = [TIPOS.INDICE, TIPOS.MATRIZ_EVAL, TIPOS.MAPA_CALOR, TIPOS.MATRIZ_CONT, TIPOS.MATRIZ_CI_GOB, TIPOS.MATRIZ_FRAUDE, TIPOS.RIESGOS_NUEVOS, TIPOS.MAPA_CALOR_NUEVOS];
     if (tipoUnico.includes(tipoNuevaSeccion) && existeTipoUnico(tipoNuevaSeccion)) return;
 
     if (tipoNuevaSeccion === TIPOS.INDICE) {
@@ -823,6 +835,8 @@ export default function InformeAnual({ titulo = "Informe anual" }) {
   const disabledCIGob = secciones.some((s) => s.tipo === TIPOS.MATRIZ_CI_GOB);
   const disabledFraude = secciones.some((s) => s.tipo === TIPOS.MATRIZ_FRAUDE);
   const disabledIndice = secciones.some((s) => s.tipo === TIPOS.INDICE);
+  const disabledNuevos = secciones.some((s) => s.tipo === TIPOS.RIESGOS_NUEVOS);
+  const disabledMapaNuevos = secciones.some((s) => s.tipo === TIPOS.MAPA_CALOR_NUEVOS);
 
   const buildDocxForPrimeraSegunda = (matrices) => {
     const children = [];
@@ -901,6 +915,8 @@ export default function InformeAnual({ titulo = "Informe anual" }) {
       if (t === TIPOS.MATRIZ_EVAL) return "Matriz de Evaluación de Riesgos (Institucional)";
       if (t === TIPOS.MAPA_CALOR) return "Mapa de Calor de Riesgos (Residual) Institucional";
       if (t === TIPOS.MATRIZ_CONT) return "Matriz de Continuidad y Evaluación (Institucional)";
+      if (t === TIPOS.RIESGOS_NUEVOS) return "Riesgos identificados en el período";
+      if (t === TIPOS.MAPA_CALOR_NUEVOS) return "Mapa de Calor de Riesgos Identificados en el Período (Residual)";
       return "Reporte";
     };
     const nombreBase = (t) => {
@@ -909,6 +925,8 @@ export default function InformeAnual({ titulo = "Informe anual" }) {
       if (t === TIPOS.MATRIZ_EVAL) return `Matriz_Evaluacion_${periodo}`;
       if (t === TIPOS.MAPA_CALOR) return `Mapa_de_calor_de_riesgos_${periodo}`;
       if (t === TIPOS.MATRIZ_CONT) return `Matriz_Continuidad_Y_Monitoreo_${periodo}`;
+      if (t === TIPOS.RIESGOS_NUEVOS) return `Riesgos_identificados_periodo_${periodo}`;
+      if (t === TIPOS.MAPA_CALOR_NUEVOS) return `Mapa_de_calor_riesgos_identificados_periodo_${periodo}`;
       return `Reporte_${periodo}`;
     };
 
@@ -934,15 +952,23 @@ export default function InformeAnual({ titulo = "Informe anual" }) {
         const content = buildDocxForPrimeraSegunda(matrices);
         sections.push({ properties: { page: { size: { orientation: PageOrientation.LANDSCAPE } } }, children: content });
       } else {
-        const categoria = (tipoMatriz === TIPOS.MATRIZ_EVAL) ? "ME" : (tipoMatriz === TIPOS.MAPA_CALOR) ? "MC" : "MCE";
-        const payload = await fetchInstME_MC_MCE(periodo, categoria);
+        const esNuevos = esTipoNuevos(tipoMatriz);
+        const payload = await fetchInstME_MC_MCE(periodo, categoriaDeTipo(tipoMatriz), esNuevos);
         const { propiedades, rows } = normalizeColumns(payload);
         if (!propiedades.length || !rows.length) {
-          openSnack("No hay datos para exportar a Word.", "warning");
+          openSnack(esNuevos ? "No se registraron riesgos identificados en el período." : "No hay datos para exportar a Word.", "warning");
           return;
         }
 
-        if (tipoMatriz === TIPOS.MAPA_CALOR) {
+        if (esNuevos) {
+          sections[0].children.push(new Paragraph({
+            text: `Total de riesgos identificados en el período: ${rows.length}. No forman parte de la evaluación ni del seguimiento.`,
+            alignment: AlignmentType.CENTER,
+            spacing: { after: 200 }
+          }));
+        }
+
+        if (esTipoMapa(tipoMatriz)) {
           const puntos = puntosFromME_Inst(rows);
           if (!puntos.length) {
             openSnack("No hay datos para el mapa de calor.", "warning");
@@ -954,7 +980,7 @@ export default function InformeAnual({ titulo = "Informe anual" }) {
           sections.push({
             properties: { page: { size: { orientation: PageOrientation.LANDSCAPE } } },
             children: [
-              new Paragraph({ text: "Mapa de calor de riesgos residuales", heading: HeadingLevel.HEADING2, alignment: AlignmentType.CENTER, spacing: { after: 200 } }),
+              new Paragraph({ text: esNuevos ? "Mapa de calor de riesgos identificados en el período (residual)" : "Mapa de calor de riesgos residuales", heading: HeadingLevel.HEADING2, alignment: AlignmentType.CENTER, spacing: { after: 200 } }),
               new Paragraph({
                 children: [new ImageRun({ data: bytes, transformation: { width: Math.min(1100, width * 2), height: Math.min(650, height * 2) } })],
                 alignment: AlignmentType.CENTER
@@ -1024,9 +1050,39 @@ export default function InformeAnual({ titulo = "Informe anual" }) {
           ];
           sections.push({ properties: { page: { size: { orientation: PageOrientation.LANDSCAPE } } }, children });
         } else {
-          const categoria = (s.tipo === TIPOS.MATRIZ_EVAL) ? "ME" : (s.tipo === TIPOS.MAPA_CALOR) ? "MC" : "MCE";
-          const payload = await fetchInstME_MC_MCE(periodo, categoria);
+          const esNuevos = esTipoNuevos(s.tipo);
+          const payload = await fetchInstME_MC_MCE(periodo, categoriaDeTipo(s.tipo), esNuevos);
           const { propiedades, rows } = normalizeColumns(payload);
+
+          // Las secciones de riesgos nuevos se incluyen aunque no haya registros, para dejar constancia en el informe
+          if (esNuevos) {
+            const children = [
+              new Paragraph({ text: TIPO_LABEL[s.tipo], heading: HeadingLevel.HEADING2, spacing: { after: 120 } }),
+              new Paragraph({
+                text: rows.length
+                  ? `Total de riesgos identificados en el período: ${rows.length}. No forman parte de la evaluación ni del seguimiento.`
+                  : "No se registraron riesgos identificados en el período.",
+                spacing: { after: 120 }
+              }),
+            ];
+            if (s.tipo === TIPOS.MAPA_CALOR_NUEVOS && rows.length) {
+              const puntos = puntosFromME_Inst(rows);
+              if (puntos.length) {
+                const { svg, width, height } = buildSvgMapaFromPuntos(puntos);
+                const pngDataUrl = await svgToPngDataUrl(svg, width, height, 2);
+                const bytes = await dataUrlToUint8Array(pngDataUrl);
+                children.push(new Paragraph({
+                  children: [new ImageRun({ data: bytes, transformation: { width: Math.min(1100, width * 2), height: Math.min(650, height * 2) } })],
+                  alignment: AlignmentType.CENTER
+                }));
+                children.push(new Paragraph({ text: " " }));
+              }
+            }
+            if (propiedades.length && rows.length) children.push(...buildDocxForME_MCE(propiedades, rows));
+            sections.push({ properties: { page: { size: { orientation: PageOrientation.LANDSCAPE } } }, children });
+            continue;
+          }
+
           if (!propiedades.length || !rows.length) continue;
 
           const children = [];
@@ -1119,6 +1175,12 @@ export default function InformeAnual({ titulo = "Informe anual" }) {
                 <MenuItem value={TIPOS.MATRIZ_CONT} disabled={disabledCont}>
                   {TIPO_LABEL[TIPOS.MATRIZ_CONT]} {disabledCont ? " (ya agregada)" : ""}
                 </MenuItem>
+                <MenuItem value={TIPOS.RIESGOS_NUEVOS} disabled={disabledNuevos}>
+                  {TIPO_LABEL[TIPOS.RIESGOS_NUEVOS]} {disabledNuevos ? " (ya agregada)" : ""}
+                </MenuItem>
+                <MenuItem value={TIPOS.MAPA_CALOR_NUEVOS} disabled={disabledMapaNuevos}>
+                  {TIPO_LABEL[TIPOS.MAPA_CALOR_NUEVOS]} {disabledMapaNuevos ? " (ya agregada)" : ""}
+                </MenuItem>
               </Select>
 
               <Tooltip title={periodo ? "Agregar una nueva sección" : "Seleccione un período primero"}>
@@ -1162,7 +1224,7 @@ export default function InformeAnual({ titulo = "Informe anual" }) {
                 const chipColor =
                   (sec.tipo === TIPOS.TEXTO || sec.tipo === TIPOS.INDICE)
                     ? "default"
-                    : sec.tipo === TIPOS.MAPA_CALOR
+                    : esTipoMapa(sec.tipo)
                       ? "warning"
                       : "info";
 
@@ -1235,9 +1297,15 @@ export default function InformeAnual({ titulo = "Informe anual" }) {
                                   >
                                     Generar Word (individual)
                                   </Button>
-                                  <Alert severity="info">
-                                    Esta sección se genera desde la información actual. El <strong>mapa de calor</strong> se inserta como imagen usando valores ajustados (Prob./Sev.) y <em>Ref.</em>.
-                                  </Alert>
+                                  {esTipoNuevos(sec.tipo) ? (
+                                    <Alert severity="info">
+                                      {sec.tipo === TIPOS.MAPA_CALOR_NUEVOS ? "Mapa de calor (residual) de" : "Lista"} los riesgos <strong>identificados en el período</strong> y marcados como <strong>General</strong>. No se incluyen en las demás matrices, el mapa de calor institucional ni el seguimiento.
+                                    </Alert>
+                                  ) : (
+                                    <Alert severity="info">
+                                      Esta sección se genera desde la información actual. El <strong>mapa de calor</strong> se inserta como imagen usando valores ajustados (Prob./Sev.) y <em>Ref.</em>.
+                                    </Alert>
+                                  )}
                                 </Stack>
                               )}
                             </Collapse>
