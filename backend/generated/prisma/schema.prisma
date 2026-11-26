@@ -1,0 +1,29 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+model SeguridadPersona {
+  codigoColaborador Int @map("CODIGO_COLABORADOR")
+  codigoEntidad     Int @map("CODIGO_ENTIDAD")
+  codigoCia         Int @map("CODIGO_CIA")
+  activo            Int @map("ACTIVO")
+
+  @@id([codigoCia, codigoColaborador])
+  @@map("seguridad_persona")
+}
+
+model SeguridadSesion {
+  idSesion          String    @id @map("id_sesion") @db.VarChar(64)
+  codigoCia         Int       @map("codigo_cia")
+  codigoColaborador Int       @map("codigo_colaborador")
+  activo            Int       @map("activo")
+  fechaRevocacion   DateTime? @map("fecha_revocacion")
+  fechaExpiracion   DateTime  @map("fecha_expiracion")
+
+  @@map("seguridad_sesion")
+}
