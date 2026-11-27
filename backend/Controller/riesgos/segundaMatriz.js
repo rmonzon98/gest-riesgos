@@ -9,7 +9,7 @@
  * @author Equipo de Desarrollo
  */
 
-const pool = require('../../bd/mySQLConnection');
+const { RespuestaHttp, consultar, ejecutar, enviarRespuestaHttp, transaccion } = require('../../bd/consultas');
 
 /* === HELPERS INTERNOS === */
 const asJSONString = (v) => {
@@ -93,7 +93,7 @@ exports.obtenerVersionesPeriodo = async (req, res) => {
             v.VERSION
     `;
 
-        const [rows] = await pool.execute(sql, [codigo_cia, periodo]);
+        const rows = await consultar(sql, [codigo_cia, periodo]);
 
         return res.json({
             ok: true,
@@ -137,7 +137,7 @@ exports.obtenerUnico = async (req, res) => {
         ORDER BY 
             MATRIZ
     `;
-        const [rows] = await pool.execute(sql, [codigo_cia, periodo, version]);
+        const rows = await consultar(sql, [codigo_cia, periodo, version]);
 
         const matrices = rows.map(r => ({
             MATRIZ: r.MATRIZ,
@@ -190,97 +190,91 @@ exports.crearSegundaMatriz = async (req, res) => {
         m.filas = sanitizeRows(headers, m.filas);
     }
 
-    let conn;
     try {
-        conn = await pool.getConnection();
-        await conn.beginTransaction();
+        const resultado = await transaccion(async tx => {
+            const [maxRow] = await consultar(
+                `
+                SELECT 
+                    COALESCE(MAX(VERSION), 0) AS MAXV
+                FROM 
+                    gestion_riesgos.riesgos_segunda_matriz
+                WHERE 
+                    CODIGO_CIA = ? AND CODIGO_PERIODO = ?
+                FOR UPDATE`,
+                [codigo_cia, Number(periodo)], tx
+            );
+            const nextVersion = Number(maxRow?.MAXV || 0) + 1;
 
-        const [[maxRow]] = await conn.execute(
-            `
-            SELECT 
-                COALESCE(MAX(VERSION), 0) AS MAXV
-            FROM 
-                gestion_riesgos.riesgos_segunda_matriz
-            WHERE 
-                CODIGO_CIA = ? AND CODIGO_PERIODO = ?
-            FOR UPDATE`,
-            [codigo_cia, Number(periodo)]
-        );
-        const nextVersion = Number(maxRow?.MAXV || 0) + 1;
+            await ejecutar(
+                `
+                INSERT INTO 
+                    gestion_riesgos.riesgos_segunda_matriz (
+                        CODIGO_CIA, CODIGO_PERIODO, VERSION,
+                        USUARIO_CREACION, FECHA_CREACION, ESTADO
+                    )
+                    VALUES (
+                        ?, ?, ?, 
+                        ?, CURRENT_TIMESTAMP, 'S'
+                    )`,
+                [codigo_cia, Number(periodo), nextVersion, usuario ?? null], tx
+            );
 
-        await conn.execute(
-            `
+            let idx = 0;
+            const sqlDet = `
             INSERT INTO 
-                gestion_riesgos.riesgos_segunda_matriz (
-                    CODIGO_CIA, CODIGO_PERIODO, VERSION,
-                    USUARIO_CREACION, FECHA_CREACION, ESTADO
+                gestion_riesgos.riesgos_segunda_matriz_est (
+                    CODIGO_CIA, CODIGO_PERIODO, VERSION, 
+                    MATRIZ, TITULO, COLUMNAS, FILAS
                 )
                 VALUES (
                     ?, ?, ?, 
-                    ?, CURRENT_TIMESTAMP, 'S'
-                )`,
-            [codigo_cia, Number(periodo), nextVersion, usuario ?? null]
-        );
+                    ?, ?, ?, ?
+                )`;
+            for (const m of matrices) {
+                idx += 1;
+                const titulo = (m.titulo ?? '').toString();
+                const headers = m?.columnas?.headers ?? [];
+                const filas = m?.filas ?? [];
+                const columnasJSON = JSON.stringify({ headers });
+                const filasJSON = JSON.stringify(filas);
 
-        let idx = 0;
-        const sqlDet = `
-        INSERT INTO 
-            gestion_riesgos.riesgos_segunda_matriz_est (
-                CODIGO_CIA, CODIGO_PERIODO, VERSION, 
-                MATRIZ, TITULO, COLUMNAS, FILAS
-            )
-            VALUES (
-                ?, ?, ?, 
-                ?, ?, ?, ?
-            )`;
-        for (const m of matrices) {
-            idx += 1;
-            const titulo = (m.titulo ?? '').toString();
-            const headers = m?.columnas?.headers ?? [];
-            const filas = m?.filas ?? [];
-            const columnasJSON = JSON.stringify({ headers });
-            const filasJSON = JSON.stringify(filas);
+                await ejecutar(sqlDet, [
+                    codigo_cia,
+                    Number(periodo),
+                    nextVersion,
+                    idx,
+                    titulo,
+                    columnasJSON,
+                    filasJSON
+                ], tx);
+            }
 
-            await conn.execute(sqlDet, [
-                codigo_cia,
-                Number(periodo),
-                nextVersion,
-                idx,
-                titulo,
-                columnasJSON,
-                filasJSON
-            ]);
-        }
-
-        await conn.execute(
-            `
-            UPDATE 
-                gestion_riesgos.riesgos_segunda_matriz
-            SET 
-                ESTADO = 'N',
-                USUARIO_MODIFICACION = ?,
-                FECHA_MODIFICACION   = CURRENT_TIMESTAMP
-            WHERE 
-                CODIGO_CIA = ? 
-                AND CODIGO_PERIODO = ? 
-                AND VERSION <> ?`,
-            [usuario ?? null, codigo_cia, Number(periodo), nextVersion]
-        );
-
-        await conn.commit();
-        return res.status(201).json({
-            ok: true,
-            periodo: Number(periodo),
-            version: nextVersion,
-            num_matrices: matrices.length,
-            msg: 'Versión creada y establecida por defecto; las demás quedaron en N.'
+            await ejecutar(
+                `
+                UPDATE 
+                    gestion_riesgos.riesgos_segunda_matriz
+                SET 
+                    ESTADO = 'N',
+                    USUARIO_MODIFICACION = ?,
+                    FECHA_MODIFICACION   = CURRENT_TIMESTAMP
+                WHERE 
+                    CODIGO_CIA = ? 
+                    AND CODIGO_PERIODO = ? 
+                    AND VERSION <> ?`,
+                [usuario ?? null, codigo_cia, Number(periodo), nextVersion], tx
+            );
+            return {
+                ok: true,
+                periodo: Number(periodo),
+                version: nextVersion,
+                num_matrices: matrices.length,
+                msg: 'Versión creada y establecida por defecto; las demás quedaron en N.'
+            };
         });
+        return res.status(201).json(resultado);
     } catch (err) {
-        try { await conn?.rollback(); } catch { }
         console.error('crearSegundaMatriz:', err);
         return res.status(500).json({ ok: false, msg: 'Error al guardar Anexo 2' });
-    } finally {
-        conn?.release();
     }
 };
 
@@ -304,116 +298,110 @@ exports.copiarDefectoAnioPasado = async (req, res) => {
 
     const periodoPrev = periodo - 1;
 
-    let conn;
     try {
-        conn = await pool.getConnection();
-        await conn.beginTransaction();
-
-        const [[rowPrev]] = await conn.execute(
-            `
-        SELECT 
-            VERSION
-        FROM 
-            gestion_riesgos.riesgos_segunda_matriz
-        WHERE 
-            CODIGO_CIA = ? 
-            AND CODIGO_PERIODO = ? 
-            AND ESTADO = 'S'
-        ORDER BY 
-            VERSION DESC
-        LIMIT 1`,
-            [codigo_cia, periodoPrev]
-        );
-        const prevVersion = rowPrev?.VERSION;
-        if (!prevVersion) {
-            await conn.rollback();
-            return res.status(404).json({
-                ok: false,
-                msg: `No existe versión por defecto en el período ${periodoPrev}.`
-            });
-        }
-
-        const [[rowMax]] = await conn.execute(
-            `
-        SELECT 
-            COALESCE(MAX(VERSION), 0) + 1 AS NEXT_VER
-        FROM 
-            gestion_riesgos.riesgos_segunda_matriz
-        WHERE 
-            CODIGO_CIA = ? 
-            AND CODIGO_PERIODO = ?
-        FOR UPDATE`,
-            [codigo_cia, periodo]
-        );
-        const nextVersion = Number(rowMax?.NEXT_VER || 1);
-
-        await conn.execute(
-            `
-        INSERT INTO 
-            gestion_riesgos.riesgos_segunda_matriz (
-                CODIGO_CIA, CODIGO_PERIODO, VERSION,
-                USUARIO_CREACION, FECHA_CREACION, ESTADO
-            )
-            VALUES (
-                ?, ?, ?, 
-                ?, CURRENT_TIMESTAMP, 'N'
-            )`,
-            [codigo_cia, periodo, nextVersion, usuario ?? null]
-        );
-
-        const [mats] = await conn.execute(
-            `
+        const resultado = await transaccion(async tx => {
+            const [rowPrev] = await consultar(
+                `
             SELECT 
-                MATRIZ, TITULO, COLUMNAS, FILAS
+                VERSION
             FROM 
-                gestion_riesgos.riesgos_segunda_matriz_est
+                gestion_riesgos.riesgos_segunda_matriz
             WHERE 
                 CODIGO_CIA = ? 
                 AND CODIGO_PERIODO = ? 
-                AND VERSION = ?
+                AND ESTADO = 'S'
             ORDER BY 
-                MATRIZ`,
-            [codigo_cia, periodoPrev, prevVersion]
-        );
+                VERSION DESC
+            LIMIT 1`,
+                [codigo_cia, periodoPrev], tx
+            );
+            const prevVersion = rowPrev?.VERSION;
+            if (!prevVersion) {
+                throw new RespuestaHttp(404, {
+                    ok: false,
+                    msg: `No existe versión por defecto en el período ${periodoPrev}.`
+                });
+            }
 
-        const sqlDet = `
-        INSERT INTO 
-            gestion_riesgos.riesgos_segunda_matriz_est (
-                CODIGO_CIA, CODIGO_PERIODO, VERSION, 
-                MATRIZ, TITULO, COLUMNAS, FILAS
-            )
-            VALUES (
-                ?, ?, ?, 
-                ?, ?, ?, ?
-            )
-    `;
-        let count = 0;
-        for (const r of mats) {
-            count += 1;
-            await conn.execute(sqlDet, [
-                codigo_cia,
+            const [rowMax] = await consultar(
+                `
+            SELECT 
+                COALESCE(MAX(VERSION), 0) + 1 AS NEXT_VER
+            FROM 
+                gestion_riesgos.riesgos_segunda_matriz
+            WHERE 
+                CODIGO_CIA = ? 
+                AND CODIGO_PERIODO = ?
+            FOR UPDATE`,
+                [codigo_cia, periodo], tx
+            );
+            const nextVersion = Number(rowMax?.NEXT_VER || 1);
+
+            await ejecutar(
+                `
+            INSERT INTO 
+                gestion_riesgos.riesgos_segunda_matriz (
+                    CODIGO_CIA, CODIGO_PERIODO, VERSION,
+                    USUARIO_CREACION, FECHA_CREACION, ESTADO
+                )
+                VALUES (
+                    ?, ?, ?, 
+                    ?, CURRENT_TIMESTAMP, 'N'
+                )`,
+                [codigo_cia, periodo, nextVersion, usuario ?? null], tx
+            );
+
+            const mats = await consultar(
+                `
+                SELECT 
+                    MATRIZ, TITULO, COLUMNAS, FILAS
+                FROM 
+                    gestion_riesgos.riesgos_segunda_matriz_est
+                WHERE 
+                    CODIGO_CIA = ? 
+                    AND CODIGO_PERIODO = ? 
+                    AND VERSION = ?
+                ORDER BY 
+                    MATRIZ`,
+                [codigo_cia, periodoPrev, prevVersion], tx
+            );
+
+            const sqlDet = `
+            INSERT INTO 
+                gestion_riesgos.riesgos_segunda_matriz_est (
+                    CODIGO_CIA, CODIGO_PERIODO, VERSION, 
+                    MATRIZ, TITULO, COLUMNAS, FILAS
+                )
+                VALUES (
+                    ?, ?, ?, 
+                    ?, ?, ?, ?
+                )
+        `;
+            let count = 0;
+            for (const r of mats) {
+                count += 1;
+                await ejecutar(sqlDet, [
+                    codigo_cia,
+                    periodo,
+                    nextVersion,
+                    count,
+                    r.TITULO ?? null,
+                    asJSONString(r.COLUMNAS),
+                    asJSONString(r.FILAS)
+                ], tx);
+            }
+            return {
+                ok: true,
                 periodo,
-                nextVersion,
-                count,
-                r.TITULO ?? null,
-                asJSONString(r.COLUMNAS),
-                asJSONString(r.FILAS)
-            ]);
-        }
-
-        await conn.commit();
-        return res.json({
-            ok: true,
-            periodo,
-            version: nextVersion,
-            num_matrices: mats.length
+                version: nextVersion,
+                num_matrices: mats.length
+            };
         });
+        return res.json(resultado);
     } catch (err) {
-        try { await conn?.rollback(); } catch { }
+        if (enviarRespuestaHttp(err, res)) return;
         console.error('copiarDefectoAnioPasado:', err);
         return res.status(500).json({ ok: false, msg: 'Error al copiar del año pasado' });
-    } finally {
-        conn?.release();
     }
 };
 
@@ -439,63 +427,57 @@ exports.establecerDefecto = async (req, res) => {
         });
     }
 
-    let conn;
     try {
-        conn = await pool.getConnection();
-        await conn.beginTransaction();
+        const resultado = await transaccion(async tx => {
+            const updAll = await ejecutar(
+                `
+                UPDATE 
+                    gestion_riesgos.riesgos_segunda_matriz
+                SET 
+                    ESTADO = 'N',
+                    USUARIO_MODIFICACION = ?,
+                    FECHA_MODIFICACION   = CURRENT_TIMESTAMP
+                WHERE 
+                    CODIGO_CIA = ? 
+                    AND CODIGO_PERIODO = ?`,
+                [usuario, codigo_cia, periodo], tx
+            );
 
-        const [updAll] = await conn.execute(
-            `
-            UPDATE 
-                gestion_riesgos.riesgos_segunda_matriz
-            SET 
-                ESTADO = 'N',
-                USUARIO_MODIFICACION = ?,
-                FECHA_MODIFICACION   = CURRENT_TIMESTAMP
-            WHERE 
-                CODIGO_CIA = ? 
-                AND CODIGO_PERIODO = ?`,
-            [usuario, codigo_cia, periodo]
-        );
+            const updOne = await ejecutar(
+                `
+                UPDATE 
+                    gestion_riesgos.riesgos_segunda_matriz
+                SET 
+                    ESTADO = 'S',
+                    USUARIO_MODIFICACION = ?,
+                    FECHA_MODIFICACION   = CURRENT_TIMESTAMP
+                WHERE 
+                    CODIGO_CIA = ? 
+                    AND CODIGO_PERIODO = ? 
+                    AND VERSION = ?
+                LIMIT 1`,
+                [usuario, codigo_cia, periodo, version], tx
+            );
 
-        const [updOne] = await conn.execute(
-            `
-            UPDATE 
-                gestion_riesgos.riesgos_segunda_matriz
-            SET 
-                ESTADO = 'S',
-                USUARIO_MODIFICACION = ?,
-                FECHA_MODIFICACION   = CURRENT_TIMESTAMP
-            WHERE 
-                CODIGO_CIA = ? 
-                AND CODIGO_PERIODO = ? 
-                AND VERSION = ?
-            LIMIT 1`,
-            [usuario, codigo_cia, periodo, version]
-        );
-
-        if (updOne.affectedRows === 0) {
-            await conn.rollback();
-            return res.status(404).json({
-                ok: false,
-                msg: `No existe la versión ${version} para el período ${periodo}.`
-            });
-        }
-
-        await conn.commit();
-        return res.json({
-            ok: true,
-            periodo,
-            version,
-            actualizadas_a_N: updAll.affectedRows ?? 0,
-            marcada_por_defecto: updOne.affectedRows ?? 0
+            if (updOne.affectedRows === 0) {
+                throw new RespuestaHttp(404, {
+                    ok: false,
+                    msg: `No existe la versión ${version} para el período ${periodo}.`
+                });
+            }
+            return {
+                ok: true,
+                periodo,
+                version,
+                actualizadas_a_N: updAll.affectedRows ?? 0,
+                marcada_por_defecto: updOne.affectedRows ?? 0
+            };
         });
+        return res.json(resultado);
     } catch (err) {
-        try { await conn?.rollback(); } catch { }
+        if (enviarRespuestaHttp(err, res)) return;
         console.error('establecerDefecto:', err);
         return res.status(500).json({ ok: false, msg: 'Error al establecer por defecto' });
-    } finally {
-        conn?.release();
     }
 };
 
@@ -517,7 +499,7 @@ exports.obtenerMatrizDefecto = async (req, res) => {
     }
 
     try {
-        const [def] = await pool.execute(
+        const def = await consultar(
             `
                 SELECT 
                     VERSION
@@ -537,7 +519,7 @@ exports.obtenerMatrizDefecto = async (req, res) => {
         let isFallback = false;
 
         if (!version) {
-            const [maxv] = await pool.execute(
+            const maxv = await consultar(
                 `
                 SELECT 
                     MAX(VERSION) AS VMAX
@@ -559,7 +541,7 @@ exports.obtenerMatrizDefecto = async (req, res) => {
             isFallback = true;
         }
 
-        const [rows] = await pool.execute(
+        const rows = await consultar(
             `
             SELECT 
                 MATRIZ, TITULO, COLUMNAS, FILAS
@@ -623,80 +605,72 @@ exports.guardarRespuesta = async (req, res) => {
     const respuestaStr =
         typeof req.body?.respuesta === 'string' ? req.body.respuesta : JSON.stringify(respuestaObj);
 
-    let conn;
     try {
-        conn = await pool.getConnection();
-        await conn.beginTransaction();
+        const resultado = await transaccion(async tx => {
+            const [perChk] = await consultar(
+                `SELECT 1 AS ok FROM gestion_riesgos.riesgos_periodo WHERE CODIGO_CIA = ? AND CODIGO_PERIODO = ? LIMIT 1`,
+                [codigo_cia, Number(periodo)], tx
+            );
+            if (!perChk) {
+                throw new RespuestaHttp(400, { ok: false, msg: `Período ${periodo} no existe.` });
+            }
 
-        const [[perChk]] = await conn.execute(
-            `SELECT 1 AS ok FROM gestion_riesgos.riesgos_periodo WHERE CODIGO_CIA = ? AND CODIGO_PERIODO = ? LIMIT 1`,
-            [codigo_cia, Number(periodo)]
-        );
-        if (!perChk) {
-            await conn.rollback();
-            return res.status(400).json({ ok: false, msg: `Período ${periodo} no existe.` });
-        }
+            const [entChk] = await consultar(
+                `SELECT 1 AS ok FROM gestion_riesgos.seguridad_entidad WHERE CODIGO_CIA = ? AND CODIGO_ENTIDAD = ? LIMIT 1`,
+                [codigo_cia, Number(codigo_entidad)], tx
+            );
+            if (!entChk) {
+                throw new RespuestaHttp(400, { ok: false, msg: `Entidad ${codigo_entidad} no existe.` });
+            }
 
-        const [[entChk]] = await conn.execute(
-            `SELECT 1 AS ok FROM gestion_riesgos.seguridad_entidad WHERE CODIGO_CIA = ? AND CODIGO_ENTIDAD = ? LIMIT 1`,
-            [codigo_cia, Number(codigo_entidad)]
-        );
-        if (!entChk) {
-            await conn.rollback();
-            return res.status(400).json({ ok: false, msg: `Entidad ${codigo_entidad} no existe.` });
-        }
+            const [row] = await consultar(
+                `
+                SELECT 
+                    COALESCE(MAX(CODIGO_HISTORIAL), 0) + 1 AS NEXTVAL
+                FROM 
+                    gestion_riesgos.riesgos_segunda_matriz_his
+                WHERE 
+                    CODIGO_CIA = ? 
+                    AND CODIGO_ENTIDAD = ? 
+                    AND CODIGO_PERIODO = ?
+                FOR UPDATE`,
+                [codigo_cia, Number(codigo_entidad), Number(periodo)], tx
+            );
+            const codigo_historial = Number(row?.NEXTVAL || 1);
 
-        const [[row]] = await conn.execute(
-            `
-            SELECT 
-                COALESCE(MAX(CODIGO_HISTORIAL), 0) + 1 AS NEXTVAL
-            FROM 
-                gestion_riesgos.riesgos_segunda_matriz_his
-            WHERE 
-                CODIGO_CIA = ? 
-                AND CODIGO_ENTIDAD = ? 
-                AND CODIGO_PERIODO = ?
-            FOR UPDATE`,
-            [codigo_cia, Number(codigo_entidad), Number(periodo)]
-        );
-        const codigo_historial = Number(row?.NEXTVAL || 1);
-
-        await conn.execute(
-            `
-            INSERT INTO gestion_riesgos.riesgos_segunda_matriz_his (
-                CODIGO_CIA, CODIGO_ENTIDAD, CODIGO_PERIODO, CODIGO_HISTORIAL,
-                RESPUESTA, COMENTARIO_SUPERVISOR, USUARIO_CREACION, FECHA_CREACION,
-                ESTADO, ESTADO_SUPERIOR
-            ) VALUES (
-                ?, ?, ?, ?, 
-                ?, NULL, ?, CURRENT_TIMESTAMP, 
-                ${codigo_historial === 1 ? "'I'" : "'M'"}, ${codigo_historial === 1 ? "'I'" : "'M'"}
-            )`,
-            [
-                codigo_cia,
-                Number(codigo_entidad),
-                Number(periodo),
+            await ejecutar(
+                `
+                INSERT INTO gestion_riesgos.riesgos_segunda_matriz_his (
+                    CODIGO_CIA, CODIGO_ENTIDAD, CODIGO_PERIODO, CODIGO_HISTORIAL,
+                    RESPUESTA, COMENTARIO_SUPERVISOR, USUARIO_CREACION, FECHA_CREACION,
+                    ESTADO, ESTADO_SUPERIOR
+                ) VALUES (
+                    ?, ?, ?, ?, 
+                    ?, NULL, ?, CURRENT_TIMESTAMP, 
+                    ${codigo_historial === 1 ? "'I'" : "'M'"}, ${codigo_historial === 1 ? "'I'" : "'M'"}
+                )`,
+                [
+                    codigo_cia,
+                    Number(codigo_entidad),
+                    Number(periodo),
+                    codigo_historial,
+                    respuestaStr,
+                    codigo_usuario
+                ], tx
+            );
+            return {
+                ok: true,
+                periodo: Number(periodo),
                 codigo_historial,
-                respuestaStr,
-                codigo_usuario
-            ]
-        );
-
-        await conn.commit();
-
-        return res.json({
-            ok: true,
-            periodo: Number(periodo),
-            codigo_historial,
-            estado: 'I',
-            msg: 'Respuesta guardada correctamente.'
+                estado: 'I',
+                msg: 'Respuesta guardada correctamente.'
+            };
         });
+        return res.json(resultado);
     } catch (err) {
-        try { await conn?.rollback(); } catch { }
+        if (enviarRespuestaHttp(err, res)) return;
         console.error('guardarRespuesta (Anexo2):', err);
         return res.status(500).json({ ok: false, msg: 'Error al guardar la respuesta.' });
-    } finally {
-        conn?.release();
     }
 };
 
@@ -720,7 +694,7 @@ exports.obtenerEstadoEHistorial = async (req, res) => {
 
     try {
 
-        const [rows] = await pool.execute(
+        const rows = await consultar(
             `
             SELECT 
                 h.CODIGO_HISTORIAL,
@@ -834,7 +808,7 @@ exports.estadoActualizar = async (req, res) => {
     }
 
     try {
-        const [sel] = await pool.execute(
+        const sel = await consultar(
             `
             SELECT 
                 COMENTARIO_SUPERVISOR
@@ -860,7 +834,7 @@ exports.estadoActualizar = async (req, res) => {
             comentarioFinal = comentarioPrevio;
         }
 
-        const [upd] = await pool.execute(
+        const upd = await ejecutar(
             `
             UPDATE 
                 gestion_riesgos.riesgos_segunda_matriz_his
@@ -890,7 +864,7 @@ exports.estadoActualizar = async (req, res) => {
             return res.status(404).json({ ok: false, msg: 'No se encontró la entrada a actualizar.' });
         }
 
-        const [get] = await pool.execute(
+        const get = await consultar(
             `
             SELECT 
                 ESTADO, COMENTARIO_SUPERVISOR, USUARIO_MODIFICACION, FECHA_MODIFICACION
@@ -946,7 +920,7 @@ exports.obtenerUltimaVersion = async (req, res) => {
 
     try {
 
-        const [rows] = await pool.execute(
+        const rows = await consultar(
             `
             SELECT 
                 h.CODIGO_HISTORIAL,
