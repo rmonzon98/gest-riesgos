@@ -6,6 +6,20 @@ Usa una versión de Node.js compatible con Prisma 7 (`^20.19`, `^22.12` o `>=24.
 
 El backend se conecta a MariaDB con `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD` y `DB_NAME`. Usa `gestion_riesgos` como nombre de la base de la aplicación. La CLI de Prisma acepta `DATABASE_URL` como destino explícito, por ejemplo al verificar migraciones en una base de prueba. En ausencia de esa variable, usa los mismos valores `DB_*` del backend.
 
+## Acceso a datos
+
+Todo el backend usa Prisma con el adaptador MariaDB y un único pool de conexiones (`DB_CONNECTION_LIMIT`, 10 por defecto).
+
+- **Código nuevo:** usa el cliente tipado (`prisma/client.js`).
+- **Controladores anteriores:** conservan su SQL y lo ejecutan, parametrizado, con `bd/consultas.js`.
+
+`bd/consultas.js` mantiene lo que esos endpoints ya entregaban:
+
+- Interpreta los `DATE`/`DATETIME` como **hora local del proceso Node**, igual que antes. El servidor debe correr con la zona horaria en la que se guardaron los datos (Guatemala). El cliente tipado, en cambio, lee esas columnas como UTC.
+- Devuelve `COUNT(*)` y los `BIGINT` como números.
+- Traduce los errores de MariaDB a `ER_*` (`err.code`, `err.errno`, `err.sqlMessage`).
+- Rechaza parámetros `undefined`, objetos y arreglos. Para listas en `IN (...)` usa `marcadores()`.
+
 ## Base nueva
 
 Configura la conexión a una base vacía y ejecuta:

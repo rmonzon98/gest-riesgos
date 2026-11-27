@@ -5,7 +5,7 @@ Rama: `MARN` · Fecha: 2026-11-26 · Se basa en [01-decisiones.md](01-decisiones
 ## Convenciones
 
 - Base `gestion_riesgos`, MariaDB/MySQL, `utf8mb4`.
-- **ORM: Prisma con `@prisma/adapter-mariadb`** (se trae la rama `cambio-orm` y se quita sequelize). Todo cambio de esquema va como **migración de Prisma** en `backend/prisma/migrations/`. Los controladores nuevos usan Prisma; los existentes siguen con `mysql2` hasta que se migren.
+- **ORM: Prisma con `@prisma/adapter-mariadb`** (se trae la rama `cambio-orm` y se quita sequelize). Todo cambio de esquema va como **migración de Prisma** en `backend/prisma/migrations/`. Desde 2026-11-27 todo el backend usa Prisma: los controladores nuevos con el cliente tipado y los anteriores con SQL parametrizado vía `backend/bd/consultas.js`; `mysql2` se retiró.
 - La bitácora `riesgos_logs` se llena con **triggers** `trg_<tabla>_insert|update|delete`. Prisma no los modela, así que cada tabla nueva lleva sus triggers en SQL dentro de su migración.
 - Las tablas nuevas usan el prefijo `riesgos_` y llevan `CODIGO_CIA` en todas las llaves, como el resto del esquema.
 - **Las tablas nuevas tienen llave `AUTO_INCREMENT`** (`CODIGO_*`) más `CODIGO_CIA`. Las existentes calculan el código con `MAX()+1`, lo que puede chocar si dos usuarios guardan al mismo tiempo; no se cambian ahora.

@@ -24,8 +24,10 @@ Si algo del prompt contradice esos documentos, **detente y repórtalo**; no elij
 - **Autenticación:** todo router usa `router.use(verifyJWT)` (`services/verifyJWTUpd.js`). El middleware llena `req.codigo_cia`, `req.codigo_entidad` y `req.user`.
 - **Aislamiento por institución:** toda consulta filtra por `CODIGO_CIA = req.codigo_cia`. Nunca aceptes `codigo_cia` del cliente.
 - **Autorización en el servidor:** valida en el backend que el usuario puede ver o editar el recurso (su dirección, su rol, o que sea responsable o superior según corresponda). No confíes en que el frontend oculte botones.
-- **ORM:** el código nuevo usa **Prisma** (cliente en `backend/prisma/client.js`, adaptador MariaDB). El código existente usa `mysql2` (`bd/mySQLConnection.js`); no lo reescribas salvo que el prompt lo pida.
-- **SQL crudo:** si lo necesitas (`$queryRaw` o `mysql2`), siempre con parámetros. Nunca concatenes valores del request en el SQL.
+- **Acceso a datos:** todo pasa por **Prisma** con el adaptador MariaDB (cliente en `backend/prisma/client.js`). Ya no hay `mysql2`.
+  - Código nuevo: el cliente tipado de Prisma (`prisma.modelo.findMany`, `prisma.$transaction`).
+  - Controladores que conservan su SQL (los anteriores a MARN): `backend/bd/consultas.js` (`consultar`, `ejecutar`, `insertar`, `transaccion`, `conIdiomaEspanol`, `RespuestaHttp`). Este módulo mantiene las convenciones que esos endpoints ya entregaban: fechas en hora local, `COUNT` como número y códigos de error `ER_*`. No mezcles ese SQL con el cliente tipado dentro de la misma transacción.
+- **SQL crudo:** siempre con parámetros (`?` en `bd/consultas.js`, o `$queryRaw` con plantilla). Nunca concatenes valores del request en el SQL. Para listas usa `marcadores()`, no `IN (?)` con un arreglo.
 - **Migraciones:** todo cambio de esquema va en una migración de Prisma (`backend/prisma/migrations/`). Nunca modifiques la base a mano ni edites una migración ya aplicada.
 - **Bitácora:** `riesgos_logs` se llena con triggers `trg_<tabla>_insert|update|delete` (mira `trg_riesgos_area_*` en el dump). Toda tabla nueva lleva sus tres triggers en SQL dentro de su migración, con el mismo formato.
 - **Auditoría:** las tablas nuevas tienen `USUARIO_CREACION`, `FECHA_CREACION`, `USUARIO_MODIFICACION` y `FECHA_MODIFICACION`; llénalos con `req.user` y la fecha del servidor.
