@@ -22,7 +22,7 @@
 const sha1 = require('sha-1');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
-const pool = require('../bd/mySQLConnection');
+const { consultar, ejecutar, transaccion } = require('../bd/consultas');
 const { licenciaVigente } = require('../services/administracionRiesgos');
 
 const {
@@ -370,7 +370,7 @@ async function crearSesionYEnviarCookies(req, res, usuario) {
 
     const fechaExpiracion = getRefreshExpirationDate();
 
-    await pool.execute(
+    await ejecutar(
         `
         INSERT INTO gestion_riesgos.seguridad_sesion (
             id_sesion,
@@ -452,7 +452,7 @@ async function obtenerUsuarioPorCredenciales(usuario) {
         LIMIT 1
     `;
 
-    const [rows] = await pool.execute(sql, [usuario]);
+    const rows = await consultar(sql, [usuario]);
 
     return rows[0] || null;
 }
@@ -466,7 +466,7 @@ async function obtenerUsuarioPorCredenciales(usuario) {
  * @returns {Promise<object|null>} Usuario encontrado o `null`.
  */
 async function obtenerUsuarioPorId({ codigoCia, codigoPersona }) {
-    const [rows] = await pool.execute(
+    const rows = await consultar(
         `
         SELECT 
             CODIGO_COLABORADOR AS CODIGO_PERSONA,
@@ -507,7 +507,7 @@ async function validarRecoveryCode({ codigoCia, codigoPersona, codigo }) {
 
     const codeHash = hashValue(normalized);
 
-    const [rows] = await pool.execute(
+    const rows = await consultar(
         `
         SELECT id_recovery_code
         FROM gestion_riesgos.seguridad_2fa_recovery_code
@@ -524,7 +524,7 @@ async function validarRecoveryCode({ codigoCia, codigoPersona, codigo }) {
         return false;
     }
 
-    await pool.execute(
+    await ejecutar(
         `
         UPDATE gestion_riesgos.seguridad_2fa_recovery_code
         SET usado = 1,
@@ -603,7 +603,7 @@ exports.login = async (req, res) => {
             const idDesafio = crypto.randomUUID();
             const fechaExpiracion = new Date(Date.now() + TWO_FACTOR_TOKEN_MINUTES * 60 * 1000);
 
-            await pool.execute(
+            await ejecutar(
                 `
                 INSERT INTO gestion_riesgos.seguridad_2fa_desafio (
                     id_desafio,
@@ -712,7 +712,7 @@ exports.verificar2FA = async (req, res) => {
             });
         }
 
-        const [desafios] = await pool.execute(
+        const desafios = await consultar(
             `
             SELECT 
                 id_desafio,
@@ -762,7 +762,7 @@ exports.verificar2FA = async (req, res) => {
             });
         }
 
-        const [configs] = await pool.execute(
+        const configs = await consultar(
             `
             SELECT 
                 activo,
@@ -809,7 +809,7 @@ exports.verificar2FA = async (req, res) => {
         }
 
         if (!codigoValido) {
-            await pool.execute(
+            await ejecutar(
                 `
                 UPDATE gestion_riesgos.seguridad_2fa_desafio
                 SET intentos = intentos + 1
@@ -824,7 +824,7 @@ exports.verificar2FA = async (req, res) => {
             });
         }
 
-        await pool.execute(
+        await ejecutar(
             `
             UPDATE gestion_riesgos.seguridad_2fa_desafio
             SET verificado = 1,
@@ -834,7 +834,7 @@ exports.verificar2FA = async (req, res) => {
             [decoded.id_desafio]
         );
 
-        await pool.execute(
+        await ejecutar(
             `
             UPDATE gestion_riesgos.seguridad_2fa_configuracion
             SET fecha_ultimo_uso = NOW()
@@ -911,7 +911,7 @@ exports.refresh = async (req, res) => {
 
         const refreshHash = hashValue(refreshToken);
 
-        const [rows] = await pool.execute(
+        const rows = await consultar(
             `
             SELECT 
                 s.id_sesion,
@@ -956,7 +956,7 @@ exports.refresh = async (req, res) => {
 
         const fechaExpiracion = getRefreshExpirationDate();
 
-        await pool.execute(
+        await ejecutar(
             `
             UPDATE gestion_riesgos.seguridad_sesion
             SET refresh_token_hash = ?,
@@ -1020,7 +1020,7 @@ exports.logout = async (req, res) => {
             const decoded = jwt.decode(accessToken);
 
             if (decoded?.sid) {
-                await pool.execute(
+                await ejecutar(
                     `
                     UPDATE gestion_riesgos.seguridad_sesion
                     SET activo = 0,
@@ -1067,7 +1067,7 @@ exports.logout = async (req, res) => {
  */
 exports.me = async (req, res) => {
     try {
-        const [rows] = await pool.execute(
+        const rows = await consultar(
             `
             SELECT 
                 sp.CODIGO_COLABORADOR AS CODIGO_PERSONA,
@@ -1145,7 +1145,7 @@ exports.setupTOTP = async (req, res) => {
             });
         }
 
-        const [existente] = await pool.execute(
+        const existente = await consultar(
             `
             SELECT activo
             FROM gestion_riesgos.seguridad_2fa_configuracion
@@ -1166,7 +1166,7 @@ exports.setupTOTP = async (req, res) => {
         const secret = generateTotpSecret();
         const encrypted = encryptSecret(secret);
 
-        await pool.execute(
+        await ejecutar(
             `
             INSERT INTO gestion_riesgos.seguridad_2fa_configuracion (
                 codigo_cia,
@@ -1255,13 +1255,11 @@ exports.confirmarTOTP = async (req, res) => {
         });
     }
 
-    const conn = await pool.getConnection();
-
     try {
         const codigoCia = req.codigo_cia;
         const codigoPersona = req.userId;
 
-        const [configs] = await conn.execute(
+        const configs = await consultar(
             `
             SELECT 
                 activo,
@@ -1277,8 +1275,6 @@ exports.confirmarTOTP = async (req, res) => {
         );
 
         if (configs.length === 0) {
-            conn.release();
-
             return res.status(404).json({
                 ok: false,
                 message: 'No existe configuración 2FA pendiente'
@@ -1288,8 +1284,6 @@ exports.confirmarTOTP = async (req, res) => {
         const config = configs[0];
 
         if (!config.totp_secret_encrypted || !config.totp_secret_iv || !config.totp_secret_auth_tag) {
-            conn.release();
-
             return res.status(400).json({
                 ok: false,
                 message: 'La configuración 2FA está incompleta'
@@ -1308,63 +1302,59 @@ exports.confirmarTOTP = async (req, res) => {
         });
 
         if (!valido) {
-            conn.release();
-
             return res.status(400).json({
                 ok: false,
                 message: 'Código TOTP inválido'
             });
         }
 
-        await conn.beginTransaction();
-
-        await conn.execute(
-            `
-            UPDATE gestion_riesgos.seguridad_2fa_configuracion
-            SET activo = 1,
-                fecha_habilitacion = IFNULL(fecha_habilitacion, NOW()),
-                fecha_ultimo_uso = NOW(),
-                usuario_modificacion = ?,
-                fecha_modificacion = NOW()
-            WHERE codigo_cia = ?
-              AND codigo_colaborador = ?
-            `,
-            [codigoPersona, codigoCia, codigoPersona]
-        );
-
-        await conn.execute(
-            `
-            DELETE FROM gestion_riesgos.seguridad_2fa_recovery_code
-            WHERE codigo_cia = ?
-              AND codigo_colaborador = ?
-            `,
-            [codigoCia, codigoPersona]
-        );
-
         const recoveryCodes = generateRecoveryCodes(8);
 
-        for (const recoveryCode of recoveryCodes) {
-            await conn.execute(
+        await transaccion(async tx => {
+            await ejecutar(
                 `
-                INSERT INTO gestion_riesgos.seguridad_2fa_recovery_code (
-                    id_recovery_code,
-                    codigo_cia,
-                    codigo_colaborador,
-                    codigo_hash
-                )
-                VALUES (?, ?, ?, ?)
+                UPDATE gestion_riesgos.seguridad_2fa_configuracion
+                SET activo = 1,
+                    fecha_habilitacion = IFNULL(fecha_habilitacion, NOW()),
+                    fecha_ultimo_uso = NOW(),
+                    usuario_modificacion = ?,
+                    fecha_modificacion = NOW()
+                WHERE codigo_cia = ?
+                  AND codigo_colaborador = ?
                 `,
-                [
-                    crypto.randomUUID(),
-                    codigoCia,
-                    codigoPersona,
-                    hashValue(normalizeRecoveryCode(recoveryCode))
-                ]
+                [codigoPersona, codigoCia, codigoPersona], tx
             );
-        }
 
-        await conn.commit();
-        conn.release();
+            await ejecutar(
+                `
+                DELETE FROM gestion_riesgos.seguridad_2fa_recovery_code
+                WHERE codigo_cia = ?
+                  AND codigo_colaborador = ?
+                `,
+                [codigoCia, codigoPersona], tx
+            );
+
+            for (const recoveryCode of recoveryCodes) {
+                await ejecutar(
+                    `
+                    INSERT INTO gestion_riesgos.seguridad_2fa_recovery_code (
+                        id_recovery_code,
+                        codigo_cia,
+                        codigo_colaborador,
+                        codigo_hash
+                    )
+                    VALUES (?, ?, ?, ?)
+                    `,
+                    [
+                        crypto.randomUUID(),
+                        codigoCia,
+                        codigoPersona,
+                        hashValue(normalizeRecoveryCode(recoveryCode))
+                    ],
+                    tx
+                );
+            }
+        });
 
         return res.json({
             ok: true,
@@ -1372,12 +1362,6 @@ exports.confirmarTOTP = async (req, res) => {
             recoveryCodes
         });
     } catch (err) {
-        try {
-            await conn.rollback();
-        } catch (_rollbackErr) { }
-
-        conn.release();
-
         console.error('Error confirmando TOTP:', err);
 
         return res.status(500).json({
@@ -1420,7 +1404,7 @@ exports.desactivarTOTP = async (req, res) => {
         const codigoCia = req.codigo_cia;
         const codigoPersona = req.userId;
 
-        const [configs] = await pool.execute(
+        const configs = await consultar(
             `
             SELECT 
                 activo,
@@ -1473,7 +1457,7 @@ exports.desactivarTOTP = async (req, res) => {
             });
         }
 
-        await pool.execute(
+        await ejecutar(
             `
             UPDATE gestion_riesgos.seguridad_2fa_configuracion
             SET activo = 0,
@@ -1488,7 +1472,7 @@ exports.desactivarTOTP = async (req, res) => {
             [codigoPersona, codigoCia, codigoPersona]
         );
 
-        await pool.execute(
+        await ejecutar(
             `
             DELETE FROM gestion_riesgos.seguridad_2fa_recovery_code
             WHERE codigo_cia = ?

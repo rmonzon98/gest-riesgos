@@ -7,7 +7,7 @@
  * @author Equipo de Desarrollo
  */
 
-const pool = require('../../bd/mySQLConnection');
+const { consultar, ejecutar, transaccion, prisma } = require('../../bd/consultas');
 const sha1 = require('sha-1')
 const { sendEmail } = require('./../../services/mail')
 const { accesoAdministracion, bloquearInstitucion, comprobarLicencia, errorAdministracion, obtenerLicencia } =
@@ -17,7 +17,7 @@ const { accesoAdministracion, bloquearInstitucion, comprobarLicencia, errorAdmin
 exports.licencia = async (req, res) => {
     try {
         await accesoAdministracion(req, true);
-        return res.json({ result: await obtenerLicencia(pool, req.codigo_cia) });
+        return res.json({ result: await obtenerLicencia(prisma, req.codigo_cia) });
     } catch (error) {
         if (error.status) return res.status(error.status).json({ error: error.message });
         console.error('Error al consultar la licencia:', error);
@@ -81,7 +81,7 @@ exports.actualizarContrasena = async (req, res) => {
         SET CONTRASENA = ?, FECHA_MODIFICACION = NOW()
         WHERE CORREO_ELECTRONICO = ?
         `;
-        const [result] = await pool.execute(sql, [contrasena.contrasena, correo]);
+        const result = await ejecutar(sql, [contrasena.contrasena, correo]);
 
         if (result.affectedRows === 0) {
             return res.status(404).json({ ok: false, msg: 'No se encontró un usuario con ese correo electrónico.' });
@@ -138,7 +138,7 @@ exports.obtenerSuperior = async (req, res) => {
         WHERE CODIGO_CIA = ? AND CODIGO_COLABORADOR = ?
         LIMIT 1
         `;
-        const [rows] = await pool.execute(sql, [req.codigo_cia, req.userId]);
+        const rows = await consultar(sql, [req.codigo_cia, req.userId]);
         if (!rows.length) return res.status(404).json({ error: 'Superior no encontrado' });
         return res.json({ data: rows[0] });
     } catch (error) {
@@ -178,7 +178,7 @@ exports.miUnidad = async (req, res) => {
             CODIGO_CIA = ? AND CODIGO_ENTIDAD = ?
         LIMIT 1
         `;
-        const [rows] = await pool.execute(sql, [codigo_cia, Number(codigo_entidad)]);
+        const rows = await consultar(sql, [codigo_cia, Number(codigo_entidad)]);
         if (!rows.length) return res.status(404).json({ error: 'Unidad no encontrada' });
 
         return res.json({ data: rows[0] });
@@ -232,7 +232,7 @@ exports.obtenerPersonasPorEmpresa = async (req, res) => {
         ORDER BY sp.activo DESC, sp.PRIMER_NOMBRE, sp.PRIMER_APELLIDO
         `;
 
-        const [rows] = await pool.execute(sql, [codigo_cia]);
+        const rows = await consultar(sql, [codigo_cia]);
 
         const personas = rows.map(p => {
             const nombres = [
@@ -278,7 +278,7 @@ exports.obtenerResponsableUnico = async (req, res) => {
     const { codigo } = req.query;
     try {
         const { direccion } = await accesoAdministracion(req);
-        const [rows] = await pool.execute(`
+        const rows = await consultar(`
             SELECT
                 a.CODIGO_COLABORADOR, a.PRIMER_NOMBRE, 
                 a.SEGUNDO_NOMBRE, a.TERCER_NOMBRE,
@@ -339,7 +339,7 @@ exports.cambiarVigente = async (req, res) => {
 
         const params = [valor, usuario, codigo_cia, codigo_colaborador];
 
-        const [result] = await pool.execute(sql, params);
+        const result = await ejecutar(sql, params);
 
         if (result.affectedRows === 0) {
             return res.status(404).json({ error: 'Colaborador no encontrado' });
@@ -373,45 +373,39 @@ exports.cambiarActivo = async (req, res) => {
     }
 
     if (![0, 1, '0', '1'].includes(valor)) return res.status(400).json({ error: 'Indique el estado de la persona.' });
-    let conn;
     try {
         const { direccion } = await accesoAdministracion(req);
-        conn = await pool.getConnection();
-        await conn.beginTransaction();
-        await bloquearInstitucion(conn, codigo_cia);
-        const [[persona]] = await conn.execute(`SELECT ACTIVO, CODIGO_ENTIDAD FROM gestion_riesgos.seguridad_persona
-            WHERE CODIGO_CIA = ? AND CODIGO_COLABORADOR = ? FOR UPDATE`, [codigo_cia, codigo_colaborador]);
-        if (!persona || (direccion != null && persona.CODIGO_ENTIDAD !== direccion)) {
-            throw errorAdministracion(404, 'Colaborador no encontrado en su ámbito.');
-        }
-        if (String(valor) === '1' && persona.ACTIVO !== '1') comprobarLicencia(await obtenerLicencia(conn, codigo_cia));
-        const sql = `
-        UPDATE gestion_riesgos.seguridad_persona
-        SET 
-            activo                = ?,
-            USUARIO_MODIFICACION  = ?,
-            FECHA_MODIFICACION    = CURRENT_TIMESTAMP
-       WHERE CODIGO_CIA = ? AND CODIGO_COLABORADOR = ?
-    `;
+        await transaccion(async tx => {
+            await bloquearInstitucion(tx, codigo_cia);
+            const [persona] = await consultar(`SELECT ACTIVO, CODIGO_ENTIDAD FROM gestion_riesgos.seguridad_persona
+                WHERE CODIGO_CIA = ? AND CODIGO_COLABORADOR = ? FOR UPDATE`, [codigo_cia, codigo_colaborador], tx);
+            if (!persona || (direccion != null && persona.CODIGO_ENTIDAD !== direccion)) {
+                throw errorAdministracion(404, 'Colaborador no encontrado en su ámbito.');
+            }
+            if (String(valor) === '1' && persona.ACTIVO !== '1') comprobarLicencia(await obtenerLicencia(tx, codigo_cia));
+            const sql = `
+            UPDATE gestion_riesgos.seguridad_persona
+            SET 
+                activo                = ?,
+                USUARIO_MODIFICACION  = ?,
+                FECHA_MODIFICACION    = CURRENT_TIMESTAMP
+           WHERE CODIGO_CIA = ? AND CODIGO_COLABORADOR = ?
+        `;
 
-        const params = [valor, usuario, codigo_cia, codigo_colaborador];
+            const params = [valor, usuario, codigo_cia, codigo_colaborador];
 
-        const [result] = await conn.execute(sql, params);
+            const result = await ejecutar(sql, params, tx);
 
-        if (result.affectedRows === 0) {
-            throw errorAdministracion(404, 'Colaborador no encontrado.');
-        }
-
-        await conn.commit();
+            if (result.affectedRows === 0) {
+                throw errorAdministracion(404, 'Colaborador no encontrado.');
+            }
+        });
         return res.json({ mensaje: 'Colaborador actualizado correctamente' });
 
     } catch (error) {
-        if (conn) await conn.rollback();
         if (error.status) return res.status(error.status).json({ error: error.message });
         console.error('Error al actualizar colaborador:', error);
         return res.status(500).json({ error: 'Error al actualizar colaborador' });
-    } finally {
-        conn?.release();
     }
 };
 
@@ -441,7 +435,7 @@ exports.actualizarContrasenaAdmin = async (req, res) => {
         SET CONTRASENA = ?, FECHA_MODIFICACION = NOW()
         WHERE CORREO_ELECTRONICO = ?
         `;
-        const [result] = await pool.execute(sql, [contrasena.contrasena, correo]);
+        const result = await ejecutar(sql, [contrasena.contrasena, correo]);
 
         if (result.affectedRows === 0) {
             return res.status(404).json({ ok: false, msg: 'No se encontró un usuario con ese correo electrónico.' });
@@ -518,7 +512,7 @@ exports.obtenerPersonasPorEmpresaDireccion = async (req, res) => {
         ORDER BY sp.activo DESC, sp.PRIMER_NOMBRE, sp.PRIMER_APELLIDO
         `;
 
-        const [rows] = await pool.execute(sql, [codigo_cia, req.codigo_entidad]);
+        const rows = await consultar(sql, [codigo_cia, req.codigo_entidad]);
 
         const personas = rows.map(p => {
             const nombres = [
@@ -548,7 +542,7 @@ exports.obtenerPersonasPorEmpresaDireccion = async (req, res) => {
     }
 };
 
-async function superiorAsignado(conn, cia, persona, solicitado, previo) {
+async function superiorAsignado(tx, cia, persona, solicitado, previo) {
     if (solicitado === undefined) return previo;
     if (solicitado == null || solicitado === '') return null;
     const superior = Number(solicitado);
@@ -556,11 +550,11 @@ async function superiorAsignado(conn, cia, persona, solicitado, previo) {
         throw errorAdministracion(400, 'El superior debe ser una persona distinta del colaborador.');
     }
     if (superior === previo) return superior;
-    const [[fila]] = await conn.execute(`
+    const [fila] = await consultar(`
         SELECT p.ACTIVO, s.CODIGO_SUPERIOR FROM gestion_riesgos.seguridad_persona p
         LEFT JOIN gestion_riesgos.riesgos_colaborador_superior s
             ON s.CODIGO_CIA = p.CODIGO_CIA AND s.CODIGO_COLABORADOR = p.CODIGO_COLABORADOR
-        WHERE p.CODIGO_CIA = ? AND p.CODIGO_COLABORADOR = ?`, [cia, superior]);
+        WHERE p.CODIGO_CIA = ? AND p.CODIGO_COLABORADOR = ?`, [cia, superior], tx);
     if (!fila || fila.ACTIVO !== '1') throw errorAdministracion(400, 'Elija un superior activo de su institución.');
     if (fila.CODIGO_SUPERIOR === persona) throw errorAdministracion(409, 'La asignación crearía un ciclo entre los dos superiores.');
     return superior;
@@ -580,70 +574,66 @@ async function guardarResponsable(req, res, { crear, porDireccion }) {
     if ([nombre_superior, puesto_superior].some(value => value != null && (typeof value !== 'string' || value.length > 100))) {
         return res.status(400).json({ error: 'El nombre y el puesto de firma admiten hasta 100 caracteres.' });
     }
-    let conn;
     try {
         await accesoAdministracion(req, !porDireccion);
-        conn = await pool.getConnection();
-        await conn.beginTransaction();
-        await bloquearInstitucion(conn, cia);
-        const entidad = porDireccion ? req.codigo_entidad : codigo_entidad || null;
-        let persona = crear ? null : Number(codigo_colaborador);
-        let anterior;
-        let visible;
-        if (crear) {
-            comprobarLicencia(await obtenerLicencia(conn, cia));
-            const [[duplicado]] = await conn.execute(`SELECT CODIGO_COLABORADOR FROM gestion_riesgos.seguridad_persona
-                WHERE CODIGO_CIA = ? AND LOWER(CORREO_ELECTRONICO) = ? LIMIT 1`, [cia, email]);
-            if (duplicado) throw errorAdministracion(409, 'El correo ya está registrado para esta institución.');
-            const [[siguiente]] = await conn.execute(`SELECT COALESCE(MAX(CODIGO_COLABORADOR), 0) + 1 AS nuevo
-                FROM gestion_riesgos.seguridad_persona WHERE CODIGO_CIA = ? FOR UPDATE`, [cia]);
-            persona = Number(siguiente.nuevo);
-            const password = obtenerContrasenaCorreo(email);
-            visible = password.visible;
-            await conn.execute(`INSERT INTO gestion_riesgos.seguridad_persona
-                (CODIGO_CIA, CODIGO_COLABORADOR, PRIMER_NOMBRE, SEGUNDO_NOMBRE, TERCER_NOMBRE,
-                PRIMER_APELLIDO, SEGUNDO_APELLIDO, TERCER_APELLIDO, CORREO_ELECTRONICO, CODIGO_ENTIDAD,
-                CONTRASENA, ACTIVO, USUARIO_CREACION, FECHA_CREACION)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '1', ?, CURRENT_TIMESTAMP)`,
-                [cia, persona, ...nombres, email, entidad, password.contrasena, usuario]);
-        } else {
-            const [[encontrada]] = await conn.execute(`SELECT CODIGO_ENTIDAD FROM gestion_riesgos.seguridad_persona
-                WHERE CODIGO_CIA = ? AND CODIGO_COLABORADOR = ? FOR UPDATE`, [cia, persona]);
-            if (!encontrada || (porDireccion && encontrada.CODIGO_ENTIDAD !== Number(entidad))) {
-                throw errorAdministracion(404, 'Colaborador no encontrado en su ámbito.');
+        const { persona, visible } = await transaccion(async tx => {
+            await bloquearInstitucion(tx, cia);
+            const entidad = porDireccion ? req.codigo_entidad : codigo_entidad || null;
+            let persona = crear ? null : Number(codigo_colaborador);
+            let anterior;
+            let visible;
+            if (crear) {
+                comprobarLicencia(await obtenerLicencia(tx, cia));
+                const [duplicado] = await consultar(`SELECT CODIGO_COLABORADOR FROM gestion_riesgos.seguridad_persona
+                    WHERE CODIGO_CIA = ? AND LOWER(CORREO_ELECTRONICO) = ? LIMIT 1`, [cia, email], tx);
+                if (duplicado) throw errorAdministracion(409, 'El correo ya está registrado para esta institución.');
+                const [siguiente] = await consultar(`SELECT COALESCE(MAX(CODIGO_COLABORADOR), 0) + 1 AS nuevo
+                    FROM gestion_riesgos.seguridad_persona WHERE CODIGO_CIA = ? FOR UPDATE`, [cia], tx);
+                persona = Number(siguiente.nuevo);
+                const password = obtenerContrasenaCorreo(email);
+                visible = password.visible;
+                await ejecutar(`INSERT INTO gestion_riesgos.seguridad_persona
+                    (CODIGO_CIA, CODIGO_COLABORADOR, PRIMER_NOMBRE, SEGUNDO_NOMBRE, TERCER_NOMBRE,
+                    PRIMER_APELLIDO, SEGUNDO_APELLIDO, TERCER_APELLIDO, CORREO_ELECTRONICO, CODIGO_ENTIDAD,
+                    CONTRASENA, ACTIVO, USUARIO_CREACION, FECHA_CREACION)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '1', ?, CURRENT_TIMESTAMP)`,
+                    [cia, persona, ...nombres, email, entidad, password.contrasena, usuario], tx);
+            } else {
+                const [encontrada] = await consultar(`SELECT CODIGO_ENTIDAD FROM gestion_riesgos.seguridad_persona
+                    WHERE CODIGO_CIA = ? AND CODIGO_COLABORADOR = ? FOR UPDATE`, [cia, persona], tx);
+                if (!encontrada || (porDireccion && encontrada.CODIGO_ENTIDAD !== Number(entidad))) {
+                    throw errorAdministracion(404, 'Colaborador no encontrado en su ámbito.');
+                }
+                [anterior] = await consultar(`SELECT CODIGO_SUPERIOR, NOMBRE_SUPERIOR, PUESTO_SUPERIOR
+                    FROM gestion_riesgos.riesgos_colaborador_superior WHERE CODIGO_CIA = ? AND CODIGO_COLABORADOR = ?`, [cia, persona], tx);
+                await ejecutar(`UPDATE gestion_riesgos.seguridad_persona
+                    SET PRIMER_NOMBRE = ?, SEGUNDO_NOMBRE = ?, TERCER_NOMBRE = ?, PRIMER_APELLIDO = ?,
+                        SEGUNDO_APELLIDO = ?, TERCER_APELLIDO = ?, CORREO_ELECTRONICO = ?, CODIGO_ENTIDAD = ?,
+                        USUARIO_MODIFICACION = ?, FECHA_MODIFICACION = CURRENT_TIMESTAMP
+                    WHERE CODIGO_CIA = ? AND CODIGO_COLABORADOR = ?`,
+                    [...nombres, email, entidad, usuario, cia, persona], tx);
             }
-            [[anterior]] = await conn.execute(`SELECT CODIGO_SUPERIOR, NOMBRE_SUPERIOR, PUESTO_SUPERIOR
-                FROM gestion_riesgos.riesgos_colaborador_superior WHERE CODIGO_CIA = ? AND CODIGO_COLABORADOR = ?`, [cia, persona]);
-            await conn.execute(`UPDATE gestion_riesgos.seguridad_persona
-                SET PRIMER_NOMBRE = ?, SEGUNDO_NOMBRE = ?, TERCER_NOMBRE = ?, PRIMER_APELLIDO = ?,
-                    SEGUNDO_APELLIDO = ?, TERCER_APELLIDO = ?, CORREO_ELECTRONICO = ?, CODIGO_ENTIDAD = ?,
-                    USUARIO_MODIFICACION = ?, FECHA_MODIFICACION = CURRENT_TIMESTAMP
-                WHERE CODIGO_CIA = ? AND CODIGO_COLABORADOR = ?`,
-                [...nombres, email, entidad, usuario, cia, persona]);
-        }
-        const superior = await superiorAsignado(conn, cia, persona, codigo_superior, anterior?.CODIGO_SUPERIOR ?? null);
-        const nombreFirma = nombre_superior === undefined ? anterior?.NOMBRE_SUPERIOR ?? null : nombre_superior;
-        const puestoFirma = puesto_superior === undefined ? anterior?.PUESTO_SUPERIOR ?? null : puesto_superior;
-        await conn.execute(`INSERT INTO gestion_riesgos.riesgos_colaborador_superior
-            (CODIGO_CIA, CODIGO_COLABORADOR, CODIGO_SUPERIOR, NOMBRE_SUPERIOR, PUESTO_SUPERIOR, USUARIO_CREACION, FECHA_CREACION)
-            VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-            ON DUPLICATE KEY UPDATE CODIGO_SUPERIOR = VALUES(CODIGO_SUPERIOR), NOMBRE_SUPERIOR = VALUES(NOMBRE_SUPERIOR),
-                PUESTO_SUPERIOR = VALUES(PUESTO_SUPERIOR), USUARIO_MODIFICACION = VALUES(USUARIO_CREACION),
-                FECHA_MODIFICACION = CURRENT_TIMESTAMP`,
-            [cia, persona, superior, nombreFirma, puestoFirma, usuario]);
-        await conn.commit();
+            const superior = await superiorAsignado(tx, cia, persona, codigo_superior, anterior?.CODIGO_SUPERIOR ?? null);
+            const nombreFirma = nombre_superior === undefined ? anterior?.NOMBRE_SUPERIOR ?? null : nombre_superior;
+            const puestoFirma = puesto_superior === undefined ? anterior?.PUESTO_SUPERIOR ?? null : puesto_superior;
+            await ejecutar(`INSERT INTO gestion_riesgos.riesgos_colaborador_superior
+                (CODIGO_CIA, CODIGO_COLABORADOR, CODIGO_SUPERIOR, NOMBRE_SUPERIOR, PUESTO_SUPERIOR, USUARIO_CREACION, FECHA_CREACION)
+                VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ON DUPLICATE KEY UPDATE CODIGO_SUPERIOR = VALUES(CODIGO_SUPERIOR), NOMBRE_SUPERIOR = VALUES(NOMBRE_SUPERIOR),
+                    PUESTO_SUPERIOR = VALUES(PUESTO_SUPERIOR), USUARIO_MODIFICACION = VALUES(USUARIO_CREACION),
+                    FECHA_MODIFICACION = CURRENT_TIMESTAMP`,
+                [cia, persona, superior, nombreFirma, puestoFirma, usuario], tx);
+            return { persona, visible };
+        });
         return crear
             ? res.status(201).json({ mensaje: 'Colaborador creado correctamente', codigo_colaborador: persona, contra: visible })
             : res.json({ mensaje: 'Colaborador actualizado correctamente' });
     } catch (error) {
-        if (conn) await conn.rollback();
         if (error.status) return res.status(error.status).json({ error: error.message });
         if (error.code === 'ER_DUP_ENTRY') return res.status(409).json({ error: 'Ya existe un registro con esos datos.' });
         if (error.code === 'PROTOCOL_SEQUENCE_TIMEOUT') return res.status(408).json({ error: 'La operación tardó demasiado.' });
         console.error('Error al guardar el colaborador:', error);
         return res.status(500).json({ error: 'No se pudo guardar el colaborador.' });
-    } finally {
-        conn?.release();
     }
 }
 
@@ -693,7 +683,7 @@ exports.obtenerPersonasPorEmpresaAdministracion = async (req, res) => {
         ORDER BY sp.activo DESC, sp.PRIMER_NOMBRE, sp.PRIMER_APELLIDO
         `;
 
-        const [rows] = await pool.execute(sql, [codigo_cia]);
+        const rows = await consultar(sql, [codigo_cia]);
 
         const personas = rows.map(p => {
             const nombres = [
@@ -756,7 +746,7 @@ exports.actualizarContrasenaPerfil = async (req, res) => {
             FROM gestion_riesgos.seguridad_persona
             WHERE CODIGO_CIA = ? AND CODIGO_COLABORADOR = ? AND VIGENTE = '1'
         `;
-        const [rows] = await pool.execute(sqlVerificar, [req.codigo_cia, req.userId]);
+        const rows = await consultar(sqlVerificar, [req.codigo_cia, req.userId]);
 
         if (rows.length === 0) {
             return res.status(404).json({
@@ -777,7 +767,7 @@ exports.actualizarContrasenaPerfil = async (req, res) => {
             SET CONTRASENA = ?, USUARIO_MODIFICACION = ?, FECHA_MODIFICACION = NOW()
             WHERE CODIGO_CIA = ? AND CODIGO_COLABORADOR = ? AND VIGENTE = '1'
         `;
-        await pool.execute(sqlActualizar, [sha1(nueva), req.userId, req.codigo_cia, req.userId]);
+        await ejecutar(sqlActualizar, [sha1(nueva), req.userId, req.codigo_cia, req.userId]);
 
         res.json({
             ok: true,
@@ -830,7 +820,7 @@ exports.obtenerSuperiorPerfil = async (req, res) => {
             AND sp.codigo_colaborador = ?
         `
 
-        const response = await pool.execute(sqlInformacion, [codigo_cia, codigo_colaborador]);
+        const response = [await consultar(sqlInformacion, [codigo_cia, codigo_colaborador])];
 
         res.json({ ok: true, result: response });
     } catch (err) {
@@ -869,7 +859,7 @@ exports.actualizarSuperior = async (req, res) => {
             codigo_cia = ?
             AND codigo_colaborador = ?
         `
-        await pool.execute(sqlUpdate, [nombre_superior, puesto_superior, req.userId, codigo_cia, codigo_colaborador]);
+        await ejecutar(sqlUpdate, [nombre_superior, puesto_superior, req.userId, codigo_cia, codigo_colaborador]);
 
         res.json({ ok: true, });
     } catch (err) {
