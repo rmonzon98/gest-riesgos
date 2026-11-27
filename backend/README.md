@@ -15,7 +15,7 @@ Todo el backend usa Prisma con el adaptador MariaDB y un único pool de conexion
 
 `bd/consultas.js` mantiene lo que esos endpoints ya entregaban:
 
-- Interpreta los `DATE`/`DATETIME` como **hora local del proceso Node**, igual que antes. El servidor debe correr con la zona horaria en la que se guardaron los datos (Guatemala). El cliente tipado, en cambio, lee esas columnas como UTC.
+- Interpreta los `DATE`/`DATETIME` como **hora local del proceso Node**, igual que antes. El servidor debe correr con la zona horaria en la que se guardaron los datos (Guatemala). El cliente tipado sigue la misma convención gracias a la extensión `prisma/horaLocal.js`: convierte los timestamps en argumentos y resultados y genera los `@default(now())` en hora local. Las columnas `@db.Date` (fechas de calendario) no se convierten; el código las maneja como medianoche UTC.
 - Devuelve `COUNT(*)` y los `BIGINT` como números.
 - Traduce los errores de MariaDB a `ER_*` (`err.code`, `err.errno`, `err.sqlMessage`).
 - Rechaza parámetros `undefined`, objetos y arreglos. Para listas en `IN (...)` usa `marcadores()`.
