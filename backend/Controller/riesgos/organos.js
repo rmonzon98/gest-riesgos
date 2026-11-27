@@ -191,7 +191,7 @@ async function actualizarOrgano(req, res) {
                 `UPDATE gestion_riesgos.riesgos_organos
        SET NOMBRE = ?, USUARIO_MODIFICACION = ?, FECHA_MODIFICACION = NOW()
        WHERE CODIGO_CIA = ? AND CODIGO_ORGANO = ?`,
-                [nombre, codigo_cia, codigo_organo, req.userId ?? null], tx
+                [nombre, req.userId ?? null, codigo_cia, codigo_organo], tx
             );
         });
 

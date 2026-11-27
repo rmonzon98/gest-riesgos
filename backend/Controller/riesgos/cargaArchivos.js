@@ -565,7 +565,7 @@ exports.actualizarFinalDocumento = async (req, res) => {
                 WHERE CODIGO_CIA = ?
                 AND CODIGO_DOCUMENTO = ?
                 AND CODIGO_ENTIDAD = ?`,
-                [req.userId, finalNum, codigo_cia, Number(id), codigo_entidad], tx
+                [finalNum, req.userId, codigo_cia, Number(id), codigo_entidad], tx
             );
 
             if (upd.affectedRows !== 1) {

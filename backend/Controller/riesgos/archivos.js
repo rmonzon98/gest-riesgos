@@ -231,7 +231,7 @@ exports.actualizarLogoBarra = async (req, res) => {
             `SELECT PATH_BARRA FROM gestion_riesgos.seguridad_institucion WHERE CODIGO_CIA = ? LIMIT 1`,
             [codigo_cia]
         );
-        oldPathRel = rows?.[0]?.PATH || null;
+        oldPathRel = rows?.[0]?.PATH_BARRA || null;
 
         const carpetaDestino = absInDocs(`entidad${codigo_cia}`, 'logo');
         await fsp.mkdir(carpetaDestino, { recursive: true });

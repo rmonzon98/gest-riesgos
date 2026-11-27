@@ -193,7 +193,7 @@ async function actualizarViceministerio(req, res) {
                 `UPDATE gestion_riesgos.riesgos_viceministerio
            SET NOMBRE = ?, USUARIO_MODIFICACION = ?, FECHA_MODIFICACION = NOW()
            WHERE CODIGO_CIA = ? AND CODIGO_VICEMINISTERIO = ?`,
-                [nombre, codigo_cia, codigo_viceministerio, req.userId ?? null], tx
+                [nombre, req.userId ?? null, codigo_cia, codigo_viceministerio], tx
             );
         });
 
