@@ -7,7 +7,7 @@
  * @author Equipo de Desarrollo
  */
 
-const pool = require('./../../bd/mySQLConnection');
+const { consultar, conIdiomaEspanol } = require('../../bd/consultas');
 const fs = require('fs');
 const fsp = fs.promises;
 const path = require('path');
@@ -51,11 +51,8 @@ exports.obtenerSuperiorInfo = async (req, res) => {
     const codigo_cia = asNum(req.codigo_cia);
     const codigo_colaborador = asNum(req.userId);
 
-    let conn;
     try {
-        conn = await pool.getConnection();
-
-        const [rows] = await conn.query(
+        const rows = await consultar(
             `
             SELECT  nombre_superior AS nombre, puesto_superior AS puesto
             FROM gestion_riesgos.riesgos_colaborador_superior
@@ -73,10 +70,6 @@ exports.obtenerSuperiorInfo = async (req, res) => {
     } catch (err) {
         console.error('Error en obtener superior:', err);
         return res.status(500).json({ msg: 'Error al obtener superior', err: err.message });
-    } finally {
-        try {
-            conn?.release?.();
-        } catch { }
     }
 }
 
@@ -97,11 +90,8 @@ exports.obtenerSuperior = async (req, res, next) => {
     const codigo_cia = asNum(req.codigo_cia);
     const codigo_colaborador = asNum(req.userId);
 
-    let conn;
     try {
-        conn = await pool.getConnection();
-
-        const [rows] = await conn.query(
+        const rows = await consultar(
             `
             SELECT  nombre_superior AS nombre, puesto_superior AS puesto
             FROM gestion_riesgos.riesgos_colaborador_superior
@@ -120,10 +110,6 @@ exports.obtenerSuperior = async (req, res, next) => {
     } catch (err) {
         console.error('Error en obtener superior:', err);
         return res.status(500).json({ msg: 'Error al obtener superior', err: err.message });
-    } finally {
-        try {
-            conn?.release?.();
-        } catch { }
     }
 }
 
@@ -133,10 +119,7 @@ const asNum = (v) => {
 };
 
 async function obtenerPeriodosEs(codigo_cia) {
-    const conn = await pool.getConnection();
-    try {
-        await conn.query("SET SESSION lc_time_names = 'es_ES'");
-        const [rows] = await conn.execute(
+    return conIdiomaEspanol(tx => consultar(
             `SELECT
          CODIGO_PERIODO,
          DATE_FORMAT(PERIODO_INICIAL, '%d-%M') AS FECINI,
@@ -144,12 +127,8 @@ async function obtenerPeriodosEs(codigo_cia) {
        FROM gestion_riesgos.riesgos_periodo
        WHERE CODIGO_CIA = ?
        ORDER BY CODIGO_PERIODO ASC`,
-            [codigo_cia]
-        );
-        return rows;
-    } finally {
-        conn.release();
-    }
+            [codigo_cia], tx
+    ));
 }
 
 /**
@@ -171,14 +150,8 @@ exports.obtenerInfoInicial = async (req, res) => {
         return res.status(400).json({ error: 'Falta codigo_cia' });
     }
 
-    let conn;
     try {
-        conn = await pool.getConnection();
-
-        await conn.query(`SET lc_time_names = 'es_ES'`);
-
-        const tiposQ = conn
-            .query(
+        const tiposQ = consultar(
                 `
             SELECT  CODIGO_TIPO_OBJETIVO AS ID,  DESCRIPCION AS NOMBRE
             FROM gestion_riesgos.riesgos_tipo_objetivo
@@ -186,12 +159,10 @@ exports.obtenerInfoInicial = async (req, res) => {
             ORDER BY DESCRIPCION
         `,
                 [codigo_cia]
-            )
-            .then(([rows]) => rows);
+            );
 
         const periodosQ = obtenerPeriodosEs(codigo_cia);
-        const unidadesQ = conn
-            .query(
+        const unidadesQ = consultar(
                 `
                 SELECT 
                     CODIGO_ENTIDAD AS CODIGO_ENTIDAD,
@@ -201,8 +172,7 @@ exports.obtenerInfoInicial = async (req, res) => {
                 ORDER BY NOMBRE ASC
             `,
                 [codigo_cia]
-            )
-            .then(([rows]) => rows);
+            );
 
         const [tiposResult, periodosResult, unidadResult] = await Promise.all([
             tiposQ,
@@ -220,10 +190,6 @@ exports.obtenerInfoInicial = async (req, res) => {
         return res
             .status(500)
             .send({ error: 'Error interno al obtener información inicial.' });
-    } finally {
-        try {
-            conn?.release?.();
-        } catch { }
     }
 };
 
@@ -246,11 +212,8 @@ exports.obtenerLogo = async (req, res) => {
         return res.status(400).json({ msg: 'Falta codigo_cia' });
     }
 
-    let conn;
     try {
-        conn = await pool.getConnection();
-
-        const [rows] = await conn.query(
+        const rows = await consultar(
             `
             SELECT 
                 path  AS path,
@@ -285,10 +248,6 @@ exports.obtenerLogo = async (req, res) => {
     } catch (err) {
         console.error('Error en obtenerLogo:', err);
         return res.status(500).json({ msg: 'Error al obtener el logo', err: err.message });
-    } finally {
-        try {
-            conn?.release?.();
-        } catch { }
     }
 };
 
@@ -400,15 +359,8 @@ exports.obtenerValores = async (req, res, next) => {
         ORDER BY rrx.REF ASC`
     let parametros = [direccion, codigo_cia, Number(periodo), soloNuevos(req.query.nuevos)]
     sql = sql + filtrosUnidadTipo(tipo, parametros) + orden
-    const conn = await pool.getConnection();
-    try {
-        await conn.query("SET SESSION lc_time_names = 'es_ES'");
-        const [rows] = await conn.execute(sql, parametros);
-        req.valores = rows;
-        next()
-    } finally {
-        conn.release();
-    }
+    req.valores = await conIdiomaEspanol(tx => consultar(sql, parametros, tx));
+    next()
 }
 
 /**
@@ -431,7 +383,7 @@ exports.obtenerPropiedades = async (req, res) => {
         FROM gestion_riesgos.riesgos_reportes_propiedades
         WHERE codigo_cia = ? AND defecto = 'S' AND codigo_periodo = ?
         `;
-    const [propRows] = await pool.execute(sqlPropiedades, [req.codigo_cia, periodo]);
+    const propRows = await consultar(sqlPropiedades, [req.codigo_cia, periodo]);
     let propiedades = propRows.flatMap(r => {
         try {
             const arr = typeof r.PROPIEDADES === 'string'
@@ -469,7 +421,7 @@ exports.institucion = async (req, res, next) => {
         FROM gestion_riesgos.seguridad_institucion
         WHERE codigo_cia = ?
         `;
-    const [propRows] = await pool.execute(sqlPropiedades, [req.codigo_cia]);
+    const propRows = await consultar(sqlPropiedades, [req.codigo_cia]);
     req.institucion = propRows
     next()
 }
@@ -582,13 +534,6 @@ exports.obtenerValoresInst = async (req, res, next) => {
         ORDER BY rrx.REF ASC`
     let parametros = [direccion, codigo_cia, Number(periodo), soloNuevos(req.query.nuevos)]
     sql = sql + filtrosUnidadTipo(tipo, parametros) + orden
-    const conn = await pool.getConnection();
-    try {
-        await conn.query("SET SESSION lc_time_names = 'es_ES'");
-        const [rows] = await conn.execute(sql, parametros);
-        req.valores = rows;
-        next()
-    } finally {
-        conn.release();
-    }
+    req.valores = await conIdiomaEspanol(tx => consultar(sql, parametros, tx));
+    next()
 }

@@ -7,7 +7,7 @@
  * @author Equipo de Desarrollo
  */
 
-const pool = require('../../bd/mySQLConnection');
+const { consultar } = require('../../bd/consultas');
 
   /**
    * obtenerEntidades
@@ -34,7 +34,7 @@ exports.obtenerEntidades = async (req, res) => {
         ORDER BY nombre ASC
         `;
 
-        const [rows] = await pool.execute(sql, [1, codigo_cia]);
+        const rows = await consultar(sql, [1, codigo_cia]);
 
         return res.json({ result: rows });
     } catch (err) {

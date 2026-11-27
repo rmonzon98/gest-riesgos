@@ -8,7 +8,7 @@
  * @author Equipo de Desarrollo
  */
 
-const pool = require('../../bd/mySQLConnection');
+const { consultar, ejecutar } = require('../../bd/consultas');
 
 /**
  * obtenerTiposObjetivo
@@ -31,7 +31,7 @@ exports.obtenerTiposObjetivo = async (req, res) => {
       WHERE CODIGO_CIA = ? AND ESTADO = 1
       ORDER BY CODIGO_TIPO_OBJETIVO
     `;
-    const [rows] = await pool.execute(sql, [codigo_cia]);
+    const rows = await consultar(sql, [codigo_cia]);
     return res.json({ result: rows });
   } catch (err) {
     console.error('obtenerTiposObjetivo:', err);
@@ -62,7 +62,7 @@ exports.obtenerTipoObjetivoUnico = async (req, res) => {
       WHERE CODIGO_CIA = ? AND CODIGO_TIPO_OBJETIVO = ?
       LIMIT 1
     `;
-    const [rows] = await pool.execute(sql, [codigo_cia, codigo]);
+    const rows = await consultar(sql, [codigo_cia, codigo]);
     if (!rows.length) return res.status(404).json({ error: 'Tipo de objetivo no encontrado' });
     return res.json({ result: rows });
   } catch (err) {
@@ -102,7 +102,7 @@ exports.crearTipoObjetivo = async (req, res) => {
     `;
     const params = [codigo_cia, codigo, descripcion, usuario ?? null];
 
-    await pool.execute(sql, params);
+    await ejecutar(sql, params);
     return res.status(201).json({ mensaje: 'Tipo de objetivo creado correctamente' });
   } catch (err) {
     if (err?.code === 'ER_DUP_ENTRY' || err?.errno === 1062) {
@@ -141,7 +141,7 @@ exports.actualizarTipoObjetivo = async (req, res) => {
     `;
     const params = [descripcion, usuario ?? null, codigo_cia, codigo];
 
-    const [result] = await pool.execute(sql, params);
+    const result = await ejecutar(sql, params);
     if (result.affectedRows === 0) {
       return res.status(404).json({ error: 'Tipo de objetivo no encontrado' });
     }

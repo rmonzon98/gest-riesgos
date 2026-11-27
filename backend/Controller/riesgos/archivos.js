@@ -7,7 +7,7 @@
  * @author Equipo de Desarrollo
  */
 
-const pool = require('../../bd/mySQLConnection');
+const { consultar, ejecutar } = require('../../bd/consultas');
 const path = require('path');
 const fs = require('fs');
 const fsp = fs.promises;
@@ -40,7 +40,7 @@ exports.obtenerLogo = async (req, res) => {
             CODIGO_CIA = ?
         LIMIT 1
         `;
-        const [rows] = await pool.execute(sql, [codigo_cia]);
+        const rows = await consultar(sql, [codigo_cia]);
         if (!rows.length || !rows[0].LOGO) {
             return res.status(404).json({ msg: 'Logo no encontrado' });
         }
@@ -86,7 +86,7 @@ exports.obtenerLogoBarra = async (req, res) => {
             CODIGO_CIA = ?
         LIMIT 1
         `;
-        const [rows] = await pool.execute(sql, [codigo_cia]);
+        const rows = await consultar(sql, [codigo_cia]);
         if (!rows.length || !rows[0].LOGO) {
             return res.status(404).json({ msg: 'Logo no encontrado' });
         }
@@ -147,15 +147,12 @@ exports.actualizarLogo = async (req, res) => {
         return res.status(400).json({ ok: false, msg: 'El archivo excede el tamaño máximo permitido (5MB)' });
     }
 
-    let cn;
     let oldPathRel = null;
     let newPathRel = null;
     let newPathAbs = null;
 
     try {
-        cn = await pool.getConnection();
-
-        const [rows] = await cn.query(
+        const rows = await consultar(
             `SELECT PATH FROM gestion_riesgos.seguridad_institucion WHERE CODIGO_CIA = ? LIMIT 1`,
             [codigo_cia]
         );
@@ -188,14 +185,12 @@ exports.actualizarLogo = async (req, res) => {
 
         await fsp.writeFile(newPathAbs, file.buffer, { flag: 'wx' });
 
-        await cn.beginTransaction();
-        await cn.query(
+        await ejecutar(
             `UPDATE gestion_riesgos.seguridad_institucion
         SET PATH = ?, FECHA_MODIFICACION = NOW(), usuario_modificacion = ?
         WHERE CODIGO_CIA = ?`,
             [newPathRel, req.userId, codigo_cia]
         );
-        await cn.commit();
 
         if (oldPathRel) {
             try { await fsp.unlink(safeInDocs(oldPathRel.replace(/^docs\//, ''))); } catch { }
@@ -208,11 +203,8 @@ exports.actualizarLogo = async (req, res) => {
         });
     } catch (err) {
         if (newPathAbs) { try { await fsp.unlink(newPathAbs); } catch { } }
-        try { await cn?.rollback(); } catch { }
         console.error('Error al actualizar logo:', err);
         return res.status(500).json({ ok: false, msg: 'Error al actualizar logo', error: err.message });
-    } finally {
-        try { cn?.release?.(); } catch { }
     }
 };
 
@@ -230,15 +222,12 @@ exports.actualizarLogoBarra = async (req, res) => {
         return res.status(400).json({ ok: false, msg: 'El archivo excede el tamaño máximo permitido (5MB)' });
     }
 
-    let cn;
     let oldPathRel = null;
     let newPathRel = null;
     let newPathAbs = null;
 
     try {
-        cn = await pool.getConnection();
-
-        const [rows] = await cn.query(
+        const rows = await consultar(
             `SELECT PATH_BARRA FROM gestion_riesgos.seguridad_institucion WHERE CODIGO_CIA = ? LIMIT 1`,
             [codigo_cia]
         );
@@ -271,14 +260,12 @@ exports.actualizarLogoBarra = async (req, res) => {
 
         await fsp.writeFile(newPathAbs, file.buffer, { flag: 'wx' });
 
-        await cn.beginTransaction();
-        await cn.query(
+        await ejecutar(
             `UPDATE gestion_riesgos.seguridad_institucion
         SET PATH_BARRA = ?, FECHA_MODIFICACION = NOW(), usuario_modificacion = ? 
         WHERE CODIGO_CIA = ?`,
             [newPathRel, req.userId, codigo_cia]
         );
-        await cn.commit();
 
         if (oldPathRel) {
             try { await fsp.unlink(safeInDocs(oldPathRel.replace(/^docs\//, ''))); } catch { }
@@ -291,11 +278,8 @@ exports.actualizarLogoBarra = async (req, res) => {
         });
     } catch (err) {
         if (newPathAbs) { try { await fsp.unlink(newPathAbs); } catch { } }
-        try { await cn?.rollback(); } catch { }
         console.error('Error al actualizar logo:', err);
         return res.status(500).json({ ok: false, msg: 'Error al actualizar logo', error: err.message });
-    } finally {
-        try { cn?.release?.(); } catch { }
     }
 };
 
@@ -346,7 +330,7 @@ exports.obtenerFotoPerfil = async (req, res) => {
             LIMIT 1
         `;
 
-        const [rows] = await pool.execute(sql, [req.codigo_cia, req.userId]);
+        const rows = await consultar(sql, [req.codigo_cia, req.userId]);
 
         if (!rows.length || !rows[0].foto) {
             return res.status(404).json({ msg: 'Foto de perfil no encontrada' });
@@ -402,15 +386,12 @@ exports.actualizarFotoPerfil = async (req, res) => {
         return res.status(400).json({ ok: false, msg: 'El archivo excede el tamaño máximo permitido (5MB)' });
     }
 
-    let cn;
     let oldPathRel = null;
     let newPathRel = null;
     let newPathAbs = null;
 
     try {
-        cn = await pool.getConnection();
-
-        const [rows] = await cn.query(
+        const rows = await consultar(
             `SELECT PATH FROM gestion_riesgos.seguridad_persona WHERE CODIGO_CIA = ? AND codigo_colaborador = ?`,
             [codigo_cia, usuario]
         );
@@ -443,14 +424,12 @@ exports.actualizarFotoPerfil = async (req, res) => {
 
         await fsp.writeFile(newPathAbs, file.buffer, { flag: 'wx' });
 
-        await cn.beginTransaction();
-        await cn.query(
+        await ejecutar(
             `UPDATE gestion_riesgos.seguridad_persona
-        SET PATH = ?, FECHA_MODIFICACION = NOW(), usuario_modificacion = '${req.userId}'
+        SET PATH = ?, FECHA_MODIFICACION = NOW(), usuario_modificacion = ?
         WHERE CODIGO_CIA = ? AND codigo_colaborador = ?`,
-            [newPathRel, codigo_cia, req.userId]
+            [newPathRel, String(req.userId), codigo_cia, req.userId]
         );
-        await cn.commit();
 
         if (oldPathRel) {
             try { await fsp.unlink(safeInDocs(oldPathRel.replace(/^foto-perfil\//, ''))); } catch { }
@@ -463,10 +442,7 @@ exports.actualizarFotoPerfil = async (req, res) => {
         });
     } catch (err) {
         if (newPathAbs) { try { await fsp.unlink(newPathAbs); } catch { } }
-        try { await cn?.rollback(); } catch { }
         console.error('Error al actualizar foto de perfil:', err);
         return res.status(500).json({ ok: false, msg: 'Error al actualizar foto de perfil', error: err.message });
-    } finally {
-        try { cn?.release?.(); } catch { }
     }
 };

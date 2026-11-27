@@ -8,7 +8,7 @@
  * @author Equipo de Desarrollo
  */
 
-const pool = require('../../bd/mySQLConnection');
+const { consultar, ejecutar, transaccion } = require('../../bd/consultas');
 
 /**
  * obtenerObjetivos
@@ -39,7 +39,7 @@ exports.obtenerObjetivos = async (req, res) => {
         WHERE CODIGO_CIA = ? AND CODIGO_TIPO_OBJETIVO = ?
         ORDER BY CODIGO_OBJETIVO
         `;
-        const [rows] = await pool.execute(sql, [codigo_cia, tipoObjetivo]);
+        const rows = await consultar(sql, [codigo_cia, tipoObjetivo]);
         return res.json({ result: rows });
     } catch (err) {
         console.error('obtenerObjetivos:', err);
@@ -77,7 +77,7 @@ exports.obtenerObjetivoUnico = async (req, res) => {
         WHERE CODIGO_CIA = ? AND CODIGO_TIPO_OBJETIVO = ? AND CODIGO_OBJETIVO = ?
         LIMIT 1
         `;
-        const [rows] = await pool.execute(sql, [codigo_cia, tipoObjetivo, codigo]);
+        const rows = await consultar(sql, [codigo_cia, tipoObjetivo, codigo]);
         if (!rows.length) return res.status(404).json({ error: 'Objetivo no encontrado' });
         return res.json({ result: rows });
     } catch (err) {
@@ -107,39 +107,34 @@ exports.crearObjetivo = async (req, res) => {
         return res.status(400).json({ error: 'Faltan codigo_cia, tipo, descripcion o abreviatura' });
     }
 
-    let conn;
     try {
-        conn = await pool.getConnection();
-        await conn.beginTransaction();
+        const nuevo_codigo = await transaccion(async tx => {
+            const [row] = await consultar(
+                `SELECT COALESCE(MAX(CODIGO_OBJETIVO), 0) + 1 AS NUEVO
+             FROM gestion_riesgos.riesgos_objetivo
+            WHERE CODIGO_CIA = ? AND CODIGO_TIPO_OBJETIVO = ?
+            FOR UPDATE`,
+                [codigo_cia, tipoObjetivo], tx
+            );
+            const codigo = Number(row?.NUEVO || 1);
 
-        const [[row]] = await conn.execute(
-            `SELECT COALESCE(MAX(CODIGO_OBJETIVO), 0) + 1 AS NUEVO
-         FROM gestion_riesgos.riesgos_objetivo
-        WHERE CODIGO_CIA = ? AND CODIGO_TIPO_OBJETIVO = ?
-        FOR UPDATE`,
-            [codigo_cia, tipoObjetivo]
-        );
-        const nuevo_codigo = Number(row?.NUEVO || 1);
+            await ejecutar(
+                `INSERT INTO gestion_riesgos.riesgos_objetivo (
+             CODIGO_CIA, CODIGO_TIPO_OBJETIVO, CODIGO_OBJETIVO,
+             DESCRIPCION, ABREVIATURA, ESTADO,
+             USUARIO_CREACION, FECHA_CREACION
+           ) VALUES (
+             ?, ?, ?, ?, ?, 1, ?, CURRENT_TIMESTAMP
+           )`,
+                [codigo_cia, tipoObjetivo, codigo, descripcion, abreviatura ?? null, usuario ?? null], tx
+            );
+            return codigo;
+        });
 
-        await conn.execute(
-            `INSERT INTO gestion_riesgos.riesgos_objetivo (
-         CODIGO_CIA, CODIGO_TIPO_OBJETIVO, CODIGO_OBJETIVO,
-         DESCRIPCION, ABREVIATURA, ESTADO,
-         USUARIO_CREACION, FECHA_CREACION
-       ) VALUES (
-         ?, ?, ?, ?, ?, 1, ?, CURRENT_TIMESTAMP
-       )`,
-            [codigo_cia, tipoObjetivo, nuevo_codigo, descripcion, abreviatura ?? null, usuario ?? null]
-        );
-
-        await conn.commit();
         return res.status(201).json({ mensaje: 'Objetivo creado correctamente', id: nuevo_codigo });
     } catch (err) {
-        if (conn) { try { await conn.rollback(); } catch { } }
         console.error('crearObjetivo:', err);
         return res.status(500).json({ error: 'Error al crear objetivo' });
-    } finally {
-        if (conn) conn.release();
     }
 };
 
@@ -166,7 +161,7 @@ exports.actualizarObjetivo = async (req, res) => {
     }
 
     try {
-        const [result] = await pool.execute(
+        const result = await ejecutar(
             `UPDATE gestion_riesgos.riesgos_objetivo
           SET DESCRIPCION          = ?,
               ABREVIATURA          = ?,

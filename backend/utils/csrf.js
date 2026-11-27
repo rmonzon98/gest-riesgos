@@ -1,4 +1,4 @@
-const pool = require('../bd/mySQLConnection');
+const { consultar } = require('../bd/consultas');
 const { hashValue } = require('./totp');
 
 const SAFE_METHODS = ['GET', 'HEAD', 'OPTIONS'];
@@ -35,7 +35,7 @@ exports.verifyCSRF = async (req, res, next) => {
 
         const csrfHash = hashValue(csrfHeader);
 
-        const [rows] = await pool.execute(
+        const rows = await consultar(
             `
             SELECT id_sesion
             FROM gestion_riesgos.seguridad_sesion

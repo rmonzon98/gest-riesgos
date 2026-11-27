@@ -7,7 +7,7 @@
  * @author Equipo de Desarrollo
  */
 
-const pool = require('../../bd/mySQLConnection');
+const { consultar } = require('../../bd/consultas');
 const { asignacionVigente, licenciaVigente } = require('../../services/administracionRiesgos');
 
 // Toda aplicación requiere licencia vigente; la de riesgos además requiere un rol vigente.
@@ -56,7 +56,7 @@ exports.obtenerAplicaciones = async (req, res) => {
             ${accesoAplicacion}
         ORDER BY b.NOMBRE
         `;
-        const [rows] = await pool.execute(sql, [codigo_cia, req.userId]);
+        const rows = await consultar(sql, [codigo_cia, req.userId]);
         return res.json({ result: rows });
     } catch (err) {
         console.error('obtenerApps:', err);
@@ -103,7 +103,7 @@ exports.checkApp = async (req, res) => {
         LIMIT 1
         `;
 
-        const [rows] = await pool.execute(sql, [codigo_cia, req.userId, app]);
+        const rows = await consultar(sql, [codigo_cia, req.userId, app]);
         const permitido = rows.length > 0;
 
         return res.json({

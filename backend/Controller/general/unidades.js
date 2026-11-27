@@ -7,7 +7,7 @@
  * @author Equipo de Desarrollo
  */
 
-const pool = require('../../bd/mySQLConnection');
+const { consultar, ejecutar, transaccion } = require('../../bd/consultas');
 
 /**
  * obtenerDirecciones
@@ -38,7 +38,7 @@ exports.obtenerDirecciones = async (req, res) => {
                 AND se.ESTADO = '1'
             ORDER BY se.NOMBRE ASC
         `;
-        const [rows] = await pool.execute(sql, [codigo_cia]);
+        const rows = await consultar(sql, [codigo_cia]);
         return res.json({ result: rows });
     } catch (err) {
         console.error('Error al obtener direcciones:', err);
@@ -70,7 +70,7 @@ exports.obtenerDireccionUnica = async (req, res) => {
       WHERE CODIGO_CIA = ? AND CODIGO_ENTIDAD = ?
       LIMIT 1
     `;
-        const [rows] = await pool.execute(sql, [codigo_cia, direccion]);
+        const rows = await consultar(sql, [codigo_cia, direccion]);
 
         if (!rows.length) return res.status(404).json({ error: 'Dirección no encontrada' });
         return res.json({ result: rows });
@@ -102,39 +102,34 @@ exports.crearDirecciones = async (req, res) => {
         return res.status(400).json({ error: 'Faltan campos requeridos (codigo_cia, siglas, descripcion)' });
     }
 
-    let conn;
     try {
-        conn = await pool.getConnection();
-        await conn.beginTransaction();
+        const codigo_entidad = await transaccion(async tx => {
+            const [row] = await consultar(
+                `SELECT COALESCE(MAX(CODIGO_ENTIDAD), 0) + 1 AS NUEVO
+             FROM gestion_riesgos.seguridad_entidad
+            WHERE CODIGO_CIA = ?
+            FOR UPDATE`,
+                [codigo_cia], tx
+            );
+            const codigo = Number(row?.NUEVO || 1);
 
-        const [[row]] = await conn.execute(
-            `SELECT COALESCE(MAX(CODIGO_ENTIDAD), 0) + 1 AS NUEVO
-         FROM gestion_riesgos.seguridad_entidad
-        WHERE CODIGO_CIA = ?
-        FOR UPDATE`,
-            [codigo_cia]
-        );
-        const codigo_entidad = Number(row?.NUEVO || 1);
+            await ejecutar(
+                `INSERT INTO gestion_riesgos.seguridad_entidad (
+             CODIGO_ENTIDAD, CODIGO_CIA, NOMBRE, SIGLAS, DESCRIPCION, ESTADO,
+             USUARIO_CREACION, FECHA_CREACION
+           ) VALUES (
+             ?, ?, ?, ?, ?, 1,
+             ?, CURRENT_TIMESTAMP
+           )`,
+                [codigo, codigo_cia, descripcion, siglas, descripcion, usuario ?? null], tx
+            );
+            return codigo;
+        });
 
-        await conn.execute(
-            `INSERT INTO gestion_riesgos.seguridad_entidad (
-         CODIGO_ENTIDAD, CODIGO_CIA, NOMBRE, SIGLAS, DESCRIPCION, ESTADO,
-         USUARIO_CREACION, FECHA_CREACION
-       ) VALUES (
-         ?, ?, ?, ?, ?, 1,
-         ?, CURRENT_TIMESTAMP
-       )`,
-            [codigo_entidad, codigo_cia, descripcion, siglas, descripcion, usuario ?? null]
-        );
-
-        await conn.commit();
         return res.status(201).json({ mensaje: 'Dirección creada correctamente', id: codigo_entidad });
     } catch (err) {
-        if (conn) { try { await conn.rollback(); } catch { } }
         console.error('crearDirecciones:', err);
         return res.status(500).json({ error: 'Error al crear la dirección' });
-    } finally {
-        if (conn) conn.release();
     }
 };
 
@@ -158,7 +153,7 @@ exports.actualizarDirecciones = async (req, res) => {
     }
 
     try {
-        const [result] = await pool.execute(
+        const result = await ejecutar(
             `UPDATE gestion_riesgos.seguridad_entidad
           SET NOMBRE               = ?,
               SIGLAS               = ?,

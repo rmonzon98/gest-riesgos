@@ -9,7 +9,7 @@
  * @author Equipo de Desarrollo
  */
 
-const pool = require('../../bd/mySQLConnection');
+const { consultar, ejecutar, transaccion } = require('../../bd/consultas');
 
 /**
  * obtenerPrimeraMatrizDirecciones
@@ -31,11 +31,8 @@ exports.obtenerPrimeraMatrizDirecciones = async (req, res) => {
         return res.status(400).json({ ok: false, message: 'Faltan cia/periodo.' });
     }
 
-    let cn;
     try {
-        cn = await pool.getConnection();
-
-        const [rows] = await cn.query(
+        const rows = await consultar(
             `
             SELECT 
                 h.CODIGO_HISTORIAL,
@@ -136,8 +133,6 @@ exports.obtenerPrimeraMatrizDirecciones = async (req, res) => {
     } catch (err) {
         console.error('getPrimeraMatriz direcciones error', err);
         return res.status(500).json({ ok: false, message: 'Error interno al obtener matrices.' });
-    } finally {
-        try { cn?.release?.(); } catch { }
     }
 };
 
@@ -156,7 +151,6 @@ const asNum = (v) => {
  *   (por ejemplo al responder la matriz institucional).
  *
  * @param {Object} req Objeto de solicitud Express (se espera `req.codigo_cia`).
- * @param {Object} [cn] Conexión opcional de MySQL ya abierta; si no se provee se obtiene del pool.
  * @returns {Promise<void>} Lanza error en caso de fallo de base de datos.
  */
 exports.attachInstitucion = async (req, res, next) => {
@@ -172,11 +166,7 @@ exports.attachInstitucion = async (req, res, next) => {
       WHERE CODIGO_CIA = ?
       LIMIT 1
     `;
-        const [rows] = await pool.execute({
-            sql,
-            values: [codigo_cia],
-            timeout: 12000,
-        });
+        const rows = await consultar(sql, [codigo_cia]);
 
         if (!rows.length) {
             return res.status(404).json({ msg: 'Institución no encontrada' });
@@ -211,11 +201,8 @@ exports.getPrimeraMatriz = async (req, res) => {
         return res.status(400).json({ ok: false, message: 'Faltan cia/periodo.' });
     }
 
-    let cn;
     try {
-        cn = await pool.getConnection();
-
-        const [rows] = await cn.query(
+        const rows = await consultar(
             `
         SELECT VERSION, RESPUESTA
         FROM gestion_riesgos.riesgos_matriz_insti
@@ -257,10 +244,6 @@ exports.getPrimeraMatriz = async (req, res) => {
         return res
             .status(500)
             .json({ ok: false, message: 'Error interno al obtener matriz.' });
-    } finally {
-        try {
-            cn?.release?.();
-        } catch { }
     }
 };
 
@@ -288,42 +271,37 @@ exports.savePrimeraMatriz = async (req, res) => {
         return res.status(400).json({ ok: false, message: 'Faltan cia/periodo.' });
     }
 
-    let cn;
     try {
-        cn = await pool.getConnection();
-        await cn.beginTransaction();
+        const nextVersion = await transaccion(async tx => {
+            const lockRows = await consultar(
+                `
+            SELECT IFNULL(MAX(VERSION), 0) + 1 AS NEXT_VER
+            FROM gestion_riesgos.riesgos_matriz_insti
+            WHERE CODIGO_CIA = ? AND CODIGO_PERIODO = ? AND TIPO = ?
+            FOR UPDATE
+          `,
+                [cia, periodo, tipo], tx
+            );
+            const version = asNum(lockRows?.[0]?.NEXT_VER || 1);
 
-        const [lockRows] = await cn.query(
-            `
-        SELECT IFNULL(MAX(VERSION), 0) + 1 AS NEXT_VER
-        FROM gestion_riesgos.riesgos_matriz_insti
-        WHERE CODIGO_CIA = ? AND CODIGO_PERIODO = ? AND TIPO = ?
-        FOR UPDATE
-      `,
-            [cia, periodo, tipo]
-        );
-        const nextVersion = asNum(lockRows?.[0]?.NEXT_VER || 1);
+            const jsonStr = JSON.stringify({ matrices });
 
-        const jsonStr = JSON.stringify({ matrices });
+            await ejecutar(
+                `
+            INSERT INTO gestion_riesgos.riesgos_matriz_insti
+              (CODIGO_CIA, CODIGO_PERIODO, TIPO, VERSION, RESPUESTA, USUARIO_CREACION, FECHA_CREACION)
+            VALUES
+              (?,           ?,             ?,    ?,       ?,         ?,                 NOW())
+          `,
+                [cia, periodo, tipo, version, jsonStr, usuario], tx
+            );
+            return version;
+        });
 
-        await cn.query(
-            `
-        INSERT INTO gestion_riesgos.riesgos_matriz_insti
-          (CODIGO_CIA, CODIGO_PERIODO, TIPO, VERSION, RESPUESTA, USUARIO_CREACION, FECHA_CREACION)
-        VALUES
-          (?,           ?,             ?,    ?,       ?,         ?,                 NOW())
-      `,
-            [cia, periodo, tipo, nextVersion, jsonStr, usuario]
-        );
-
-        await cn.commit();
         return res.json({ ok: true, version: nextVersion });
     } catch (err) {
         console.error('savePrimeraMatriz error', err);
-        try { await cn?.rollback(); } catch { }
         return res.status(500).json({ ok: false, message: 'Error interno al guardar.' });
-    } finally {
-        try { cn?.release?.(); } catch { }
     }
 };
 
@@ -347,11 +325,8 @@ exports.obtenerSegundaMatrizDirecciones = async (req, res) => {
         return res.status(400).json({ ok: false, message: 'Faltan cia/periodo.' });
     }
 
-    let cn;
     try {
-        cn = await pool.getConnection();
-
-        const [rows] = await cn.query(
+        const rows = await consultar(
             `
             SELECT 
                 h.CODIGO_HISTORIAL,
@@ -445,8 +420,6 @@ exports.obtenerSegundaMatrizDirecciones = async (req, res) => {
     } catch (err) {
         console.error('getPrimeraMatriz direcciones error', err);
         return res.status(500).json({ ok: false, message: 'Error interno al obtener matrices.' });
-    } finally {
-        try { cn?.release?.(); } catch { }
     }
 };
 
@@ -472,10 +445,8 @@ exports.getSegundaMatriz = async (req, res) => {
         return res.status(400).json({ ok: false, message: 'Faltan cia/periodo.' });
     }
 
-    let cn;
     try {
-        cn = await pool.getConnection();
-        const [rows] = await cn.query(
+        const rows = await consultar(
             `
         SELECT VERSION, RESPUESTA
         FROM gestion_riesgos.riesgos_matriz_insti
@@ -509,8 +480,6 @@ exports.getSegundaMatriz = async (req, res) => {
     } catch (e) {
         console.error('getSegundaMatriz', e);
         return res.status(500).json({ ok: false, message: 'Error interno al obtener.' });
-    } finally {
-        try { cn?.release?.(); } catch { }
     }
 };
 
@@ -537,42 +506,37 @@ exports.saveSegundaMatriz = async (req, res) => {
         return res.status(400).json({ ok: false, message: 'Faltan cia/periodo.' });
     }
 
-    let cn;
     try {
-        cn = await pool.getConnection();
-        await cn.beginTransaction();
+        const nextVersion = await transaccion(async tx => {
+            const lockRows = await consultar(
+                `
+            SELECT IFNULL(MAX(VERSION), 0) + 1 AS NEXT_VER
+            FROM gestion_riesgos.riesgos_matriz_insti
+            WHERE CODIGO_CIA = ? AND CODIGO_PERIODO = ? AND TIPO = ?
+            FOR UPDATE
+          `,
+                [cia, periodo, tipo], tx
+            );
+            const version = asNum(lockRows?.[0]?.NEXT_VER || 1);
 
-        const [lockRows] = await cn.query(
-            `
-        SELECT IFNULL(MAX(VERSION), 0) + 1 AS NEXT_VER
-        FROM gestion_riesgos.riesgos_matriz_insti
-        WHERE CODIGO_CIA = ? AND CODIGO_PERIODO = ? AND TIPO = ?
-        FOR UPDATE
-      `,
-            [cia, periodo, tipo]
-        );
-        const nextVersion = asNum(lockRows?.[0]?.NEXT_VER || 1);
+            const jsonStr = JSON.stringify({ matrices });
 
-        const jsonStr = JSON.stringify({ matrices });
+            await ejecutar(
+                `
+            INSERT INTO gestion_riesgos.riesgos_matriz_insti
+              (CODIGO_CIA, CODIGO_PERIODO, TIPO, VERSION, RESPUESTA, USUARIO_CREACION, FECHA_CREACION)
+            VALUES
+              (?,           ?,             ?,    ?,       ?,         ?,                 NOW())
+          `,
+                [cia, periodo, tipo, version, jsonStr, usuario], tx
+            );
+            return version;
+        });
 
-        await cn.query(
-            `
-        INSERT INTO gestion_riesgos.riesgos_matriz_insti
-          (CODIGO_CIA, CODIGO_PERIODO, TIPO, VERSION, RESPUESTA, USUARIO_CREACION, FECHA_CREACION)
-        VALUES
-          (?,           ?,             ?,    ?,       ?,         ?,                 NOW())
-      `,
-            [cia, periodo, tipo, nextVersion, jsonStr, usuario]
-        );
-
-        await cn.commit();
         return res.json({ ok: true, version: nextVersion });
     } catch (e) {
         console.error('saveSegundaMatriz', e);
-        try { await cn?.rollback(); } catch { }
         return res.status(500).json({ ok: false, message: 'Error interno al guardar.' });
-    } finally {
-        try { cn?.release?.(); } catch { }
     }
 };
 
@@ -595,17 +559,14 @@ exports.cargarInformeAnual = async (req, res) => {
         return res.status(400).json({ ok: false, message: "Faltan cia/periodo." });
     }
 
-    let cn;
     try {
-        cn = await pool.getConnection();
-
         const sql = `
       SELECT informacion
       FROM gestion_riesgos.riesgos_informe_anual
       WHERE codigo_cia = ? AND codigo_periodo = ?
       LIMIT 1
     `;
-        const [rows] = await cn.query(sql, [cia, periodo]);
+        const rows = await consultar(sql, [cia, periodo]);
 
         let secciones = [];
         if (rows.length > 0 && rows[0]?.informacion) {
@@ -621,8 +582,6 @@ exports.cargarInformeAnual = async (req, res) => {
     } catch (err) {
         console.error("cargarInformeAnual error", err);
         return res.status(500).json({ ok: false, message: "Error interno al cargar informe." });
-    } finally {
-        try { cn?.release?.(); } catch { }
     }
 };
 
@@ -649,10 +608,7 @@ exports.crearInformeAnual = async (req, res) => {
         return res.status(400).json({ ok: false, message: "Faltan cia/periodo." });
     }
 
-    let cn;
     try {
-        cn = await pool.getConnection();
-
         const sql = `
       INSERT INTO gestion_riesgos.riesgos_informe_anual (informacion, usuario_creacion, codigo_cia, codigo_periodo, fecha_creacion)
       VALUES (?, ?, ?, ?, NOW())
@@ -664,7 +620,7 @@ exports.crearInformeAnual = async (req, res) => {
 
         const params = [informacion, req.userId, cia, periodo, informacion, req.userId];
 
-        const [result] = await cn.query(sql, params);
+        const result = await ejecutar(sql, params);
 
         const action = result.affectedRows === 1 ? "insert" :
             result.affectedRows === 2 ? "update" : "none";
@@ -673,7 +629,5 @@ exports.crearInformeAnual = async (req, res) => {
     } catch (err) {
         console.error("crearInformeAnual error", err);
         return res.status(500).json({ ok: false, message: "Error interno al guardar informe." });
-    } finally {
-        try { cn?.release?.(); } catch { }
     }
 };

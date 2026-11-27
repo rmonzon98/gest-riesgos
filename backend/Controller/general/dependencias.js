@@ -7,7 +7,7 @@
  * @author Equipo de Desarrollo
  */
 
-const pool = require('../../bd/mySQLConnection');
+const { consultar, ejecutar, transaccion } = require('../../bd/consultas');
 
 /**
  * Convierte valores a número o `null` para facilitar validaciones.
@@ -44,7 +44,7 @@ exports.obtenerDependencias = async (req, res) => {
       WHERE codigo_cia = ? AND codigo_entidad = ?
       ORDER BY nombre ASC
     `;
-        const [rows] = await pool.execute(sql, [cia, codigo_entidad]);
+        const rows = await consultar(sql, [cia, codigo_entidad]);
         return res.json({ msg: '✅ Dependencias obtenidas', data: rows });
     } catch (err) {
         console.error('obtenerDependencias', { cia, codigo_entidad, err });
@@ -79,41 +79,37 @@ exports.crearDependencia = async (req, res) => {
         return res.status(400).json({ msg: 'Faltan campos: codigo_entidad, nombre y siglas' });
     }
 
-    const conn = await pool.getConnection();
     try {
-        await conn.beginTransaction();
+        const codigo_dependencia = await transaccion(async tx => {
+            const nextRows = await consultar(
+                `SELECT IFNULL(MAX(codigo_dependencia), 0) + 1 AS next
+             FROM gestion_riesgos.seguridad_dependencia
+            WHERE codigo_cia = ? AND codigo_entidad = ?`,
+                [cia, codigo_entidad], tx
+            );
+            const codigo = Number(nextRows?.[0]?.next || 1);
 
-        const [nextRows] = await conn.execute(
-            `SELECT IFNULL(MAX(codigo_dependencia), 0) + 1 AS next
-         FROM gestion_riesgos.seguridad_dependencia
-        WHERE codigo_cia = ? AND codigo_entidad = ?`,
-            [cia, codigo_entidad]
-        );
-        const codigo_dependencia = Number(nextRows?.[0]?.next || 1);
+            const insertSQL = `
+          INSERT INTO gestion_riesgos.seguridad_dependencia
+            (codigo_dependencia, codigo_entidad, codigo_cia,
+             nombre, siglas, descripcion, estado,
+             usuario_creacion, fecha_creacion)
+          VALUES (?, ?, ?, ?, ?, ?, 1, ?, NOW())
+        `;
+            await ejecutar(insertSQL, [
+                codigo, codigo_entidad, cia,
+                nombre, siglas, descripcion, userId
+            ], tx);
+            return codigo;
+        });
 
-        const insertSQL = `
-      INSERT INTO gestion_riesgos.seguridad_dependencia
-        (codigo_dependencia, codigo_entidad, codigo_cia,
-         nombre, siglas, descripcion, estado,
-         usuario_creacion, fecha_creacion)
-      VALUES (?, ?, ?, ?, ?, ?, 1, ?, NOW())
-    `;
-        await conn.execute(insertSQL, [
-            codigo_dependencia, codigo_entidad, cia,
-            nombre, siglas, descripcion, userId
-        ]);
-
-        await conn.commit();
         return res.status(201).json({
             msg: '✅ Dependencia creada',
             data: { codigo_dependencia, codigo_entidad, nombre, siglas, estado: 1 }
         });
     } catch (err) {
-        await conn.rollback();
         console.error('crearDependencia', { cia, codigo_entidad, userId, err });
         return res.status(500).json({ msg: '❌ Error al crear la dependencia' });
-    } finally {
-        conn.release();
     }
 };
 
@@ -151,7 +147,7 @@ exports.actualizarDependencia = async (req, res) => {
              usuario_modificacion = ?, fecha_modificacion = NOW()
        WHERE codigo_cia = ? AND codigo_entidad = ? AND codigo_dependencia = ?
     `;
-        const [r] = await pool.execute(updateSQL, [
+        const r = await ejecutar(updateSQL, [
             nombre, siglas, userId, cia, codigo_entidad, codigo_dependencia
         ]);
 
@@ -199,10 +195,10 @@ exports.cambiarEstadoDependencia = async (req, res) => {
              usuario_modificacion = ?, fecha_modificacion = NOW()
        WHERE codigo_cia = ? AND codigo_entidad = ? AND codigo_dependencia = ?
     `;
-        const [r] = await pool.execute(toggleSQL, [userId, cia, codigo_entidad, codigo_dependencia]);
+        const r = await ejecutar(toggleSQL, [userId, cia, codigo_entidad, codigo_dependencia]);
         if (r.affectedRows === 0) return res.status(404).json({ msg: 'Dependencia no encontrada' });
 
-        const [rows] = await pool.execute(
+        const rows = await consultar(
             `SELECT codigo_dependencia, nombre, siglas, estado
          FROM gestion_riesgos.seguridad_dependencia
         WHERE codigo_cia = ? AND codigo_entidad = ? AND codigo_dependencia = ?`,

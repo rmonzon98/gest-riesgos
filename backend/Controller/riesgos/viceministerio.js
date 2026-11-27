@@ -8,7 +8,7 @@
  * @author Equipo de Desarrollo
  */
 
-const pool = require('../../bd/mySQLConnection');
+const { consultar, ejecutar, transaccion, RespuestaHttp, enviarRespuestaHttp } = require('../../bd/consultas');
 
 /**
  * obtenerViceministerios
@@ -32,7 +32,7 @@ async function obtenerViceministerios(req, res) {
       ORDER BY CODIGO_VICEMINISTERIO ASC
     `;
         const params = q ? [codigo_cia, `%${q}%`] : [codigo_cia];
-        const [rows] = await pool.query(sql, params);
+        const rows = await consultar(sql, params);
         return res.json({ ok: true, viceministerios: rows });
     } catch (err) {
         console.error('obtenerViceministerios', err);
@@ -59,7 +59,7 @@ async function obtenerViceministerio(req, res) {
     }
 
     try {
-        const [rows] = await pool.query(
+        const rows = await consultar(
             `SELECT CODIGO_CIA, CODIGO_VICEMINISTERIO, NOMBRE
        FROM gestion_riesgos.riesgos_viceministerio
        WHERE CODIGO_CIA = ? AND CODIGO_VICEMINISTERIO = ?`,
@@ -94,40 +94,37 @@ async function crearViceministerio(req, res) {
         return res.status(400).json({ ok: false, mensaje: 'El nombre es requerido.' });
     }
 
-    let conn;
     try {
-        conn = await pool.getConnection();
-        await conn.beginTransaction();
+        const codigo_viceministerio = await transaccion(async tx => {
+            const dup = await consultar(
+                `SELECT 1
+           FROM gestion_riesgos.riesgos_viceministerio
+           WHERE CODIGO_CIA = ? AND UPPER(NOMBRE) = UPPER(?)
+           LIMIT 1`,
+                [codigo_cia, nombre], tx
+            );
+            if (dup.length) {
+                throw new RespuestaHttp(409, { ok: false, mensaje: 'Ya existe un viceministerio con ese nombre.' });
+            }
 
-        const [dup] = await conn.query(
-            `SELECT 1
-       FROM gestion_riesgos.riesgos_viceministerio
-       WHERE CODIGO_CIA = ? AND UPPER(NOMBRE) = UPPER(?)
-       LIMIT 1`,
-            [codigo_cia, nombre]
-        );
-        if (dup.length) {
-            await conn.rollback();
-            return res.status(409).json({ ok: false, mensaje: 'Ya existe un viceministerio con ese nombre.' });
-        }
+            const mx = await consultar(
+                `SELECT COALESCE(MAX(CODIGO_VICEMINISTERIO), 0) AS max_cod
+           FROM gestion_riesgos.riesgos_viceministerio
+           WHERE CODIGO_CIA = ?
+           FOR UPDATE`,
+                [codigo_cia], tx
+            );
+            const codigo = Number(mx[0].max_cod) + 1;
 
-        const [mx] = await conn.query(
-            `SELECT COALESCE(MAX(CODIGO_VICEMINISTERIO), 0) AS max_cod
-       FROM gestion_riesgos.riesgos_viceministerio
-       WHERE CODIGO_CIA = ?
-       FOR UPDATE`,
-            [codigo_cia]
-        );
-        const codigo_viceministerio = Number(mx[0].max_cod) + 1;
+            await ejecutar(
+                `INSERT INTO gestion_riesgos.riesgos_viceministerio
+            (CODIGO_CIA, CODIGO_VICEMINISTERIO, NOMBRE, USUARIO_CREACION, FECHA_CREACION)
+           VALUES (?, ?, ?, ?, NOW())`,
+                [codigo_cia, codigo, nombre, req.userId ?? null], tx
+            );
+            return codigo;
+        });
 
-        await conn.query(
-            `INSERT INTO gestion_riesgos.riesgos_viceministerio
-        (CODIGO_CIA, CODIGO_VICEMINISTERIO, NOMBRE, USUARIO_CREACION, FECHA_CREACION)
-       VALUES (?, ?, ?, ?, NOW())`,
-            [codigo_cia, codigo_viceministerio, nombre, req.userId]
-        );
-
-        await conn.commit();
         return res.status(201).json({
             ok: true,
             mensaje: 'Viceministerio creado.',
@@ -138,11 +135,9 @@ async function crearViceministerio(req, res) {
             }
         });
     } catch (err) {
-        if (conn) try { await conn.rollback(); } catch { }
+        if (enviarRespuestaHttp(err, res)) return;
         console.error('crearViceministerio', err);
         return res.status(500).json({ ok: false, mensaje: 'Error al crear el viceministerio.' });
-    } finally {
-        if (conn) conn.release();
     }
 }
 
@@ -168,52 +163,45 @@ async function actualizarViceministerio(req, res) {
         return res.status(400).json({ ok: false, mensaje: 'El nombre es requerido.' });
     }
 
-    let conn;
     try {
-        conn = await pool.getConnection();
-        await conn.beginTransaction();
+        await transaccion(async tx => {
+            const cur = await consultar(
+                `SELECT 1
+           FROM gestion_riesgos.riesgos_viceministerio
+           WHERE CODIGO_CIA = ? AND CODIGO_VICEMINISTERIO = ?
+           LIMIT 1`,
+                [codigo_cia, codigo_viceministerio], tx
+            );
+            if (!cur.length) {
+                throw new RespuestaHttp(404, { ok: false, mensaje: 'Viceministerio no encontrado.' });
+            }
 
-        const [cur] = await conn.query(
-            `SELECT 1
-       FROM gestion_riesgos.riesgos_viceministerio
-       WHERE CODIGO_CIA = ? AND CODIGO_VICEMINISTERIO = ?
-       LIMIT 1`,
-            [codigo_cia, codigo_viceministerio]
-        );
-        if (!cur.length) {
-            await conn.rollback();
-            return res.status(404).json({ ok: false, mensaje: 'Viceministerio no encontrado.' });
-        }
+            const dup = await consultar(
+                `SELECT 1
+           FROM gestion_riesgos.riesgos_viceministerio
+           WHERE CODIGO_CIA = ?
+             AND UPPER(NOMBRE) = UPPER(?)
+             AND CODIGO_VICEMINISTERIO <> ?
+           LIMIT 1`,
+                [codigo_cia, nombre, codigo_viceministerio], tx
+            );
+            if (dup.length) {
+                throw new RespuestaHttp(409, { ok: false, mensaje: 'Ya existe otro viceministerio con ese nombre.' });
+            }
 
-        const [dup] = await conn.query(
-            `SELECT 1
-       FROM gestion_riesgos.riesgos_viceministerio
-       WHERE CODIGO_CIA = ?
-         AND UPPER(NOMBRE) = UPPER(?)
-         AND CODIGO_VICEMINISTERIO <> ?
-       LIMIT 1`,
-            [codigo_cia, nombre, codigo_viceministerio]
-        );
-        if (dup.length) {
-            await conn.rollback();
-            return res.status(409).json({ ok: false, mensaje: 'Ya existe otro viceministerio con ese nombre.' });
-        }
+            await ejecutar(
+                `UPDATE gestion_riesgos.riesgos_viceministerio
+           SET NOMBRE = ?, USUARIO_MODIFICACION = ?, FECHA_MODIFICACION = NOW()
+           WHERE CODIGO_CIA = ? AND CODIGO_VICEMINISTERIO = ?`,
+                [nombre, codigo_cia, codigo_viceministerio, req.userId ?? null], tx
+            );
+        });
 
-        await conn.query(
-            `UPDATE gestion_riesgos.riesgos_viceministerio
-       SET NOMBRE = ?, USUARIO_MODIFICACION = ?, FECHA_MODIFICACION = NOW()
-       WHERE CODIGO_CIA = ? AND CODIGO_VICEMINISTERIO = ?`,
-            [nombre, codigo_cia, codigo_viceministerio, req.userId]
-        );
-
-        await conn.commit();
         return res.json({ ok: true, mensaje: 'Viceministerio actualizado.' });
     } catch (err) {
-        if (conn) try { await conn.rollback(); } catch { }
+        if (enviarRespuestaHttp(err, res)) return;
         console.error('actualizarViceministerio', err);
         return res.status(500).json({ ok: false, mensaje: 'Error al actualizar el viceministerio.' });
-    } finally {
-        if (conn) conn.release();
     }
 }
 

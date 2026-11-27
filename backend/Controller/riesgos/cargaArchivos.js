@@ -10,7 +10,7 @@
 const path = require('path');
 const fs = require('fs');
 const fsp = fs.promises;
-const pool = require('../../bd/mySQLConnection');
+const { consultar, ejecutar, transaccion, RespuestaHttp, enviarRespuestaHttp } = require('../../bd/consultas');
 const { absInDocs, relToDocs, safeInDocs } = require('../../services/paths');
 
 const FLAG_DIR = {
@@ -98,42 +98,39 @@ exports.subirDocumento = async (req, res) => {
     const dirFlag = mapFlagToDir(flag);
     if (!dirFlag) return res.status(400).json({ ok: false, msg: 'Flag inválido.' });
 
-    let cn;
     let absDestino;
     try {
-        cn = await pool.getConnection();
-        await cn.beginTransaction();
+        const { CODIGO_DOCUMENTO, original, rutaRel } = await transaccion(async tx => {
+            const rNext = await consultar(
+                `
+                SELECT IFNULL(MAX(CODIGO_DOCUMENTO), 0) + 1 AS NEXT_ID
+                FROM gestion_riesgos.riesgos_documentos
+                WHERE CODIGO_CIA = ? AND codigo_entidad = ? 
+                FOR UPDATE`,
+                [codigo_cia, codigo_entidad], tx
+            );
+            const CODIGO_DOCUMENTO = rNext?.[0]?.NEXT_ID || 1;
 
-        const [rNext] = await cn.execute(
-            `
-            SELECT IFNULL(MAX(CODIGO_DOCUMENTO), 0) + 1 AS NEXT_ID
-            FROM gestion_riesgos.riesgos_documentos
-            WHERE CODIGO_CIA = ? AND codigo_entidad = ? 
-            FOR UPDATE`,
-            [codigo_cia, codigo_entidad]
-        );
-        const CODIGO_DOCUMENTO = rNext?.[0]?.NEXT_ID || 1;
+            const carpetaAbs = absInDocs(`entidad${codigo_cia}`, dirFlag, String(periodo));
+            await fsp.mkdir(carpetaAbs, { recursive: true });
 
-        const carpetaAbs = absInDocs(`entidad${codigo_cia}`, dirFlag, String(periodo));
-        await fsp.mkdir(carpetaAbs, { recursive: true });
+            const original = nombre_real || file.originalname || 'archivo';
+            const clean = sanitizeFileName(original);
+            const fisico = `${Date.now()}-${clean}`;
 
-        const original = nombre_real || file.originalname || 'archivo';
-        const clean = sanitizeFileName(original);
-        const fisico = `${Date.now()}-${clean}`;
+            absDestino = path.join(carpetaAbs, fisico);
+            await fsp.writeFile(absDestino, file.buffer, { flag: 'wx' });
 
-        absDestino = path.join(carpetaAbs, fisico);
-        await fsp.writeFile(absDestino, file.buffer, { flag: 'wx' });
-
-        const rutaRel = relToDocs(`entidad${codigo_cia}`, dirFlag, String(periodo), fisico);
-        await cn.execute(
-            `
-            INSERT INTO gestion_riesgos.riesgos_documentos
-            (CODIGO_CIA, CODIGO_DOCUMENTO, NOMBRE_REAL, PATH, TIPO, CODIGO_PERIODO, FECHA_CREACION, CATEGORIA, CODIGO_ENTIDAD, USUARIO_CREACION)
-        VALUES (?, ?, ?, ?, ?, ?, NOW(), ?, ?, ?)`,
-            [codigo_cia, CODIGO_DOCUMENTO, original, rutaRel.replace(/\\/g, '/'), mime, String(periodo), categoria, codigo_entidad, req.userId]
-        );
-
-        await cn.commit();
+            const rutaRel = relToDocs(`entidad${codigo_cia}`, dirFlag, String(periodo), fisico);
+            await ejecutar(
+                `
+                INSERT INTO gestion_riesgos.riesgos_documentos
+                (CODIGO_CIA, CODIGO_DOCUMENTO, NOMBRE_REAL, PATH, TIPO, CODIGO_PERIODO, FECHA_CREACION, CATEGORIA, CODIGO_ENTIDAD, USUARIO_CREACION)
+            VALUES (?, ?, ?, ?, ?, ?, NOW(), ?, ?, ?)`,
+                [codigo_cia, CODIGO_DOCUMENTO, original, rutaRel.replace(/\\/g, '/'), mime, String(periodo), categoria, codigo_entidad, req.userId], tx
+            );
+            return { CODIGO_DOCUMENTO, original, rutaRel };
+        });
 
         const url = `${req.protocol}://${req.get('host')}/${rutaRel.replace(/\\/g, '/')}`;
         return res.json({
@@ -150,12 +147,9 @@ exports.subirDocumento = async (req, res) => {
             }
         });
     } catch (err) {
-        try { await cn?.rollback(); } catch { }
         if (absDestino) { try { await fsp.unlink(absDestino); } catch { } }
         console.error('subirDocumento', err);
         return res.status(500).json({ ok: false, msg: 'Error al subir documento', error: err.message });
-    } finally {
-        try { cn?.release?.(); } catch { }
     }
 };
 
@@ -180,7 +174,7 @@ exports.listarPorFlagPeriodo = async (req, res) => {
     if (!periodo) return res.status(400).json({ ok: false, msg: 'Falta periodo.' });
 
     try {
-        const [rows] = await pool.execute(
+        const rows = await consultar(
             `
             SELECT CODIGO_DOCUMENTO as id, NOMBRE_REAL as filename, PATH, TIPO as contentType, CODIGO_PERIODO, FECHA_CREACION, FINAL, CATEGORIA
             FROM gestion_riesgos.riesgos_documentos
@@ -237,7 +231,7 @@ exports.descargar = async (req, res) => {
     if (!periodo) return res.status(400).json({ ok: false, msg: 'Falta periodo.' });
 
     try {
-        const [rows] = await pool.execute(
+        const rows = await consultar(
             `SELECT NOMBRE_REAL, PATH, TIPO
          FROM gestion_riesgos.riesgos_documentos
         WHERE CODIGO_CIA = ? AND CODIGO_DOCUMENTO = ? AND CODIGO_PERIODO = ? AND ACTIVO = 1
@@ -280,7 +274,7 @@ exports.obtenerFinales = async (req, res) => {
 
 
     try {
-        const [rows] = await pool.execute(
+        const rows = await consultar(
             `
         SELECT 
             a.CODIGO_DOCUMENTO AS id,
@@ -482,7 +476,7 @@ exports.eliminarDocumento = async (req, res) => {
 
         console.log(codigo_cia, id, req.codigo_entidad, sql)
 
-        const [result] = await pool.execute(sql, params);
+        const result = await ejecutar(sql, params);
         if (result.affectedRows === 0) {
             return res.status(404).json({ error: 'Error al eliminar documento' });
         }
@@ -524,9 +518,8 @@ exports.actualizarFinalDocumento = async (req, res) => {
         return res.status(400).json({ ok: false, msg: 'El valor de final debe ser 0 o 1.' });
     }
 
-    let conn;
     try {
-        const [rows] = await pool.execute(
+        const rows = await consultar(
             `
             SELECT CODIGO_DOCUMENTO, CODIGO_CIA, CODIGO_PERIODO, CATEGORIA, TIPO, FINAL
             FROM gestion_riesgos.riesgos_documentos
@@ -548,52 +541,47 @@ exports.actualizarFinalDocumento = async (req, res) => {
             return res.status(400).json({ ok: false, msg: 'El periodo/categoría no coincide con el documento.' });
         }
 
-        conn = await pool.getConnection();
-        await conn.beginTransaction();
+        await transaccion(async tx => {
+            if (finalNum === 1) {
+                await ejecutar(
+                    `UPDATE gestion_riesgos.riesgos_documentos
+                SET FINAL = 0,
+                USUARIO_MODIFICACION = ?,
+                FECHA_MODIFICACION = NOW()
+              WHERE CODIGO_CIA = ?
+                AND CODIGO_PERIODO = ?
+                AND CATEGORIA = ?
+                AND codigo_entidad = ?
+                AND TIPO = 'application/pdf'`,
+                    [req.userId, codigo_cia, Number(periodo), String(categoria), codigo_entidad], tx
+                );
+            }
 
-        if (finalNum === 1) {
-            await conn.execute(
+            const upd = await ejecutar(
                 `UPDATE gestion_riesgos.riesgos_documentos
-            SET FINAL = 0,
-            USUARIO_MODIFICACION = ?,
-            FECHA_MODIFICACION = NOW()
-          WHERE CODIGO_CIA = ?
-            AND CODIGO_PERIODO = ?
-            AND CATEGORIA = ?
-            AND codigo_entidad = ?
-            AND TIPO = 'application/pdf'`,
-                [req.userId, codigo_cia, Number(periodo), String(categoria), codigo_entidad]
+                SET FINAL = ?,
+                USUARIO_MODIFICACION = ?,
+                FECHA_MODIFICACION = NOW()
+                WHERE CODIGO_CIA = ?
+                AND CODIGO_DOCUMENTO = ?
+                AND CODIGO_ENTIDAD = ?`,
+                [req.userId, finalNum, codigo_cia, Number(id), codigo_entidad], tx
             );
-        }
 
-        const [upd] = await conn.execute(
-            `UPDATE gestion_riesgos.riesgos_documentos
-            SET FINAL = ?,
-            USUARIO_MODIFICACION = ?,
-            FECHA_MODIFICACION = NOW()
-            WHERE CODIGO_CIA = ?
-            AND CODIGO_DOCUMENTO = ?
-            AND CODIGO_ENTIDAD = ?`,
-            [req.userId, finalNum, codigo_cia, Number(id), codigo_entidad]
-        );
+            if (upd.affectedRows !== 1) {
+                throw new RespuestaHttp(409, { ok: false, msg: 'No fue posible actualizar el documento.' });
+            }
+        });
 
-        if (upd.affectedRows !== 1) {
-            await conn.rollback();
-            return res.status(409).json({ ok: false, msg: 'No fue posible actualizar el documento.' });
-        }
-
-        await conn.commit();
         return res.json({
             ok: true,
             msg: finalNum ? 'Documento marcado como final.' : 'Documento desmarcado como final.',
             data: { id: Number(id), periodo: Number(periodo), categoria: String(categoria), final: finalNum }
         });
     } catch (err) {
-        if (conn) try { await conn.rollback(); } catch { }
+        if (enviarRespuestaHttp(err, res)) return;
         console.error('actualizarFinalDocumento:', err);
         return res.status(500).json({ ok: false, msg: 'Error al actualizar el estado final del documento.' });
-    } finally {
-        if (conn) try { conn.release(); } catch { }
     }
 };
 
@@ -669,9 +657,9 @@ exports.listarArchivosDireccionPeriodo = async (req, res) => {
 
         const params = [codigo_cia, codigo_entidad, codigo_periodo];
 
-        const [[docsRows], [segRows]] = await Promise.all([
-            pool.execute(sqlDocs, params),
-            pool.execute(sqlSeg, params),
+        const [docsRows, segRows] = await Promise.all([
+            consultar(sqlDocs, params),
+            consultar(sqlSeg, params),
         ]);
 
         const fromDocs = (docsRows || []).map(r => ({
@@ -748,8 +736,8 @@ exports.listarArchivosInstiPeriodo = async (req, res) => {
 
         const params = [codigo_cia, codigo_periodo];
 
-        const [[docsRows]] = await Promise.all([
-            pool.execute(sqlDocs, params),
+        const [docsRows] = await Promise.all([
+            consultar(sqlDocs, params),
         ]);
 
         const fromDocs = (docsRows || []).map(r => ({

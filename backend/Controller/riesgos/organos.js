@@ -8,7 +8,7 @@
  * @author Equipo de Desarrollo
  */
 
-const pool = require('../../bd/mySQLConnection');
+const { consultar, ejecutar, transaccion, RespuestaHttp, enviarRespuestaHttp } = require('../../bd/consultas');
 
 /**
  * obtenerOrganos
@@ -31,7 +31,7 @@ async function obtenerOrganos(req, res) {
       ORDER BY CODIGO_ORGANO ASC
     `;
         const params = [codigo_cia];
-        const [rows] = await pool.query(sql, params);
+        const rows = await consultar(sql, params);
         return res.json({ ok: true, organos: rows });
     } catch (err) {
         console.error('obtenerOrganos', err);
@@ -59,7 +59,7 @@ async function obtenerOrgano(req, res) {
     }
 
     try {
-        const [rows] = await pool.query(
+        const rows = await consultar(
             `SELECT CODIGO_CIA, CODIGO_ORGANO, NOMBRE
        FROM gestion_riesgos.riesgos_organos
        WHERE CODIGO_CIA = ? AND CODIGO_ORGANO = ?`,
@@ -95,50 +95,45 @@ async function crearOrgano(req, res) {
         return res.status(400).json({ ok: false, mensaje: 'El nombre es requerido.' });
     }
 
-    let conn;
     try {
-        conn = await pool.getConnection();
-        await conn.beginTransaction();
-
-        const [dup] = await conn.query(
-            `SELECT 1
+        const codigo_organo = await transaccion(async tx => {
+            const dup = await consultar(
+                `SELECT 1
        FROM gestion_riesgos.riesgos_organos
-       WHERE CODIGO_CIA = ? AND UPPER(NOMBRE) = UPPER(?) 
+       WHERE CODIGO_CIA = ? AND UPPER(NOMBRE) = UPPER(?)
        LIMIT 1`,
-            [codigo_cia, nombre]
-        );
-        if (dup.length) {
-            await conn.rollback();
-            return res.status(409).json({ ok: false, mensaje: 'Ya existe un órgano con ese nombre.' });
-        }
+                [codigo_cia, nombre], tx
+            );
+            if (dup.length) {
+                throw new RespuestaHttp(409, { ok: false, mensaje: 'Ya existe un órgano con ese nombre.' });
+            }
 
-        const [mx] = await conn.query(
-            `SELECT COALESCE(MAX(CODIGO_ORGANO), 0) AS max_cod
+            const mx = await consultar(
+                `SELECT COALESCE(MAX(CODIGO_ORGANO), 0) AS max_cod
        FROM gestion_riesgos.riesgos_organos
        WHERE CODIGO_CIA = ?
        FOR UPDATE`,
-            [codigo_cia]
-        );
-        const codigo_organo = Number(mx[0].max_cod) + 1;
+                [codigo_cia], tx
+            );
+            const codigo = Number(mx[0].max_cod) + 1;
 
-        await conn.query(
-            `INSERT INTO gestion_riesgos.riesgos_organos (CODIGO_CIA, CODIGO_ORGANO, NOMBRE, USUARIO_CREACION, FECHA_CREACION)
+            await ejecutar(
+                `INSERT INTO gestion_riesgos.riesgos_organos (CODIGO_CIA, CODIGO_ORGANO, NOMBRE, USUARIO_CREACION, FECHA_CREACION)
        VALUES (?, ?, ?, ?, now())`,
-            [codigo_cia, codigo_organo, nombre, req.userId]
-        );
+                [codigo_cia, codigo, nombre, req.userId ?? null], tx
+            );
+            return codigo;
+        });
 
-        await conn.commit();
         return res.status(201).json({
             ok: true,
             mensaje: 'Órgano creado.',
             organo: { CODIGO_CIA: codigo_cia, CODIGO_ORGANO: codigo_organo, NOMBRE: nombre }
         });
     } catch (err) {
-        if (conn) try { await conn.rollback(); } catch { }
+        if (enviarRespuestaHttp(err, res)) return;
         console.error('crearOrgano', err);
         return res.status(500).json({ ok: false, mensaje: 'Error al crear el órgano.' });
-    } finally {
-        if (conn) conn.release();
     }
 }
 
@@ -166,52 +161,45 @@ async function actualizarOrgano(req, res) {
         return res.status(400).json({ ok: false, mensaje: 'El nombre es requerido.' });
     }
 
-    let conn;
     try {
-        conn = await pool.getConnection();
-        await conn.beginTransaction();
-
-        const [cur] = await conn.query(
-            `SELECT 1
+        await transaccion(async tx => {
+            const cur = await consultar(
+                `SELECT 1
        FROM gestion_riesgos.riesgos_organos
        WHERE CODIGO_CIA = ? AND CODIGO_ORGANO = ?
        LIMIT 1`,
-            [codigo_cia, codigo_organo]
-        );
-        if (!cur.length) {
-            await conn.rollback();
-            return res.status(404).json({ ok: false, mensaje: 'Órgano no encontrado.' });
-        }
+                [codigo_cia, codigo_organo], tx
+            );
+            if (!cur.length) {
+                throw new RespuestaHttp(404, { ok: false, mensaje: 'Órgano no encontrado.' });
+            }
 
-        const [dup] = await conn.query(
-            `SELECT 1
+            const dup = await consultar(
+                `SELECT 1
        FROM gestion_riesgos.riesgos_organos
        WHERE CODIGO_CIA = ?
          AND UPPER(NOMBRE) = UPPER(?)
          AND CODIGO_ORGANO <> ?
        LIMIT 1`,
-            [codigo_cia, nombre, codigo_organo]
-        );
-        if (dup.length) {
-            await conn.rollback();
-            return res.status(409).json({ ok: false, mensaje: 'Ya existe otro órgano con ese nombre.' });
-        }
+                [codigo_cia, nombre, codigo_organo], tx
+            );
+            if (dup.length) {
+                throw new RespuestaHttp(409, { ok: false, mensaje: 'Ya existe otro órgano con ese nombre.' });
+            }
 
-        await conn.query(
-            `UPDATE gestion_riesgos.riesgos_organos
+            await ejecutar(
+                `UPDATE gestion_riesgos.riesgos_organos
        SET NOMBRE = ?, USUARIO_MODIFICACION = ?, FECHA_MODIFICACION = NOW()
        WHERE CODIGO_CIA = ? AND CODIGO_ORGANO = ?`,
-            [nombre, codigo_cia, codigo_organo, req.userId]
-        );
+                [nombre, codigo_cia, codigo_organo, req.userId ?? null], tx
+            );
+        });
 
-        await conn.commit();
         return res.json({ ok: true, mensaje: 'Órgano actualizado.' });
     } catch (err) {
-        if (conn) try { await conn.rollback(); } catch { }
+        if (enviarRespuestaHttp(err, res)) return;
         console.error('actualizarOrgano', err);
         return res.status(500).json({ ok: false, mensaje: 'Error al actualizar el órgano.' });
-    } finally {
-        if (conn) conn.release();
     }
 }
 

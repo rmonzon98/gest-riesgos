@@ -7,7 +7,7 @@
  * @author Equipo de Desarrollo
  */
 
-const pool = require('../../bd/mySQLConnection');
+const { consultar, ejecutar } = require('../../bd/consultas');
 const { direccionesVinculadas, indicadoresPlanes } = require('../../services/indicadoresPlanes');
 const { permisosUsuario } = require('../../services/permisosRiesgos');
 
@@ -36,7 +36,7 @@ exports.obtenerGeneral = async (req, res) => {
         WHERE CODIGO_CIA = ?
         LIMIT 1
         `;
-        const [rows] = await pool.execute(sql, [codigo_cia]);
+        const rows = await consultar(sql, [codigo_cia]);
 
         if (!rows.length) return res.status(404).json({ msg: 'Institución no encontrada' });
         return res.json({ result: rows });
@@ -77,7 +77,7 @@ exports.actualizarGeneral = async (req, res) => {
     `;
         const params = [nombre, tipo, correo, req.userId, codigo_cia];
 
-        const [result] = await pool.execute(sql, params);
+        const result = await ejecutar(sql, params);
 
         if (result.affectedRows === 0) {
             return res.status(404).json({ error: 'Entrada no encontrada o sin cambios.' });
@@ -153,7 +153,7 @@ exports.obtenerLogsPorTabla = async (req, res) => {
             ORDER BY fecha_creacion DESC, codigo_log DESC
         `;
 
-        const [rows] = await pool.query(sql, [tabla, codigoCia]);
+        const rows = await consultar(sql, [tabla, codigoCia]);
 
         return res.json({
             ok: true,
@@ -190,38 +190,38 @@ exports.obtenerMetricas = async (req, res) => {
             riesgos, primeraMatriz,
             segundaMatriz, seguimientos, vinculos
         ] = await Promise.all([
-            pool.execute(
+            consultar(
                 `
                 SELECT codigo_entidad, codigo_riesgo, codigo_tipo_objetivo, riesgo_residual, riesgo_inherente, codigo_periodo, es_nuevo,
                     NULLIF(TRIM(EVENTO), '') IS NOT NULL AS tiene_evento
                 FROM gestion_riesgos.riesgos_riesgo_extendido
                 WHERE COALESCE(eliminado, 0) = 0 AND codigo_cia = ?
                 `, [codigo_cia]
-            ).then(([rows]) => rows),
-            pool.execute(
+            ),
+            consultar(
                 `
                 SELECT codigo_cia, codigo_entidad, codigo_periodo
                 FROM gestion_riesgos.riesgos_primera_matriz_his
                 WHERE codigo_cia = ?
                 GROUP BY codigo_cia, codigo_entidad, codigo_periodo
                 `, [codigo_cia]
-            ).then(([rows]) => rows),
-            pool.execute(
+            ),
+            consultar(
                 `
                 SELECT codigo_cia, codigo_entidad, codigo_periodo
                 FROM gestion_riesgos.riesgos_segunda_matriz_his
                 WHERE codigo_cia = ?
                 GROUP BY codigo_cia, codigo_entidad, codigo_periodo
                 `, [codigo_cia]
-            ).then(([rows]) => rows),
+            ),
             // Seguimientos
-            pool.execute(
+            consultar(
                 `
                 SELECT codigo_entidad, mes, codigo_periodo
                 FROM gestion_riesgos.riesgos_seguimiento
                 WHERE codigo_cia = ?
                 `, [codigo_cia]
-            ).then(([rows]) => rows),
+            ),
             direccionesVinculadas(codigo_cia),
         ]);
 
