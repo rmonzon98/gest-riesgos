@@ -8,6 +8,7 @@
  */
 
 const pool = require('../../bd/mySQLConnection');
+const { copiarDependenciasRiesgo } = require('../../services/continuidadPlanes');
 const path = require('path');
 const fs = require('fs').promises;
 
@@ -937,7 +938,7 @@ const obtenerCodigoRiesgo = (riesgo) => {
  */
 exports.copiarSiguientePeriodo = async (req, res) => {
     const codigo_cia = toIntOrNull(req.codigo_cia);
-    const codigo_entidad = toIntOrNull(req.body.codigo_entidad ?? req.codigo_entidad);
+    const codigo_entidad = toIntOrNull(req.codigo_entidad);
     const codigo_riesgo = toIntOrNull(req.body.codigo_riesgo);
     const periodoOrigen = toIntOrNull(req.body.codigo_periodo);
     const periodoDestino = periodoOrigen ? periodoOrigen + 1 : null;
@@ -947,6 +948,9 @@ exports.copiarSiguientePeriodo = async (req, res) => {
             ok: false,
             message: "Faltan datos requeridos para continuar el riesgo."
         });
+    }
+    if (req.body.codigo_entidad != null && toIntOrNull(req.body.codigo_entidad) !== codigo_entidad) {
+        return res.status(403).json({ ok: false, message: 'Solo puede continuar riesgos de su dirección.' });
     }
 
     let conn;
@@ -959,7 +963,7 @@ exports.copiarSiguientePeriodo = async (req, res) => {
         // en un período que no aparece en los selectores.
         const [[periodoDestinoRow]] = await conn.execute(
             `
-            SELECT ACTIVO
+            SELECT ACTIVO, YEAR(PERIODO_INICIAL) AS ANIO
             FROM gestion_riesgos.riesgos_periodo
             WHERE CODIGO_CIA = ?
               AND CODIGO_PERIODO = ?
@@ -992,7 +996,10 @@ exports.copiarSiguientePeriodo = async (req, res) => {
                 CODIGO_TIPO_OBJETIVO,
                 REF,
                 ORGANO,
-                VICEMINISTERIO
+                VICEMINISTERIO,
+                EVENTO,
+                CODIGO_DUENO,
+                CODIGO_EJE
             FROM gestion_riesgos.riesgos_riesgo_extendido
             WHERE CODIGO_CIA = ?
               AND CODIGO_ENTIDAD = ?
@@ -1097,13 +1104,16 @@ exports.copiarSiguientePeriodo = async (req, res) => {
                 REF,
                 ORGANO,
                 VICEMINISTERIO,
+                EVENTO,
+                CODIGO_DUENO,
+                CODIGO_EJE,
                 CODIGO_RIESGO,
                 PERIODO_ANTERIOR,
                 CODIGO_PERIODO,
                 USUARIO_CREACION,
                 FECHA_CREACION
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
             `,
             [
                 codigo_cia,
@@ -1115,6 +1125,9 @@ exports.copiarSiguientePeriodo = async (req, res) => {
                 riesgoOrigen.REF,
                 riesgoOrigen.ORGANO,
                 riesgoOrigen.VICEMINISTERIO,
+                riesgoOrigen.EVENTO,
+                riesgoOrigen.CODIGO_DUENO,
+                riesgoOrigen.CODIGO_EJE,
                 codigo_riesgo_nuevo,
                 codigo_riesgo,
                 periodoDestino,
@@ -1122,6 +1135,11 @@ exports.copiarSiguientePeriodo = async (req, res) => {
             ]
         );
 
+        await copiarDependenciasRiesgo(conn, {
+            codigoCia: codigo_cia, codigoEntidad: codigo_entidad, periodoOrigen, codigoOrigen: codigo_riesgo,
+            periodoDestino, codigoDestino: codigo_riesgo_nuevo, anioDestino: periodoDestinoRow.ANIO ?? periodoDestino,
+            usuario: req.userId
+        });
         await conn.commit();
 
         return res.status(201).json({

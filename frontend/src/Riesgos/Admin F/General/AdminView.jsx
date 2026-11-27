@@ -7,8 +7,10 @@
  * @author Equipo de Desarrollo
  */
 
-import { useState } from "react";
-import { Stack, Typography, Box, Tabs, Tab } from "@mui/material";
+import { useCallback, useEffect, useState } from "react";
+import { Alert, Stack, Typography, Box, Tabs, Tab } from "@mui/material";
+import apiClient from "api/apiClient";
+import { safefmt } from "funciones/Fechas";
 import RolesViews from "./RolesViews";
 import ResponablesMain from "./ResponsablesMain";
 import RolesUsuarios from "./RolesUsuarios";
@@ -22,6 +24,18 @@ import General from "./General";
 function AdminView() {
 
     const [tabIndex, setTabIndex] = useState(0);
+    const [licencia, setLicencia] = useState(null);
+    const [errorLicencia, setErrorLicencia] = useState(false);
+    const actualizarLicencia = useCallback(async () => {
+        try {
+            const { data } = await apiClient.get('/api/responsables-actualizados/licencia');
+            setLicencia(data.result);
+            setErrorLicencia(false);
+        } catch {
+            setErrorLicencia(true);
+        }
+    }, []);
+    useEffect(() => { actualizarLicencia(); }, [actualizarLicencia, tabIndex]);
 
     /**
      * Maneja el cambio de pestaña seleccionada.
@@ -36,9 +50,16 @@ function AdminView() {
     return (
         <Box p={3}>
             <Stack spacing={2}>
-                <Typography variant="h5" sx={{ fontWeight: 700, mb: 2 }}>
-                    Administración
-                </Typography>
+                <Box>
+                    <Typography component="h1" variant="h5" sx={{ fontWeight: 700 }}>Administración</Typography>
+                    {licencia && <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                        {licencia.limite == null ? `${licencia.usados} usuarios · sin límite` :
+                            `${licencia.usados} de ${licencia.limite} usuarios`}
+                        {(licencia.desde || licencia.hasta) && ` · vigente del ${safefmt(licencia.desde) || 'sin fecha de inicio'} al ${safefmt(licencia.hasta) || 'sin fecha de fin'}`}
+                    </Typography>}
+                </Box>
+                {errorLicencia && <Alert severity="warning">No se pudo consultar el uso de la licencia.</Alert>}
+                {licencia?.fueraDeVigencia && <Alert severity="warning">La licencia de la aplicación está fuera de vigencia.</Alert>}
                 <Tabs
                     value={tabIndex}
                     onChange={handleChange}
@@ -97,9 +118,9 @@ function AdminView() {
                 </Tabs>
                 {/* Contenido de cada tab */}
                 {tabIndex === 0 && <General />}
-                {tabIndex === 1 && <ResponablesMain />}
+                {tabIndex === 1 && <ResponablesMain licencia={licencia} actualizarLicencia={actualizarLicencia} />}
                 {tabIndex === 2 && <RolesViews />}
-                {tabIndex === 3 && <RolesUsuarios />}
+                {tabIndex === 3 && <RolesUsuarios actualizarLicencia={actualizarLicencia} />}
 
             </Stack>
         </Box>

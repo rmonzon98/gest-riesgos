@@ -1,119 +1,48 @@
-/**
- * @fileoverview
- * Formulario modal para crear y editar áreas de trabajo del sistema.
- *
- * @module Riesgos/Areas/FormArea.jsx
- * @version 1.0
- * @author Equipo de Desarrollo
- */
+import { useState } from 'react';
+import { Alert, Button, Dialog, DialogActions, DialogContent, DialogTitle, MenuItem, Stack, TextField } from '@mui/material';
+import apiClient from 'api/apiClient';
 
-import React, { useState, useEffect } from 'react';
-import {
-    Dialog,
-    DialogTitle,
-    DialogContent,
-    DialogActions,
-    Button,
-    TextField,
-    Box
-} from '@mui/material';
-import apiClient from "api/apiClient";
+export default function FormArea({ area, direcciones, onClose, onSuccess }) {
+    const [descripcion, setDescripcion] = useState(area.DESCRIPCION ?? '');
+    const [abreviatura, setAbreviatura] = useState(area.ABREVIATURA ?? '');
+    const [direccion, setDireccion] = useState(area.CODIGO_ENTIDAD ?? '');
+    const [guardando, setGuardando] = useState(false);
+    const [error, setError] = useState('');
+    const id = area.CODIGO_AREA;
 
-/**
- * Formulario modal controlado para alta y edición de áreas.
- *
- * @component
- */
-function FormArea({ showModal, id, onClose, onSuccess }) {
-    const [descripcion, setDescripcion] = useState('');
-    const [abreviatura, setAbreviatura] = useState('');
-
-    const MAX_DESC = 250;
-    const MAX_ABR = 20;
-
-    // Cargar datos si es edición
-    useEffect(() => {
-        if (id && showModal) {
-            apiClient.get(`/api/areas-actualizados/obtener-area`, {
-                params: { area: parseInt(id) }
-            }).then((res) => {
-                const area = res.data.result[0];
-                setDescripcion(area.DESCRIPCION || '');
-                setAbreviatura(area.ABREVIATURA || '');
-            }).catch(() => {
-            });
-        } else {
-            setDescripcion('');
-            setAbreviatura('');
-        }
-    }, [id, showModal]);
-
-    /**
-     * Valida los campos requeridos y envía los datos del área al backend.
-     */
-    const handleSubmit = async () => {
-        const payload = {
-            descripcion,
-            abreviatura,
-
-        };
-        if (id) {
-            payload.id = id
-        }
+    const guardar = async event => {
+        event.preventDefault();
+        setGuardando(true);
+        setError('');
+        const payload = { descripcion, abreviatura, ...(direccion !== (area.CODIGO_ENTIDAD ?? '') || !id ? { codigoEntidad: direccion || null } : {}) };
         try {
-            if (id) {
-                await apiClient.put(`/api/areas-actualizados/`, payload);
-            } else {
-                await apiClient.post(`/api/areas-actualizados`, payload);
-            }
-
-            if (onSuccess) {
-                onSuccess();
-            } else {
-                onClose();
-            }
-        } catch (err) {
-            console.error('Error guardando área:', err);
-        }
+            if (id) await apiClient.put('/api/areas-actualizados', { ...payload, id });
+            else await apiClient.post('/api/areas-actualizados', payload);
+            await onSuccess();
+        } catch (e) { setError(e?.response?.data?.error || 'No se pudo guardar el área.'); }
+        finally { setGuardando(false); }
     };
 
-    return (
-        <Dialog open={showModal} onClose={onClose} fullWidth maxWidth="sm">
+    return <Dialog open fullWidth maxWidth="sm" onClose={() => !guardando && onClose()}>
+        <form onSubmit={guardar}>
             <DialogTitle>{id ? 'Editar área' : 'Nueva área'}</DialogTitle>
             <DialogContent>
-                <Box mt={2}>
-                    <TextField
-                        fullWidth
-                        label="Descripción"
-                        value={descripcion}
-                        onChange={(e) => setDescripcion(e.target.value)}
-                        inputProps={{ maxLength: MAX_DESC }}
-                        helperText={`${descripcion.length}/${MAX_DESC} caracteres`}
-                        margin="normal"
-                        multiline
-                    />
-
-                    <TextField
-                        fullWidth
-                        label="Abreviatura"
-                        value={abreviatura}
-                        onChange={(e) => setAbreviatura(e.target.value)}
-                        inputProps={{ maxLength: MAX_ABR }}
-                        helperText={`${abreviatura.length}/${MAX_ABR} caracteres`}
-                        margin="normal"
-                    />
-                </Box>
+                <Stack spacing={2} sx={{ pt: 1 }}>
+                    {error && <Alert severity="error">{error}</Alert>}
+                    <TextField required label="Descripción" value={descripcion} onChange={e => setDescripcion(e.target.value)} inputProps={{ maxLength: 200 }} />
+                    <TextField label="Abreviatura" value={abreviatura} onChange={e => setAbreviatura(e.target.value)} inputProps={{ maxLength: 10 }} />
+                    <TextField select label="Dirección" value={direccion} onChange={e => setDireccion(e.target.value)}>
+                        <MenuItem value="">General</MenuItem>
+                        {direccion !== '' && !direcciones.some(row => row.CODIGO_ENTIDAD === direccion) &&
+                            <MenuItem value={direccion} disabled>Dirección {direccion}</MenuItem>}
+                        {direcciones.map(row => <MenuItem key={row.CODIGO_ENTIDAD} value={row.CODIGO_ENTIDAD}>{row.NOMBRE}</MenuItem>)}
+                    </TextField>
+                </Stack>
             </DialogContent>
             <DialogActions>
-                <Button onClick={onClose} color="inherit">
-                    Cancelar
-                </Button>
-                <Button onClick={handleSubmit} variant="contained" color="primary">
-                    Guardar
-                </Button>
+                <Button onClick={onClose} disabled={guardando}>Cancelar</Button>
+                <Button type="submit" variant="contained" disabled={!descripcion.trim() || guardando}>Guardar</Button>
             </DialogActions>
-        </Dialog>
-    );
+        </form>
+    </Dialog>;
 }
-
-export default FormArea;

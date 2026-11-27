@@ -6,7 +6,10 @@
   "scripts": {
     "start": "node index.js",
     "devStart": "nodemon index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "postinstall": "prisma generate",
+    "prisma:generate": "prisma generate",
+    "prisma:studio": "prisma studio",
+    "test": "node --test \"tests/*.test.js\""
   },
   "nodemonConfig": {
     "ignore": [
@@ -16,6 +19,8 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@prisma/adapter-mariadb": "^7.9.1",
+    "@prisma/client": "^7.9.1",
     "body-parser": "^1.20.0",
     "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
@@ -30,9 +35,8 @@
     "oracledb": "^6.0.3",
     "otplib": "^12.0.1",
     "plotly": "^1.0.6",
+    "prisma": "^7.9.1",
     "qrcode": "^1.5.4",
-    "sequelize": "^6.37.8",
-    "sequelize-cli": "^6.6.5",
     "sha-1": "^1.0.0",
     "uuid": "^14.0.0"
   },

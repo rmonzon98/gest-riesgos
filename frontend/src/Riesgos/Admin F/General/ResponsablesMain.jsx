@@ -17,6 +17,7 @@ import {
 } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
 import apiClient from "api/apiClient";
+import { apiErrorMessage } from "funciones/errors";
 import LockRoundedIcon from "@mui/icons-material/LockRounded";
 import LockOpenRoundedIcon from "@mui/icons-material/LockOpenRounded";
 import LockResetIcon from "@mui/icons-material/LockReset";
@@ -38,7 +39,7 @@ import FormResponsable from "./FormResponsable";
  *
  * @component
  */
-function ResponablesMain() {
+function ResponablesMain({ licencia, actualizarLicencia }) {
     const theme = useTheme();
     const mdDown = useMediaQuery(theme.breakpoints.down("md"));
 
@@ -107,8 +108,9 @@ function ResponablesMain() {
             const payload = { valor, codigo_colaborador: colaborador };
             await apiClient.put(`/api/responsables-actualizados/cambiar-${propiedad}`, payload);
             obtenerColaboradores();
+            actualizarLicencia?.();
         } catch (err) {
-            onError("Error al actualizar estado");
+            onError(apiErrorMessage(err));
         }
     };
 
@@ -123,6 +125,7 @@ function ResponablesMain() {
     };
 
     const handleSuccess = () => {
+        actualizarLicencia?.();
         handleClose();
         obtenerColaboradores();
         mostrarAlerta("success", "Guardado exitosamente");
@@ -214,9 +217,11 @@ function ResponablesMain() {
                     color="primary"
                     startIcon={<AddIcon />}
                     onClick={() => setShowModal(true)}
+                    disabled={Boolean(licencia?.lleno)}
                 >
-                    Nuevo Colaborador
+                    Crear usuario
                 </Button>
+                {licencia?.lleno && <Typography variant="body2" color="text.secondary">Se alcanzó el límite de usuarios.</Typography>}
 
                 <TextField
                     label="Filtrar por nombre"

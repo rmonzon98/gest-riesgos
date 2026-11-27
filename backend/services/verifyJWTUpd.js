@@ -1,25 +1,10 @@
-/**
- * @fileoverview 
- * Middleware de autenticación JWT: extrae token, valida firma/expiración y popula `req.user`.
- *
- * @module middleware/auth/verifyJWT
- * @version 1.0
- * @author Equipo de Desarrollo
- */
 const jwt = require('jsonwebtoken');
-const pool = require('../bd/mySQLConnection');
+const prisma = require('../prisma/client');
 
 const jwtSecret = process.env.SECRET_KEY;
 
 /**
- * verifyJWT
- *
- * Protege rutas validando JWT y asegurando que el usuario exista en la BD.
- *
- * - Extrae token; si falta entonces, 401.
- * - `jwt.verify` con `SECRET_KEY` (lanza si es inválido/expirado).
- * - Consulta MySQL para confirmar `id` y `codigo_cia`.
- *
+ * Valida el JWT y su sesión activa, y agrega los datos del usuario al request.
  * @middleware
  */
 exports.verifyJWT = async (req, res, next) => {
@@ -34,7 +19,6 @@ exports.verifyJWT = async (req, res, next) => {
         }
 
         const decoded = jwt.verify(token, jwtSecret);
-
         const { id, codigo_cia, sid } = decoded;
 
         if (!id || !codigo_cia || !sid) {
@@ -44,54 +28,53 @@ exports.verifyJWT = async (req, res, next) => {
             });
         }
 
-        const sql = `
-            SELECT 
-                sp.CODIGO_COLABORADOR AS CODIGO_PERSONA,
-                sp.CODIGO_ENTIDAD,
-                sp.CODIGO_CIA,
-                s.id_sesion
-            FROM 
-                gestion_riesgos.seguridad_sesion s
-            INNER JOIN
-                gestion_riesgos.seguridad_persona sp
-            ON
-                sp.CODIGO_CIA = s.codigo_cia
-                AND sp.CODIGO_COLABORADOR = s.codigo_colaborador
-            WHERE 
-                s.id_sesion = ?
-                AND s.codigo_cia = ?
-                AND s.codigo_colaborador = ?
-                AND s.activo = 1
-                AND s.fecha_revocacion IS NULL
-                AND s.fecha_expiracion > NOW()
-                AND sp.ACTIVO = 1
-            LIMIT 1
-        `;
+        const sesion = await prisma.seguridadSesion.findFirst({
+            where: {
+                idSesion: String(sid),
+                codigoCia: Number(codigo_cia),
+                codigoColaborador: Number(id),
+                activo: true,
+                fechaRevocacion: null,
+                fechaExpiracion: { gt: new Date() }
+            },
+            select: { idSesion: true }
+        });
 
-        const [rows] = await pool.execute(sql, [sid, codigo_cia, id]);
-
-        if (rows.length === 0) {
+        if (!sesion) {
             return res.status(401).json({
                 auth: false,
                 message: 'Sesión inválida o expirada'
             });
         }
 
-        const u = rows[0];
+        const persona = await prisma.seguridadPersona.findFirst({
+            where: {
+                codigoCia: Number(codigo_cia),
+                codigoColaborador: Number(id),
+                activo: '1'
+            },
+            select: { codigoColaborador: true, codigoCia: true, codigoEntidad: true }
+        });
+
+        if (!persona) {
+            return res.status(401).json({
+                auth: false,
+                message: 'Sesión inválida o expirada'
+            });
+        }
 
         req.user = {
-            id: u.CODIGO_PERSONA,
-            codigo_cia: u.CODIGO_CIA,
-            codigo_entidad: u.CODIGO_ENTIDAD,
-            id_sesion: u.id_sesion
+            id: persona.codigoColaborador,
+            codigo_cia: persona.codigoCia,
+            codigo_entidad: persona.codigoEntidad,
+            id_sesion: sesion.idSesion
         };
 
-        req.userId = u.CODIGO_PERSONA;
-        req.sessionId = u.id_sesion;
-
-        req.codigoEntidad = u.CODIGO_ENTIDAD;
-        req.codigo_cia = u.CODIGO_CIA;
-        req.codigo_entidad = u.CODIGO_ENTIDAD;
+        req.userId = persona.codigoColaborador;
+        req.sessionId = sesion.idSesion;
+        req.codigoEntidad = persona.codigoEntidad;
+        req.codigo_cia = persona.codigoCia;
+        req.codigo_entidad = persona.codigoEntidad;
 
         return next();
     } catch (err) {

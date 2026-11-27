@@ -14,15 +14,18 @@ import {
     TextField, Grid, Button, Stack, Alert, IconButton, Snackbar,
     Divider, Typography, Select, MenuItem, FormControl,
     InputLabel, Chip, LinearProgress, Switch, FormControlLabel,
-    Table, TableHead, TableRow, TableCell, TableBody, TableContainer
+    Table, TableHead, TableRow, TableCell, TableBody, TableContainer, Box, Autocomplete
 } from "@mui/material";
 import CloseRounded from "@mui/icons-material/CloseRounded";
 import ModalRiesgoPeriodoAnterior from "./ModalRiesgoPeriodoAnterior";
+import { calcularRiesgo, colorTolerancia } from "funciones/CalculoRiesgo";
+import useBusquedaMarn from "funciones/useBusquedaMarn";
 
 /* ===================== Helpers ===================== */
 const len = (v) => (v ? String(v).length : 0);
 const helper = (v, max) => `${len(v)}/${max}`;
-const riskBg = (v) => (!v ? "transparent" : v <= 10 ? "success.light" : v <= 15 ? "warning.light" : "error.light");
+const riskBg = (v) => Number(v) ? `${colorTolerancia(v)}.light` : "transparent";
+const camposCreacion = new Set(["CODIGO_TIPO_OBJETIVO", "CODIGO_AREA", "REF", "DESCRIPCION"]);
 
 /**
  * Modal de propiedades de riesgo.
@@ -36,6 +39,7 @@ function ModalIngresoRiesgosPropiedades({
     propiedadesDef, propiedadesExt,
     onRequestSave,
     saving = false,
+    inline = false, basico = false, soloLectura = false, ejes = [], puedeCambiarDueno = false,
 }) {
 
     const isEdit = Boolean(initialData?.CODIGO_RIESGO);
@@ -44,6 +48,7 @@ function ModalIngresoRiesgosPropiedades({
 
     const [objetivos, setObjetivos] = useState([]); // [{CODIGO, DESCRIPCION}]
     const [loadingObj, setLoadingObj] = useState(false);
+    const [buscarDueno, setBuscarDueno] = useState("");
 
     /* ===== formulario ===== */
     const [form, setForm] = useState({
@@ -195,6 +200,10 @@ function ModalIngresoRiesgosPropiedades({
                 REF_NUM: refNum,
                 REF: d?.REF ?? recomputeRef(tipo, refNum),
                 OBJETIVO: d?.CODIGO_OBJETIVO ?? "",
+                OBJETIVO_TEXTO: d?.OBJETIVO_TEXTO ?? "",
+                CODIGO_EJE: d?.CODIGO_EJE ?? "",
+                CODIGO_DUENO: d?.CODIGO_DUENO ?? null,
+                MOSTRAR_GENERAL: d?.MOSTRAR_GENERAL === "S",
                 AREA: d?.CODIGO_AREA ?? "",
                 DESCRIPCION: d?.DESCRIPCION ?? "",
                 PROBABILIDAD: d?.CODIGO_PROBABILIDAD ?? d?.PROBABILIDAD ?? "",
@@ -246,29 +255,16 @@ function ModalIngresoRiesgosPropiedades({
     }, [open]);
 
     useEffect(() => {
-        const prob = Number(form.PROBABILIDAD || 0);
-        const sev = Number(form.SEVERIDAD || 0);
-        const capEff = Math.max(0, Number(form.CAPACIDAD_MITIGACION || 0) - 1);
-        const varMit = (form.VARIABLE_MITIGACION || "").toUpperCase();
-
-        const sevAdj = varMit === "S" ? Math.max(1, sev - capEff) : (sev || "");
-        const probAdj = varMit === "P" ? Math.max(1, prob - capEff) : (prob || "");
-
-        const inh = prob && sev ? prob * sev : "";
-        const res = probAdj && sevAdj ? probAdj * sevAdj : "";
-
-        setForm((prev) => ({
-            ...prev,
-            PROBABILIDAD_AJUSTADA: probAdj || "",
-            SEVERIDAD_AJUSTADA: sevAdj || "",
-            RIESGO_INHERENTE: inh || "",
-            RIESGO_RESIDUAL: res || ""
-        }));
+        if (!soloLectura) setForm((prev) => ({ ...prev, ...calcularRiesgo(prev) }));
     }, [form.PROBABILIDAD, form.SEVERIDAD, form.CAPACIDAD_MITIGACION, form.VARIABLE_MITIGACION]);
 
     const isEmptyStr = (v) => (v == null || String(v).trim() === "");
 
-    const show = (k) => keysSet.has(k);
+    const show = (k) => basico || (inline && !keysSet.size)
+        ? camposCreacion.has(k) : keysSet.has(k) && !(inline && k === "EVENTO");
+    const objetivoLibre = inline && show("OBJETIVO_TEXTO");
+    const opcionesObjetivo = useBusquedaMarn(objetivoLibre && !soloLectura ? "/api/marn/objetivos-historicos" : null, form.OBJETIVO_TEXTO || "");
+    const opcionesDueno = useBusquedaMarn(puedeCambiarDueno ? "/api/marn/duenos" : null, buscarDueno);
 
     const getPrevExtras = () => {
         if (!isEdit) return {};
@@ -296,12 +292,12 @@ function ModalIngresoRiesgosPropiedades({
         return out;
     };
 
-    const extrasMissing = Array.from(keysSetExtra).some((k) => isEmptyStr(extraValues?.[k]));
+    const extrasMissing = !basico && Array.from(keysSetExtra).some((k) => isEmptyStr(extraValues?.[k]));
     const valid =
         (!show("CODIGO_TIPO_OBJETIVO") || !isEmptyStr(form.TIPO_CODIGO)) &&
         (!show("REF") || (!isEmptyStr(form.REF_NUM) && !isEmptyStr(form.REF))) &&
         (!show("CODIGO_AREA") || !isEmptyStr(form.AREA)) &&
-        (!show("CODIGO_OBJETIVO") || !isEmptyStr(form.OBJETIVO)) &&
+        (objetivoLibre || !show("CODIGO_OBJETIVO") || !isEmptyStr(form.OBJETIVO)) &&
         (!show("DESCRIPCION") || (form.DESCRIPCION || "").trim().length >= 5) &&
         (!show("CODIGO_PROBABILIDAD") || Number(form.PROBABILIDAD) > 0) &&
         (!show("CODIGO_SEVERIDAD") || Number(form.SEVERIDAD) > 0) &&
@@ -325,7 +321,9 @@ function ModalIngresoRiesgosPropiedades({
             return;
         }
         setError("");
-        const payload = buildPayload();
+        const payload = basico ? { codigoPeriodo: Number(periodo), tipoObjetivoCodigo: form.TIPO_CODIGO,
+            areaCodigo: form.AREA, descripcion: form.DESCRIPCION.trim(), ref: form.REF, esNuevo: form.ES_NUEVO ? 1 : 0,
+            organoCodigo: form.ORGANO || null, viceministerioCodigo: form.VICEMINISTERIO || null } : buildPayload();
         onRequestSave?.(payload, isEdit);
     };
 
@@ -360,17 +358,22 @@ function ModalIngresoRiesgosPropiedades({
             viceministerioCodigo: form.VICEMINISTERIO || (isEdit ? prev?.VICEMINISTERIO : null) || null,
             organoCodigo: form.ORGANO || (isEdit ? prev?.ORGANO : null) || null,
             esNuevo: form.ES_NUEVO ? 1 : 0,
+            ...(objetivoLibre && { objetivoTexto: form.OBJETIVO_TEXTO || null }),
+            ...(inline && show("CODIGO_EJE") && { codigoEje: form.CODIGO_EJE || null }),
+            ...(inline && puedeCambiarDueno && form.CODIGO_DUENO !== prev.CODIGO_DUENO && { codigoDueno: form.CODIGO_DUENO }),
+            ...(inline && { mostrarGeneral: form.MOSTRAR_GENERAL ? "S" : "N" }),
 
             // Códigos
-            tipoObjetivoCodigo: pick(keysSet.has("CODIGO_TIPO_OBJETIVO"), form.TIPO_CODIGO || null, prev?.CODIGO_TIPO_OBJETIVO ?? null),
-            areaCodigo: pick(keysSet.has("CODIGO_AREA"), form.AREA || null, prev?.CODIGO_AREA ?? null),
+            tipoObjetivoCodigo: pick(show("CODIGO_TIPO_OBJETIVO"), form.TIPO_CODIGO || null, prev?.CODIGO_TIPO_OBJETIVO ?? null),
+            areaCodigo: pick(show("CODIGO_AREA"), form.AREA || null, prev?.CODIGO_AREA ?? null),
             toleranciaCodigo: pick(keysSet.has("CODIGO_TOLERANCIA"), form.TOLERANCIA || null, prev?.CODIGO_TOLERANCIA ?? null),
             frecuenciaCodigo: pick(keysSet.has("CODIGO_FRECUENCIA"), form.FRECUENCIA || null, prev?.CODIGO_FRECUENCIA ?? null),
-            objetivoCodigo: pick(keysSet.has("CODIGO_OBJETIVO"), form.OBJETIVO || null, prev?.CODIGO_OBJETIVO ?? null),
+            objetivoCodigo: objetivoLibre && form.TIPO_CODIGO !== prev?.CODIGO_TIPO_OBJETIVO
+                ? null : pick(keysSet.has("CODIGO_OBJETIVO"), form.OBJETIVO || null, prev?.CODIGO_OBJETIVO ?? null),
 
             // Textos
-            descripcion: pick(keysSet.has("DESCRIPCION"), (form.DESCRIPCION || "").trim() || null, prev?.DESCRIPCION ?? null),
-            ref: pick(keysSet.has("REF"), form.REF || null, prev?.REF ?? null),
+            descripcion: pick(show("DESCRIPCION"), (form.DESCRIPCION || "").trim() || null, prev?.DESCRIPCION ?? null),
+            ref: pick(show("REF"), form.REF || null, prev?.REF ?? null),
             severidadNarracion: pick(keysSet.has("SEVERIDAD_NARRACION"), (form.SEVERIDAD_NARRACION || "").trim() || null, prev?.SEVERIDAD_NARRACION ?? null),
             evento: pick(keysSet.has("EVENTO"), (form.EVENTO || "").trim() || null, prev?.EVENTO ?? null),
             control: pick(keysSet.has("CONTROL"), (form.CONTROL || "").trim() || null, prev?.CONTROL ?? null),
@@ -462,11 +465,14 @@ function ModalIngresoRiesgosPropiedades({
     const sevAdjNum = Number(form.SEVERIDAD_AJUSTADA || 0);
     const inhNum = Number(form.RIESGO_INHERENTE || 0);
     const resNum = Number(form.RIESGO_RESIDUAL || 0);
+    const Contenedor = inline ? Box : Dialog;
+    const Contenido = inline ? Box : DialogContent;
+    const Acciones = inline ? Stack : DialogActions;
 
     return (
         <>
-            <Dialog open={open} onClose={handleClose} maxWidth="lg" fullWidth>
-                <DialogTitle sx={{ pr: 6 }}>
+            <Contenedor {...(inline ? {} : { open, onClose: handleClose, maxWidth: "lg", fullWidth: true })}>
+                {!inline && <DialogTitle sx={{ pr: 6 }}>
                     <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
                         <Typography variant="subtitle2" color="text.secondary">
                             {entidad || "Dirección"}
@@ -479,13 +485,15 @@ function ModalIngresoRiesgosPropiedades({
                     <IconButton onClick={handleClose} sx={{ position: "absolute", right: 8, top: 8 }}>
                         <CloseRounded />
                     </IconButton>
-                </DialogTitle>
+                </DialogTitle>}
 
-                <DialogContent dividers>
+                <Contenido {...(inline ? { component: "fieldset", disabled: soloLectura,
+                    sx: { p: 0, m: 0, minWidth: 0, border: 0, ...(soloLectura && { pointerEvents: "none" }) } } : { dividers: true })}>
                     {loadingObj && <LinearProgress sx={{ mb: 2 }} />}
 
                     <Stack spacing={2}>
                         {!!error && <Alert severity="error">{error}</Alert>}
+                        {inline && <Typography component="h2" variant="subtitle1" fontWeight={700}>Clasificación</Typography>}
 
                         {/* ======= Riesgo nuevo: se registra en el período pero no cuenta en sus métricas ni seguimiento ======= */}
                         <Stack spacing={1}>
@@ -551,7 +559,7 @@ function ModalIngresoRiesgosPropiedades({
 
                         {/* 1) Área / Tipo objetivo / REF */}
                         <Grid container spacing={2}>
-                            {keysSet.has('CODIGO_AREA') && (
+                            {show('CODIGO_AREA') && (
                                 <Grid item xs={12} md={6}>
                                     <FormControl fullWidth size="small" required error={fieldError(!form.AREA)}>
                                         <InputLabel>Área de evaluación</InputLabel>
@@ -568,7 +576,7 @@ function ModalIngresoRiesgosPropiedades({
                                 </Grid>
                             )}
 
-                            {keysSet.has('CODIGO_TIPO_OBJETIVO') && (
+                            {show('CODIGO_TIPO_OBJETIVO') && (
                                 <Grid item xs={12} md={6}>
                                     <FormControl fullWidth size="small" required error={fieldError(!form.TIPO_CODIGO)}>
                                         <InputLabel>Tipo de objetivo</InputLabel>
@@ -587,7 +595,7 @@ function ModalIngresoRiesgosPropiedades({
                                 </Grid>
                             )}
 
-                            {keysSet.has('REF') && (
+                            {show('REF') && (
                                 <>
                                     <Grid item xs={12} md={6}>
                                         <TextField
@@ -624,7 +632,14 @@ function ModalIngresoRiesgosPropiedades({
 
                         {/* 2) Objetivo / Descripción */}
                         <Grid container spacing={2}>
-                            {keysSet.has('CODIGO_OBJETIVO') && (
+                            {objetivoLibre && <Grid item xs={12} md={6}>
+                                <Autocomplete freeSolo options={opcionesObjetivo} filterOptions={options => options}
+                                    inputValue={form.OBJETIVO_TEXTO || ""}
+                                    onInputChange={(_, value) => setForm(s => ({ ...s, OBJETIVO_TEXTO: value.slice(0, 800) }))}
+                                    renderInput={params => <TextField {...params} size="small" label="Objetivo específico"
+                                        inputProps={{ ...params.inputProps, maxLength: 800 }} />} />
+                            </Grid>}
+                            {!objetivoLibre && show('CODIGO_OBJETIVO') && (
                                 <Grid item xs={12} md={6}>
                                     <FormControl fullWidth size="small" required error={fieldError(!form.OBJETIVO)}>
                                         <InputLabel>Objetivo</InputLabel>
@@ -641,8 +656,24 @@ function ModalIngresoRiesgosPropiedades({
                                     </FormControl>
                                 </Grid>
                             )}
+                            {inline && show('CODIGO_EJE') && <Grid item xs={12} md={6}>
+                                <TextField select fullWidth size="small" label="Eje estratégico" value={form.CODIGO_EJE ?? ""}
+                                    onChange={e => setForm(s => ({ ...s, CODIGO_EJE: e.target.value }))}>
+                                    <MenuItem value="">Sin eje estratégico</MenuItem>
+                                    {ejes.map(eje => <MenuItem key={eje.codigoEje} value={eje.codigoEje} disabled={eje.estado !== '1'}>
+                                        {eje.nombre}{eje.estado !== '1' ? ' (inactivo)' : ''}
+                                    </MenuItem>)}
+                                </TextField>
+                            </Grid>}
+                            {inline && puedeCambiarDueno && <Grid item xs={12} md={6}>
+                                <Autocomplete options={opcionesDueno} filterOptions={options => options}
+                                    onInputChange={(_, value) => setBuscarDueno(value)} getOptionLabel={option => option.nombre}
+                                    isOptionEqualToValue={(option, value) => option.codigoColaborador === value.codigoColaborador}
+                                    onChange={(_, value) => setForm(s => ({ ...s, CODIGO_DUENO: value?.codigoColaborador ?? initialData?.CODIGO_DUENO }))}
+                                    renderInput={params => <TextField {...params} size="small" label="Cambiar dueño" />} />
+                            </Grid>}
 
-                            {keysSet.has('DESCRIPCION') && (
+                            {show('DESCRIPCION') && (
                                 <Grid item xs={12} md={6}>
                                     <TextField
                                         required
@@ -660,7 +691,7 @@ function ModalIngresoRiesgosPropiedades({
 
                         {/* 3) Variables base y mitigación */}
                         <Grid container spacing={2}>
-                            {keysSet.has('CODIGO_PROBABILIDAD') && (
+                            {show('CODIGO_PROBABILIDAD') && (
                                 <Grid item xs={12} md={6}>
                                     <FormControl fullWidth size="small" required error={fieldError(!(Number(form.PROBABILIDAD) > 0))}>
                                         <InputLabel>Probabilidad</InputLabel>
@@ -677,7 +708,7 @@ function ModalIngresoRiesgosPropiedades({
                                 </Grid>
                             )}
 
-                            {keysSet.has('CODIGO_SEVERIDAD') && (
+                            {show('CODIGO_SEVERIDAD') && (
                                 <Grid item xs={12} md={6}>
                                     <FormControl fullWidth size="small" required error={fieldError(!(Number(form.SEVERIDAD) > 0))}>
                                         <InputLabel>Severidad</InputLabel>
@@ -694,7 +725,7 @@ function ModalIngresoRiesgosPropiedades({
                                 </Grid>
                             )}
 
-                            {keysSet.has('CAPACIDAD_MITIGACION') && (
+                            {show('CAPACIDAD_MITIGACION') && (
                                 <Grid item xs={12} md={6}>
                                     <FormControl fullWidth size="small" required error={fieldError(!form.CAPACIDAD_MITIGACION)}>
                                         <InputLabel>Eficiencia del mitigador</InputLabel>
@@ -713,7 +744,7 @@ function ModalIngresoRiesgosPropiedades({
                                 </Grid>
                             )}
 
-                            {keysSet.has('VARIABLE_MITIGACION') && (
+                            {show('VARIABLE_MITIGACION') && (
                                 <Grid item xs={12} md={6}>
                                     <FormControl fullWidth size="small" required error={fieldError(!form.VARIABLE_MITIGACION)}>
                                         <InputLabel>A mitigar</InputLabel>
@@ -731,37 +762,37 @@ function ModalIngresoRiesgosPropiedades({
                         </Grid>
 
                         {/* Tabla de cálculo */}
-                        {(keysSet.has('CODIGO_PROBABILIDAD') || keysSet.has('CODIGO_SEVERIDAD') || keysSet.has('PROBABILIDAD_AJUSTADA')
-                            || keysSet.has('SEVERIDAD_AJUSTADA') || keysSet.has('RIESGO_INHERENTE') || keysSet.has('RIESGO_RESIDUAL')) && (
+                        {(show('CODIGO_PROBABILIDAD') || show('CODIGO_SEVERIDAD') || show('PROBABILIDAD_AJUSTADA')
+                            || show('SEVERIDAD_AJUSTADA') || show('RIESGO_INHERENTE') || show('RIESGO_RESIDUAL')) && (
                                 <Grid container spacing={2}>
                                     <Grid item xs={12}>
                                         <TableContainer sx={{ border: "1px solid #e0e0e0", borderRadius: 1 }}>
                                             <Table size="small" stickyHeader>
                                                 <TableHead>
                                                     <TableRow>
-                                                        {keysSet.has('CODIGO_PROBABILIDAD') && <TableCell>Probabilidad</TableCell>}
-                                                        {keysSet.has('CODIGO_SEVERIDAD') && <TableCell>Severidad</TableCell>}
-                                                        {keysSet.has('VARIABLE_MITIGACION') && <TableCell>A mitigar</TableCell>}
-                                                        {keysSet.has('CAPACIDAD_MITIGACION') && <TableCell>Capacidad de mitigación</TableCell>}
-                                                        {(keysSet.has('RIESGO_INHERENTE') || (keysSet.has('CODIGO_PROBABILIDAD') && keysSet.has('CODIGO_SEVERIDAD')))
+                                                        {show('CODIGO_PROBABILIDAD') && <TableCell>Probabilidad</TableCell>}
+                                                        {show('CODIGO_SEVERIDAD') && <TableCell>Severidad</TableCell>}
+                                                        {show('VARIABLE_MITIGACION') && <TableCell>A mitigar</TableCell>}
+                                                        {show('CAPACIDAD_MITIGACION') && <TableCell>Capacidad de mitigación</TableCell>}
+                                                        {(show('RIESGO_INHERENTE') || (show('CODIGO_PROBABILIDAD') && show('CODIGO_SEVERIDAD')))
                                                             && <TableCell>Riesgo inherente</TableCell>}
-                                                        {keysSet.has('PROBABILIDAD_AJUSTADA') && <TableCell>Probabilidad ajustada</TableCell>}
-                                                        {keysSet.has('SEVERIDAD_AJUSTADA') && <TableCell>Severidad ajustada</TableCell>}
-                                                        {(keysSet.has('RIESGO_RESIDUAL') || (keysSet.has('PROBABILIDAD_AJUSTADA') && keysSet.has('SEVERIDAD_AJUSTADA')))
+                                                        {show('PROBABILIDAD_AJUSTADA') && <TableCell>Probabilidad ajustada</TableCell>}
+                                                        {show('SEVERIDAD_AJUSTADA') && <TableCell>Severidad ajustada</TableCell>}
+                                                        {(show('RIESGO_RESIDUAL') || (show('PROBABILIDAD_AJUSTADA') && show('SEVERIDAD_AJUSTADA')))
                                                             && <TableCell>Riesgo residual</TableCell>}
                                                     </TableRow>
                                                 </TableHead>
                                                 <TableBody>
                                                     <TableRow hover>
-                                                        {keysSet.has('CODIGO_PROBABILIDAD') && <TableCell>{probNum || "-"}</TableCell>}
-                                                        {keysSet.has('CODIGO_SEVERIDAD') && <TableCell>{sevNum || "-"}</TableCell>}
-                                                        {keysSet.has('VARIABLE_MITIGACION') && <TableCell>{varMit || "-"}</TableCell>}
-                                                        {keysSet.has('CAPACIDAD_MITIGACION') && <TableCell>{capEfectiva || "-"}</TableCell>}
-                                                        {(keysSet.has('RIESGO_INHERENTE') || (keysSet.has('CODIGO_PROBABILIDAD') && keysSet.has('CODIGO_SEVERIDAD')))
+                                                        {show('CODIGO_PROBABILIDAD') && <TableCell>{probNum || "-"}</TableCell>}
+                                                        {show('CODIGO_SEVERIDAD') && <TableCell>{sevNum || "-"}</TableCell>}
+                                                        {show('VARIABLE_MITIGACION') && <TableCell>{varMit || "-"}</TableCell>}
+                                                        {show('CAPACIDAD_MITIGACION') && <TableCell>{capEfectiva || "-"}</TableCell>}
+                                                        {(show('RIESGO_INHERENTE') || (show('CODIGO_PROBABILIDAD') && show('CODIGO_SEVERIDAD')))
                                                             && <TableCell sx={{ bgcolor: riskBg(inhNum) }}>{inhNum || "-"}</TableCell>}
-                                                        {keysSet.has('PROBABILIDAD_AJUSTADA') && <TableCell>{probAdjNum || "-"}</TableCell>}
-                                                        {keysSet.has('SEVERIDAD_AJUSTADA') && <TableCell>{sevAdjNum || "-"}</TableCell>}
-                                                        {(keysSet.has('RIESGO_RESIDUAL') || (keysSet.has('PROBABILIDAD_AJUSTADA') && keysSet.has('SEVERIDAD_AJUSTADA')))
+                                                        {show('PROBABILIDAD_AJUSTADA') && <TableCell>{probAdjNum || "-"}</TableCell>}
+                                                        {show('SEVERIDAD_AJUSTADA') && <TableCell>{sevAdjNum || "-"}</TableCell>}
+                                                        {(show('RIESGO_RESIDUAL') || (show('PROBABILIDAD_AJUSTADA') && show('SEVERIDAD_AJUSTADA')))
                                                             && <TableCell sx={{ bgcolor: riskBg(resNum) }}>{resNum || "-"}</TableCell>}
                                                     </TableRow>
                                                 </TableBody>
@@ -773,7 +804,7 @@ function ModalIngresoRiesgosPropiedades({
 
                         {/* 4) Resto de campos */}
                         <Grid container spacing={2}>
-                            {keysSet.has('CODIGO_TOLERANCIA') && (
+                            {show('CODIGO_TOLERANCIA') && (
                                 <Grid item xs={12} md={6}>
                                     <FormControl fullWidth size="small" required error={fieldError(!form.TOLERANCIA)}>
                                         <InputLabel>Tolerancia</InputLabel>
@@ -790,7 +821,7 @@ function ModalIngresoRiesgosPropiedades({
                                 </Grid>
                             )}
 
-                            {keysSet.has('SEVERIDAD_NARRACION') && (
+                            {show('SEVERIDAD_NARRACION') && (
                                 <Grid item xs={12} md={6}>
                                     <TextField
                                         required
@@ -805,7 +836,7 @@ function ModalIngresoRiesgosPropiedades({
                                 </Grid>
                             )}
 
-                            {keysSet.has('EVENTO') && (
+                            {show('EVENTO') && (
                                 <Grid item xs={12} md={6}>
                                     <TextField
                                         required
@@ -820,7 +851,7 @@ function ModalIngresoRiesgosPropiedades({
                                 </Grid>
                             )}
 
-                            {keysSet.has('CONTROL') && (
+                            {show('CONTROL') && (
                                 <Grid item xs={12} md={6}>
                                     <TextField
                                         required
@@ -835,7 +866,7 @@ function ModalIngresoRiesgosPropiedades({
                                 </Grid>
                             )}
 
-                            {keysSet.has('MONITOREO') && (
+                            {show('MONITOREO') && (
                                 <Grid item xs={12} md={6}>
                                     <TextField
                                         required
@@ -850,7 +881,7 @@ function ModalIngresoRiesgosPropiedades({
                                 </Grid>
                             )}
 
-                            {keysSet.has('CODIGO_FRECUENCIA') && (
+                            {show('CODIGO_FRECUENCIA') && (
                                 <Grid item xs={12} md={6}>
                                     <FormControl fullWidth size="small" required error={fieldError(!form.FRECUENCIA)}>
                                         <InputLabel>Frecuencia</InputLabel>
@@ -867,7 +898,7 @@ function ModalIngresoRiesgosPropiedades({
                                 </Grid>
                             )}
 
-                            {keysSet.has('RESPONSABLE') && (
+                            {show('RESPONSABLE') && (
                                 <Grid item xs={12} md={6}>
                                     <TextField
                                         required
@@ -884,7 +915,7 @@ function ModalIngresoRiesgosPropiedades({
                         </Grid>
 
                         {/* Extras (propiedadesExt) */}
-                        {Array.isArray(propiedadesExt) && propiedadesExt.length > 0 && (
+                        {!basico && Array.isArray(propiedadesExt) && propiedadesExt.length > 0 && (
                             <>
                                 <Divider />
                                 <Grid container spacing={2}>
@@ -915,7 +946,16 @@ function ModalIngresoRiesgosPropiedades({
                             </>
                         )}
 
-                        <Grid container spacing={2}>
+                        {!basico && <Grid container spacing={2}>
+                            {inline && initialData?.EFICIENCIA_MITIGADOR != null && <Grid item xs={12} md={6}>
+                                <TextField fullWidth size="small" label="Eficiencia del mitigador (informativa)"
+                                    value={initialData.EFICIENCIA_MITIGADOR} InputProps={{ readOnly: true }} />
+                            </Grid>}
+                            {inline && <Grid item xs={12} md={6}>
+                                <FormControlLabel label="Mostrar en reportes generales"
+                                    control={<Switch checked={Boolean(form.MOSTRAR_GENERAL)}
+                                        onChange={e => setForm(s => ({ ...s, MOSTRAR_GENERAL: e.target.checked }))} />} />
+                            </Grid>}
                             <Grid item xs={12}>
                                 <TextField
                                     label="Observaciones (opcional)"
@@ -926,26 +966,26 @@ function ModalIngresoRiesgosPropiedades({
                                     helperText={helper(form.OBSERVACIONES, 999)}
                                 />
                             </Grid>
-                        </Grid>
+                        </Grid>}
                     </Stack>
-                </DialogContent>
+                </Contenido>
 
-                <DialogActions>
-                    <Button onClick={handleClose} disabled={saving}>Cancelar</Button>
+                {!soloLectura && <Acciones {...(inline ? { direction: "row", spacing: 1, justifyContent: "flex-end", sx: { mt: 2 } } : {})}>
+                    {!inline && <Button onClick={handleClose} disabled={saving}>Cancelar</Button>}
 
                     {/* Nuevo botón: Riesgo período anterior */}
-                    <Button
+                    {!basico && <Button
                         variant="outlined"
                         onClick={handleFetchRiesgoPeriodoAnterior}
                         disabled={saving || prevLoading}
                     >
                         {prevLoading ? "Consultando..." : "Riesgo período anterior"}
-                    </Button>
+                    </Button>}
 
                     <Button variant="contained" onClick={handleSaveClick} disabled={saving}>
                         {isEdit ? "Guardar cambios" : "Crear riesgo"}
                     </Button>
-                </DialogActions>
+                </Acciones>}
 
                 <Snackbar
                     open={prevMsg.open}
@@ -962,7 +1002,7 @@ function ModalIngresoRiesgosPropiedades({
                         {prevMsg.text}
                     </Alert>
                 </Snackbar>
-            </Dialog>
+            </Contenedor>
 
             {/* Modal de visualización del riesgo del período anterior */}
             <ModalRiesgoPeriodoAnterior

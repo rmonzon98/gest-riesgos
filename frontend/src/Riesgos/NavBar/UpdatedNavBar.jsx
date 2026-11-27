@@ -146,6 +146,8 @@ const UpdatedNavBar = () => {
         'Módulo de Administración': [
             'Administración',
             'Administración por dirección',
+            'Autorizaciones de eliminación',
+            'Reasignar',
             'Logs',
             'Métricas'
         ],
@@ -188,6 +190,9 @@ const UpdatedNavBar = () => {
         ],
         'Módulo de Informe Anual': ['Informe Anual'],
         'Módulo de Monitoreo del Comportamiento de los Riesgos': [
+            'Mis planes',
+            'Verificación de actividades',
+            'Planes por viceministerio',
             'Seguimiento',
             'Monitoreo de riesgos entre periodos',
             'Seguimiento de control interno institucional'
@@ -198,6 +203,8 @@ const UpdatedNavBar = () => {
             'Areas',
             'Dependencia',
             'Direcciones',
+            'Ejes estratégicos',
+            'Glosario',
             'Mantenimiento de propiedades de riesgos y reportes',
             'Objetivos',
             'Organos',
@@ -251,6 +258,7 @@ const UpdatedNavBar = () => {
         const out = [];
 
         for (const r of roles) {
+            if (norm(r.URL).startsWith('/permiso/')) continue;
             const key = `${norm(r.NOMBRE)}|${norm(r.URL)}`;
 
             if (seen.has(key)) continue;

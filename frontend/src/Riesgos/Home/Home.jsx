@@ -2,8 +2,9 @@
 import React, { useEffect, useState } from 'react';
 import {
     Box, Typography, Grid, Paper, Stack, List, ListItem, ListItemIcon,
-    ListItemText, Chip, Divider, Card, CardHeader, CardContent
+    ListItemText, Chip, Divider, Card, CardHeader, CardContent, Button
 } from '@mui/material';
+import { Link } from 'react-router-dom';
 
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import WarningAmberOutlinedIcon from '@mui/icons-material/WarningAmberOutlined';
@@ -86,6 +87,8 @@ function MessageSection({ titulo, icono, color, items }) {
 
 export default function Home() {
     const [correoSoporte, setCorreoSoporte] = useState('');
+    const [planes, setPlanes] = useState(null);
+    const [concepto, setConcepto] = useState(null);
 
     const grupos = SECCIONES.reduce(
         (acc, s) => {
@@ -130,6 +133,17 @@ export default function Home() {
         };
     }, []);
 
+    useEffect(() => {
+        const controller = new AbortController();
+        apiClient.get('/api/marn/mis-planes/resumen-inicio', { signal: controller.signal })
+            .then(({ data }) => { if (!controller.signal.aborted) setPlanes(data.result); })
+            .catch(() => {});
+        apiClient.get('/api/marn/glosario/destacado', { signal: controller.signal })
+            .then(({ data }) => { if (!controller.signal.aborted) setConcepto(data.result); })
+            .catch(() => {});
+        return () => controller.abort();
+    }, []);
+
     return (
         <Box sx={{ p: 4 }}>
             <Typography variant="h3" gutterBottom>
@@ -139,6 +153,23 @@ export default function Home() {
             <Typography variant="h6" color="text.secondary" gutterBottom>
                 Utilice las opciones que tiene habilitado en el menú según los perfiles acreditados a su usuario.
             </Typography>
+
+            {planes && <Card variant="outlined" sx={{ maxWidth: 450, my: 2 }}>
+                <CardHeader title="Mis planes" subheader={`Periodo ${planes.periodo}`} />
+                <CardContent>
+                    <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mb: 2 }}>
+                        <Chip label={`${planes.vencidos} vencidos`} color={planes.vencidos ? 'error' : 'default'} />
+                        <Chip label={`${planes.porVencer} por vencer en 15 días`} variant="outlined" />
+                    </Stack>
+                    <Button component={Link} to="/riesgos/mis-planes">Ver mis planes</Button>
+                </CardContent>
+            </Card>}
+            {concepto && <Card variant="outlined" sx={{ maxWidth: 640, my: 2 }}>
+                <CardHeader title="Concepto destacado" subheader={concepto.titulo} />
+                <CardContent sx={{ pt: 0 }}>
+                    <Typography sx={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{concepto.descripcion}</Typography>
+                </CardContent>
+            </Card>}
 
             {correoSoporte && (
                 <Typography variant="body1" color="text.secondary">

@@ -36,7 +36,8 @@ if (!fs.existsSync(DOCS_DIR)) {
  */
 function absInDocs(...segs) {
     const abs = path.resolve(DOCS_DIR, path.join(...segs));
-    if (!abs.startsWith(DOCS_DIR)) throw new Error('Ruta fuera de /docs');
+    const rel = path.relative(DOCS_DIR, abs);
+    if (rel === '..' || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel)) throw new Error('Ruta fuera de /docs');
     return abs;
 }
 
@@ -71,4 +72,12 @@ function safeInDocs(rel) {
     return absInDocs(clean);
 }
 
-module.exports = { DOCS_DIR, absInDocs, relToDocs, safeInDocs };
+/** Identifica la carpeta privada de adjuntos de actividades dentro de docs. */
+function esRutaPlan(relativa) {
+    if (typeof relativa !== 'string') return false;
+    const segmentos = relativa.replaceAll('\\', '/').split('/').map(part => part.replace(/[ .]+$/, '') || part);
+    const ruta = path.posix.normalize(`/${segmentos.join('/')}`).replace(/^\/(?:docs\/)?/i, '');
+    return /^entidad\d+\/planes(?:\/|$)/i.test(ruta);
+}
+
+module.exports = { DOCS_DIR, absInDocs, relToDocs, safeInDocs, esRutaPlan };

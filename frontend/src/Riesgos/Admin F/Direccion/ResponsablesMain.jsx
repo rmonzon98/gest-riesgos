@@ -21,6 +21,7 @@ import {
 } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
 import apiClient from "api/apiClient";
+import { apiErrorMessage } from "funciones/errors";
 import LockRoundedIcon from "@mui/icons-material/LockRounded";
 import LockOpenRoundedIcon from "@mui/icons-material/LockOpenRounded";
 import LockResetIcon from "@mui/icons-material/LockReset";
@@ -125,7 +126,7 @@ function ResponablesMain() {
             await apiClient.put(`/api/responsables-actualizados/cambiar-${propiedad}`, payload);
             obtenerColaboradores();
         } catch (err) {
-            onError("Error al actualizar estado");
+            onError(apiErrorMessage(err));
         }
     };
 

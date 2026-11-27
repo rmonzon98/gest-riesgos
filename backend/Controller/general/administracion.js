@@ -8,6 +8,8 @@
  */
 
 const pool = require('../../bd/mySQLConnection');
+const { direccionesVinculadas, indicadoresPlanes } = require('../../services/indicadoresPlanes');
+const { permisosUsuario } = require('../../services/permisosRiesgos');
 
 /**
  * obtenerGeneral
@@ -171,18 +173,29 @@ exports.obtenerLogsPorTabla = async (req, res) => {
     }
 };
 
+/** Devuelve métricas de matrices y riesgos, con indicadores de planes por periodo y dirección. */
 exports.obtenerMetricas = async (req, res) => {
     const codigo_cia = req.codigo_cia;
     try {
+        if (!(await permisosUsuario(req, ['/metricas'])).has('/metricas')) {
+            return res.status(403).json({ error: 'No tiene permiso para consultar métricas.' });
+        }
+        const periodo = req.query.periodo == null || req.query.periodo === '' ? undefined : Number(req.query.periodo);
+        const entidades = req.query.entidades ? String(req.query.entidades).split(',').map(Number) : [];
+        if ((periodo != null && (!Number.isInteger(periodo) || periodo <= 0)) ||
+            entidades.some(entidad => !Number.isInteger(entidad) || entidad <= 0)) {
+            return res.status(400).json({ error: 'Seleccione un período y direcciones válidos.' });
+        }
         const [
             riesgos, primeraMatriz,
-            segundaMatriz, seguimientos
+            segundaMatriz, seguimientos, vinculos
         ] = await Promise.all([
             pool.execute(
                 `
-                SELECT codigo_entidad, codigo_tipo_objetivo, riesgo_residual, riesgo_inherente, codigo_periodo, es_nuevo
+                SELECT codigo_entidad, codigo_riesgo, codigo_tipo_objetivo, riesgo_residual, riesgo_inherente, codigo_periodo, es_nuevo,
+                    NULLIF(TRIM(EVENTO), '') IS NOT NULL AS tiene_evento
                 FROM gestion_riesgos.riesgos_riesgo_extendido
-                WHERE eliminado = 0 AND codigo_cia = ?
+                WHERE COALESCE(eliminado, 0) = 0 AND codigo_cia = ?
                 `, [codigo_cia]
             ).then(([rows]) => rows),
             pool.execute(
@@ -209,11 +222,15 @@ exports.obtenerMetricas = async (req, res) => {
                 WHERE codigo_cia = ?
                 `, [codigo_cia]
             ).then(([rows]) => rows),
+            direccionesVinculadas(codigo_cia),
         ]);
 
+        const filas = riesgos.map(row => ({ ...row, direccionesVinculadas:
+            [...(vinculos.get(`${row.codigo_entidad}:${row.codigo_periodo}:${row.codigo_riesgo}`) || [])] }));
+        const planes = await indicadoresPlanes(codigo_cia, periodo, entidades, filas);
         return res.json({
-            riesgos, primeraMatriz,
-            segundaMatriz, seguimientos
+            riesgos: filas, primeraMatriz,
+            segundaMatriz, seguimientos, planes
         });
     } catch (err) {
         console.error('metricas:', err);

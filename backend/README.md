@@ -1,361 +1,55 @@
-# Guía rápida — Sequelize y ejecución del proyecto
+# Backend de Gestión de Riesgos
 
-## 1. Instalación
+## Instalación y configuración
 
-Instalar dependencias del proyecto:
+Usa una versión de Node.js compatible con Prisma 7 (`^20.19`, `^22.12` o `>=24.0`). Desde `backend/`, ejecuta `npm ci`. El script `postinstall` ejecuta `prisma generate`. Si cambia `prisma/schema.prisma`, regenera el cliente con `npx prisma generate` o `npm run prisma:generate`.
 
-```bash
-npm install
-```
+El backend se conecta a MariaDB con `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD` y `DB_NAME`. Usa `gestion_riesgos` como nombre de la base de la aplicación. La CLI de Prisma acepta `DATABASE_URL` como destino explícito, por ejemplo al verificar migraciones en una base de prueba. En ausencia de esa variable, usa los mismos valores `DB_*` del backend.
 
-Si Sequelize todavía no está instalado:
+## Base nueva
 
-```bash
-npm install sequelize mysql2
-npm install --save-dev sequelize-cli
-```
-
-## 2. Configuración
-
-Verificar que la configuración de la base de datos y las variables de entorno estén correctamente definidas.
-
-Ejemplo:
-
-```env
-DB_HOST=localhost
-DB_PORT=3306
-DB_DATABASE=gestion_riesgos
-DB_USERNAME=root
-DB_PASSWORD=********
-```
-
-> No subir credenciales reales al repositorio.
-
----
-
-## 3. Migraciones
-
-### Crear una migración
+Configura la conexión a una base vacía y ejecuta:
 
 ```bash
-npx sequelize-cli migration:generate --name nombre-de-la-migracion
-```
-
-Ejemplo:
-
-```bash
-npx sequelize-cli migration:generate --name agregar-fk-viceministerio-seguridad-entidad
-```
-
-### Ver estado
-
-```bash
-npx sequelize-cli db:migrate:status
-```
-
-Estados:
-
-- `up`: migración ejecutada.
-- `down`: migración pendiente.
-
-### Ejecutar migraciones pendientes
-
-```bash
-npx sequelize-cli db:migrate
-```
-
-### Revertir la última migración
-
-```bash
-npx sequelize-cli db:migrate:undo
-```
-
-### Revertir todas las migraciones
-
-```bash
-npx sequelize-cli db:migrate:undo:all
-```
-
-> Usar `undo:all` con precaución, especialmente en ambientes compartidos o producción.
-
----
-
-## 4. Seeders
-
-Los **seeders** se utilizan para insertar o actualizar datos existentes.
-
-### Crear un Seeder
-
-```bash
-npx sequelize-cli seed:generate --name nombre-del-seeder
-```
-
-Ejemplo:
-
-```bash
-npx sequelize-cli seed:generate --name asignar-viceministerios-entidades
-```
-
-### Ejecutar todos los Seeders
-
-```bash
-npx sequelize-cli db:seed:all
-```
-
-### Ejecutar un Seeder específico
-
-```bash
-npx sequelize-cli db:seed --seed nombre-del-archivo.js
-```
-
-### Revertir el último Seeder
-
-```bash
-npx sequelize-cli db:seed:undo
-```
-
-### Revertir todos los Seeders
-
-```bash
-npx sequelize-cli db:seed:undo:all
-```
-
----
-
-## 5. ¿Migración o Seeder?
-
-| Cambio | Utilizar |
-|---|---|
-| Crear tabla | Migración |
-| Eliminar tabla | Migración |
-| Agregar columna | Migración |
-| Modificar columna | Migración |
-| Crear Foreign Key | Migración |
-| Crear índice | Migración |
-| Insertar datos iniciales | Seeder |
-| Actualizar datos existentes | Seeder |
-| Asignar códigos a registros | Seeder |
-| Cargar catálogos | Seeder |
-
-**Regla rápida:**
-
-> Cambia la estructura → **Migración**  
-> Cambian los datos → **Seeder**
-
----
-
-## 6. Estructura básica de una migración
-
-```javascript
-'use strict';
-
-/** @type {import('sequelize-cli').Migration} */
-module.exports = {
-
-    async up(queryInterface, Sequelize) {
-
-        // Aplicar cambios
-    },
-
-    async down(queryInterface, Sequelize) {
-
-        // Revertir cambios
-    }
-
-};
-```
-
-Siempre que sea posible, implementar `down()` para poder realizar rollback.
-
----
-
-## 7. Flujo recomendado para una migración
-
-```bash
-# 1. Crear migración
-npx sequelize-cli migration:generate --name nombre-cambio
-
-# 2. Revisar migraciones pendientes
-npx sequelize-cli db:migrate:status
-
-# 3. Ejecutar migraciones
-npx sequelize-cli db:migrate
-
-# 4. Verificar nuevamente
-npx sequelize-cli db:migrate:status
-```
-
-Si es necesario revertir:
-
-```bash
-npx sequelize-cli db:migrate:undo
-```
-
----
-
-## 8. Flujo recomendado para un Seeder
-
-```bash
-# 1. Crear Seeder
-npx sequelize-cli seed:generate --name nombre-cambio-datos
-
-# 2. Ejecutar
-npx sequelize-cli db:seed:all
-
-# 3. Revertir si es necesario
-npx sequelize-cli db:seed:undo
-```
-
----
-
-## 9. Ejecución del proyecto
-
-Primero instalar las dependencias:
-
-```bash
-npm install
-```
-
-Después verificar que la base de datos esté disponible y ejecutar las migraciones:
-
-```bash
-npx sequelize-cli db:migrate
-```
-
-Si el proyecto utiliza Seeders:
-
-```bash
-npx sequelize-cli db:seed:all
-```
-
-Finalmente ejecutar el proyecto mediante el script definido en `package.json`. Por ejemplo:
-
-```bash
+npx prisma migrate deploy
+npx prisma migrate status
 npm start
 ```
 
-o, si el proyecto utiliza un script de desarrollo:
+`0_init` crea las tablas y los 114 triggers de bitácora. Las migraciones `1_fk_entidad_viceministerio` y `2_es_nuevo_riesgo` aplican los dos cambios posteriores al dump. Las migraciones contienen el esquema. Carga los datos iniciales que correspondan al entorno antes de iniciar sesión.
+
+## Base existente
+
+Haz una copia de seguridad y comprueba que las tablas y los triggers correspondan a la base inicial. Registra esa migración como aplicada, sin volver a ejecutar su SQL:
 
 ```bash
-npm run devStart
+npx prisma migrate resolve --applied 0_init
 ```
 
-Para conocer los comandos disponibles:
+Si alguno de los cambios posteriores ya existe, verifica su definición con `SHOW CREATE TABLE` y registra solamente la migración que coincida:
+
+- `1_fk_entidad_viceministerio` apunta de `seguridad_entidad` a `riesgos_viceministerio` con la llave `(CODIGO_CIA, CODIGO_VICEMINISTERIO)`, `ON DELETE RESTRICT` y `ON UPDATE CASCADE`.
+- `2_es_nuevo_riesgo` tiene `ES_NUEVO TINYINT(1) NOT NULL DEFAULT 0` después de `PERIODO_ANTERIOR`.
 
 ```bash
-npm run
+# Ejecuta cada comando solo si su cambio ya está presente en esta base.
+npx prisma migrate resolve --applied 1_fk_entidad_viceministerio
+npx prisma migrate resolve --applied 2_es_nuevo_riesgo
 ```
 
----
+Aplica las migraciones pendientes con `npx prisma migrate deploy`. Comprueba las diferencias que Prisma puede representar con `npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code`. Revisa los triggers por separado con `SHOW TRIGGERS`.
 
-## 10. Flujo completo para levantar el proyecto
+## Desarrollo de migraciones
+
+Actualiza `prisma/schema.prisma` y crea la migración en una base de desarrollo:
 
 ```bash
-# Instalar dependencias
-npm install
-
-# Verificar estado de migraciones
-npx sequelize-cli db:migrate:status
-
-# Ejecutar migraciones pendientes
-npx sequelize-cli db:migrate
-
-# Ejecutar Seeders, si corresponde
-npx sequelize-cli db:seed:all
-
-# Ejecutar aplicación
-npm start
+npx prisma migrate dev --name nombre_del_cambio
+npx prisma generate
 ```
 
-Si el proyecto utiliza desarrollo:
+`migrate dev` reproduce el historial en una base sombra. Para que Prisma la cree y elimine, el usuario de migración necesita permisos para `CREATE DATABASE` y `DROP DATABASE`, además de los permisos para ejecutar las migraciones. Si la creación de bases está restringida, configura `SHADOW_DATABASE_URL` con una base sombra dedicada y permisos de esquema. `prisma.config.ts` la asigna a `shadowDatabaseUrl`. Prisma reinicia el esquema de la base sombra en cada uso, por lo que debe ser una base distinta de la base de la aplicación.
 
-```bash
-npm run devStart
-```
+Para revisar SQL personalizado antes de aplicarlo, usa `npx prisma migrate dev --create-only --name nombre_del_cambio`. Agrega los triggers de auditoría en el SQL de la migración correspondiente. Para despliegues usa `npx prisma migrate deploy`, que no usa la base sombra.
 
----
-
-## 11. Rollback
-
-### Última migración
-
-```bash
-npx sequelize-cli db:migrate:undo
-```
-
-### Todas las migraciones
-
-```bash
-npx sequelize-cli db:migrate:undo:all
-```
-
-### Último Seeder
-
-```bash
-npx sequelize-cli db:seed:undo
-```
-
-### Todos los Seeders
-
-```bash
-npx sequelize-cli db:seed:undo:all
-```
-
----
-
-## 12. Comandos esenciales
-
-| Acción | Comando |
-|---|---|
-| Instalar dependencias | `npm install` |
-| Ejecutar proyecto | `npm start` |
-| Desarrollo | `npm run dev` |
-| Ver scripts disponibles | `npm run` |
-| Estado de migraciones | `npx sequelize-cli db:migrate:status` |
-| Ejecutar migraciones | `npx sequelize-cli db:migrate` |
-| Rollback última migración | `npx sequelize-cli db:migrate:undo` |
-| Rollback todas las migraciones | `npx sequelize-cli db:migrate:undo:all` |
-| Crear migración | `npx sequelize-cli migration:generate --name nombre` |
-| Ejecutar todos los Seeders | `npx sequelize-cli db:seed:all` |
-| Crear Seeder | `npx sequelize-cli seed:generate --name nombre` |
-| Ejecutar Seeder específico | `npx sequelize-cli db:seed --seed archivo.js` |
-| Rollback último Seeder | `npx sequelize-cli db:seed:undo` |
-| Rollback todos los Seeders | `npx sequelize-cli db:seed:undo:all` |
-
----
-
-## 13. Buenas prácticas
-
-- No modificar una migración que ya fue ejecutada y compartida con otros ambientes.
-- Para corregir una migración existente, crear una nueva migración.
-- Implementar siempre `up()` y `down()`.
-- Verificar `db:migrate:status` antes y después de ejecutar cambios.
-- No guardar contraseñas ni credenciales reales en Git.
-- Utilizar nombres descriptivos para migraciones y Seeders.
-- Probar las migraciones en desarrollo antes de ejecutarlas en producción.
-- Realizar respaldo de la base de datos antes de cambios estructurales importantes.
-
-## 14. Flujo recomendado para Git
-
-Después de crear una migración o Seeder:
-
-```bash
-git status
-git add .
-git commit -m "feat: agregar migracion de viceministerios"
-git push
-```
-
-En otro ambiente, después de actualizar el código:
-
-```bash
-git pull
-npm install
-npx sequelize-cli db:migrate
-```
-
-Si existen Seeders nuevos:
-
-```bash
-npx sequelize-cli db:seed:all
-```
+Inicia el backend con `npm start` o, para recarga en desarrollo, `npm run devStart`.

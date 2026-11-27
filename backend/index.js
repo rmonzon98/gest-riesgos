@@ -13,7 +13,8 @@ const HOURS = 3;
 const timeToken = 1000 * 60 * 60 * HOURS;
 const port = process.env.SERVER_PORT || process.env.PORT || 8080;
 
-const { DOCS_DIR } = require('./services/paths');
+const { DOCS_DIR, esRutaPlan } = require('./services/paths');
+const { verifyJWT } = require('./services/verifyJWTUpd');
 
 const corsOrigin = process.env.CORS_URL || process.env.CORS_ORIGIN || 'http://localhost:5173';
 
@@ -50,8 +51,15 @@ app.use(session({
 }));
 
 // Estáticos DEL BACKEND (NO del frontend)
-app.use('/Pictures', express.static(path.join(__dirname, 'Pictures')));
-app.use('/docs', express.static(DOCS_DIR));
+app.use('/Pictures', verifyJWT, express.static(path.join(__dirname, 'Pictures')));
+app.use('/docs', verifyJWT, (req, res, next) => {
+  try {
+    if (esRutaPlan(decodeURIComponent(req.path))) return res.status(403).send('Use la descarga de la actividad.');
+  } catch {
+    return res.status(400).send('Ruta inválida.');
+  }
+  return next();
+}, express.static(DOCS_DIR));
 
 // Healthcheck
 app.get('/healthz', (_req, res) => res.status(200).json({ ok: true }));
@@ -78,6 +86,7 @@ app.use('/api/seguimientos-actualizados', require('./Routes/riesgos/seguimientos
 app.use('/api/segunda-matriz-actualizados', require('./Routes/riesgos/segunda-matriz.js'));
 app.use('/api/tipo-objetivo-actualizados', require('./Routes/riesgos/tipo-objetivo.js'));
 app.use('/api/viceministerios', require('./Routes/riesgos/viceministerio.js'));
+app.use('/api/marn', require('./Routes/riesgos/detalleMarn'));
 app.use('/descargar', require('./Routes/riesgos/descarga-archivos.js'));
 
 // Ruta Login

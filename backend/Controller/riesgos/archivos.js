@@ -12,7 +12,7 @@ const path = require('path');
 const fs = require('fs');
 const fsp = fs.promises;
 
-const { DOCS_DIR, relToDocs, absInDocs, safeInDocs } = require('../../services/paths');
+const { DOCS_DIR, relToDocs, absInDocs, safeInDocs, esRutaPlan } = require('../../services/paths');
 
 /**
  * obtenerLogo
@@ -314,12 +314,13 @@ exports.actualizarLogoBarra = async (req, res) => {
 exports.obtenerArchivo = (req, res) => {
     const { ruta } = req.query;
 
-    if (!ruta) return res.status(400).send('Falta ruta');
+    if (typeof ruta !== 'string' || !ruta) return res.status(400).send('Falta ruta');
 
     const rel = ruta.replace(/^docs\//, '');
     let filePath;
     try {
         filePath = safeInDocs(rel);
+        if (esRutaPlan(path.relative(DOCS_DIR, filePath))) return res.status(403).send('Use la descarga de la actividad.');
     } catch {
         return res.status(400).send('Ruta inválida');
     }

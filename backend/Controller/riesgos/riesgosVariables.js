@@ -8,7 +8,10 @@
  */
 
 const pool = require('../../bd/mySQLConnection');
-const { param } = require('../../Routes/riesgos/riesgosVariables');
+const { accesoRiesgo, camposMarn, propiedadesPeriodo, seccionRiesgo, validarAreaRiesgo } = require('../../services/detalleRiesgos');
+const prisma = require('../../prisma/client');
+const { permisoEliminacionDirecta, permisosUsuario } = require('../../services/permisosRiesgos');
+const { cumplimientoRiesgos } = require('../../services/planesSeguimiento');
 
 // Normaliza el flag ES_NUEVO recibido del front (true/'1'/1 → 1, false/'0'/0 → 0).
 // Devuelve null cuando no viene, para conservar el valor actual en actualizaciones.
@@ -115,8 +118,9 @@ exports.obtenerInfoInicial = async (req, res) => {
             pool.execute(
                 `
                 SELECT CODIGO_AREA AS ID, DESCRIPCION AS NOMBRE
-                FROM gestion_riesgos.riesgos_area WHERE ESTADO = 1 AND CODIGO_CIA = ? ORDER BY DESCRIPCION
-                `, [codigo_cia]
+                FROM gestion_riesgos.riesgos_area WHERE ESTADO = 1 AND CODIGO_CIA = ?
+                    AND (CODIGO_ENTIDAD IS NULL OR CODIGO_ENTIDAD = ?) ORDER BY DESCRIPCION
+                `, [codigo_cia, req.codigo_entidad]
             ).then(([rows]) => rows),
 
             obtenerPeriodosEs(codigo_cia),
@@ -239,30 +243,13 @@ exports.obtenerCatalogoRiesgos = async (req, res) => {
  */
 exports.obtenerPropiedades = async (req, res) => {
     const { tipo, periodo } = req.query;
-    const map = { 1: 'PROPIEDADES_ME', 2: 'PROPIEDADES_MC', 3: 'PROPIEDADES_MCE' };
-    const col = map[Number(tipo)];
+    const map = { 1: 'ME', 2: 'MC', 3: 'MCE' };
+    const seccion = map[Number(tipo)];
 
-    if (!col) return res.status(400).json({ ok: false, error: 'Tipo inválido (1, 2 o 3)' });
+    if (!seccion || !Number.isInteger(Number(periodo))) return res.status(400).json({ ok: false, error: 'Tipo o periodo inválido.' });
 
     try {
-        const sql = `
-      SELECT ${col} AS PROPIEDADES
-      FROM gestion_riesgos.riesgos_reportes_propiedades
-      WHERE codigo_cia = ? AND defecto = 'S' AND codigo_periodo = ?
-    `;
-        const [rows] = await pool.execute(sql, [req.codigo_cia, periodo]);
-
-        const result = rows.flatMap(r => {
-            try {
-                const arr = typeof r.PROPIEDADES === 'string'
-                    ? JSON.parse(r.PROPIEDADES)
-                    : r.PROPIEDADES;
-                return Array.isArray(arr) ? arr : [];
-            } catch {
-                return [];
-            }
-        });
-
+        const result = await propiedadesPeriodo(prisma, req.codigo_cia, Number(periodo), seccion);
         return res.json({ ok: true, data: result });
     } catch (err) {
         console.error('obtener propiedades:', err);
@@ -950,7 +937,7 @@ exports.obtenerRiesgos = async (req, res) => {
     const codigo_cia = req.codigo_cia;
     const codigo_entidad = req.codigo_entidad;
     const periodo = Number(req.query?.periodo);
-    const tipo = req.query?.tipo;
+    const tipo = req.query?.tipo ?? 'ME';
 
     if (!codigo_cia || !codigo_entidad || !periodo) {
         return res
@@ -959,11 +946,30 @@ exports.obtenerRiesgos = async (req, res) => {
     }
 
     try {
+        const { url } = seccionRiesgo(tipo);
+        const permisos = await permisosUsuario(req, [url, permisoEliminacionDirecta], { vigentes: true });
+        const incluirVinculados = tipo === 'ME' && permisos.has(url);
         const sqlRiesgos = `
         SELECT
             rr.CODIGO_RIESGO,
+            rr.CODIGO_ENTIDAD,
             rr.DESCRIPCION,
             rr.REF,
+            rr.CODIGO_DUENO,
+            EXISTS(SELECT 1 FROM gestion_riesgos.riesgos_solicitud_eliminacion s
+              WHERE s.CODIGO_CIA = rr.CODIGO_CIA AND s.CODIGO_ENTIDAD = rr.CODIGO_ENTIDAD
+                AND s.CODIGO_PERIODO = rr.CODIGO_PERIODO AND s.CODIGO_RIESGO = rr.CODIGO_RIESGO
+                AND s.ESTADO = 'P') AS ELIMINACION_SOLICITADA,
+            direccion.NOMBRE AS DIRECCION_DUENA,
+            NULLIF(CONCAT_WS(' ', dueno.PRIMER_NOMBRE, dueno.PRIMER_APELLIDO), '') AS DUENO,
+            GREATEST((SELECT COUNT(*) FROM gestion_riesgos.riesgos_riesgo_evento ev
+              WHERE ev.CODIGO_CIA = rr.CODIGO_CIA AND ev.CODIGO_ENTIDAD = rr.CODIGO_ENTIDAD
+                AND ev.CODIGO_PERIODO = rr.CODIGO_PERIODO AND ev.CODIGO_RIESGO = rr.CODIGO_RIESGO
+                AND ev.ACTIVO = 1), IF(NULLIF(TRIM(rr.EVENTO), '') IS NULL, 0, 1)) AS EVENTOS,
+            (SELECT COUNT(*) FROM gestion_riesgos.riesgos_plan_accion plan
+              WHERE plan.CODIGO_CIA = rr.CODIGO_CIA AND plan.CODIGO_ENTIDAD = rr.CODIGO_ENTIDAD
+                AND plan.CODIGO_PERIODO = rr.CODIGO_PERIODO AND plan.CODIGO_RIESGO = rr.CODIGO_RIESGO
+                AND plan.ACTIVO = 1) AS PLANES,
             rr.COMENTARIO_SUPERVISOR_${tipo} AS COMENTARIO_SUPERVISOR,
             rr.ESTADO_${tipo} AS ESTADO,
             rr.COMENTARIO_SUPERIOR_${tipo} AS COMENTARIO_SUPERIOR,
@@ -972,23 +978,41 @@ exports.obtenerRiesgos = async (req, res) => {
             rr.ES_NUEVO
         FROM
             gestion_riesgos.riesgos_riesgo_extendido rr
+        LEFT JOIN gestion_riesgos.seguridad_persona dueno
+            ON dueno.CODIGO_CIA = rr.CODIGO_CIA AND dueno.CODIGO_COLABORADOR = rr.CODIGO_DUENO
+        JOIN gestion_riesgos.seguridad_entidad direccion
+            ON direccion.CODIGO_CIA = rr.CODIGO_CIA AND direccion.CODIGO_ENTIDAD = rr.CODIGO_ENTIDAD
         WHERE 
             rr.CODIGO_CIA = ?
-            AND rr.CODIGO_ENTIDAD = ?
             AND rr.CODIGO_PERIODO = ?
+            AND (rr.CODIGO_ENTIDAD = ? OR (? AND COALESCE(rr.ELIMINADO, 0) = 0 AND EXISTS (
+                SELECT 1 FROM gestion_riesgos.riesgos_riesgo_vinculo vinculo
+                WHERE vinculo.CODIGO_CIA = rr.CODIGO_CIA AND vinculo.CODIGO_ENTIDAD = rr.CODIGO_ENTIDAD
+                  AND vinculo.CODIGO_PERIODO = rr.CODIGO_PERIODO AND vinculo.CODIGO_RIESGO = rr.CODIGO_RIESGO
+                  AND vinculo.CODIGO_ENTIDAD_VINCULADA = ? AND vinculo.ACTIVO = 1
+            )))
         ORDER BY rr.eliminado ASC, rr.ESTADO_${tipo} DESC, rr.REF ASC
         `;
         const [riesgosRows] = await pool.execute(sqlRiesgos, [
             codigo_cia,
-            Number(codigo_entidad),
             periodo,
+            Number(codigo_entidad), incluirVinculados, Number(codigo_entidad)
         ]);
-        const anios = await obtenerAniosOrigen(codigo_cia, Number(codigo_entidad), periodo);
+        const direcciones = [...new Set(riesgosRows.map(row => row.CODIGO_ENTIDAD))];
+        const anios = new Map(await Promise.all(direcciones.map(async direccion => [direccion,
+            await obtenerAniosOrigen(codigo_cia, direccion, periodo)])));
+        const cumplimiento = tipo === 'ME' ? await cumplimientoRiesgos(codigo_cia, periodo, riesgosRows.map(row => ({
+            codigoEntidad: row.CODIGO_ENTIDAD, codigoRiesgo: row.CODIGO_RIESGO }))) : new Map();
 
         return res.json({
-            riesgos: agregarAnioOrigen(riesgosRows, anios, periodo),
+            puedeEliminarDirecto: permisos.has(permisoEliminacionDirecta),
+            puedeSolicitarEliminacion: tipo === 'ME' && permisos.has(url),
+            riesgos: riesgosRows.map(row => ({ ...agregarAnioOrigen([row], anios.get(row.CODIGO_ENTIDAD), periodo)[0],
+                CUMPLIMIENTO: cumplimiento.get(`${row.CODIGO_ENTIDAD}:${row.CODIGO_RIESGO}`)?.porcentaje ?? null,
+                vinculado: row.CODIGO_ENTIDAD !== Number(codigo_entidad) })),
         });
     } catch (err) {
+        if (err.status) return res.status(err.status).json({ error: err.message });
         console.error("obtenerRiesgos:", err);
         return res.status(500).json({ error: "Error al obtener riesgos" });
     }
@@ -1032,7 +1056,8 @@ exports.crearRiesgo = async (req, res) => {
         extras,
         organoCodigo,
         viceministerioCodigo,
-        esNuevo
+        esNuevo,
+        tipo = 'ME'
     } = req.body || {};
 
     const codigo_cia = req.codigo_cia;
@@ -1056,6 +1081,12 @@ exports.crearRiesgo = async (req, res) => {
 
     let conn;
     try {
+        seccionRiesgo(tipo);
+        if (tipo === 'ME' && !(await accesoRiesgo(req, Number(codigo_entidad), tipo)).edicion) {
+            return res.status(403).json({ error: 'No tiene permiso para crear el riesgo.' });
+        }
+        const marn = await camposMarn(req, pPeriodo, tipo);
+        await validarAreaRiesgo(req, pArea);
         conn = await pool.getConnection();
         await conn.beginTransaction();
 
@@ -1081,7 +1112,7 @@ exports.crearRiesgo = async (req, res) => {
                 FECHA_CREACION, SEVERIDAD_NARRACION, PROBABILIDAD_AJUSTADA, SEVERIDAD_AJUSTADA,
                 RIESGO_RESIDUAL, RIESGO_INHERENTE, EVENTO, CONTROL, 
                 MONITOREO, CODIGO_FRECUENCIA, RESPONSABLE, EXTRAS_ME,
-                ORGANO, VICEMINISTERIO, ES_NUEVO
+                ORGANO, VICEMINISTERIO, ES_NUEVO, OBJETIVO_TEXTO, CODIGO_EJE, CODIGO_DUENO
             ) VALUES (
                 ?, ?, ?, ?,
                 ?, ?, ?, ?,
@@ -1090,7 +1121,7 @@ exports.crearRiesgo = async (req, res) => {
                 CURRENT_TIMESTAMP, ?, ?, ?,
                 ?, ?, ?, ?,
                 ?, ?, ?, ?,
-                ?, ?, ?
+                ?, ?, ?, ?, ?, ?
             )
             `;
         await conn.execute(sql, [
@@ -1101,7 +1132,8 @@ exports.crearRiesgo = async (req, res) => {
             severidadNarracion || null, Number(probabilidadAjustada) || null, Number(severidadAjustada) || null,
             Number(riesgoResidual) || null, Number(riesgoInherente) || null, evento || null, control || null,
             monitoreo || null, pFreq || null, responsable || null, extras ? JSON.stringify(extras) : null,
-            organoCodigo || null, viceministerioCodigo || null, normalizarEsNuevo(esNuevo) ?? 0
+            organoCodigo || null, viceministerioCodigo || null, normalizarEsNuevo(esNuevo) ?? 0,
+            marn.objetivoTexto ?? null, marn.codigoEje ?? null, marn.codigoDueno
         ]);
 
         await conn.commit();
@@ -1119,6 +1151,7 @@ exports.crearRiesgo = async (req, res) => {
         });
     } catch (err) {
         try { await conn?.rollback(); } catch { }
+        if (err.status) return res.status(err.status).json({ error: err.message });
         console.error("❌ crearRiesgo (extendido):", err);
         return res.status(500).json({ error: "Error al crear el riesgo extendido." });
     } finally {
@@ -1481,7 +1514,7 @@ exports.actualizarRiesgoMe = async (req, res) => {
 
         extras,
 
-        tipo,
+        tipo = 'ME',
         organoCodigo,
         viceministerioCodigo,
         esNuevo
@@ -1519,24 +1552,36 @@ exports.actualizarRiesgoMe = async (req, res) => {
 
     let conn;
     try {
+        seccionRiesgo(tipo);
+        if (req.body?.codigoEntidad != null && Number(req.body.codigoEntidad) !== Number(codigo_entidad)) {
+            return res.status(403).json({ error: 'No puede editar el riesgo de otra dirección.' });
+        }
+        if (tipo === 'ME' && !(await accesoRiesgo(req, Number(codigo_entidad), tipo)).edicion) {
+            return res.status(403).json({ error: 'No tiene permiso para editar el riesgo.' });
+        }
         conn = await pool.getConnection();
+        await conn.beginTransaction();
+        const [[actual]] = await conn.execute(
+            `SELECT ES_NUEVO, PERIODO_ANTERIOR, ESTADO_ME_SUPERIOR, ELIMINADO, CODIGO_EJE, CODIGO_DUENO, CODIGO_AREA
+             FROM gestion_riesgos.riesgos_riesgo_extendido
+             WHERE CODIGO_CIA = ? AND CODIGO_ENTIDAD = ? AND CODIGO_PERIODO = ? AND CODIGO_RIESGO = ? FOR UPDATE`,
+            [codigo_cia, Number(codigo_entidad), pPeriodo, pRiesgo]
+        );
+        if (!actual) return res.status(404).json({ error: 'Riesgo no encontrado con los identificadores proporcionados.' });
+        if (tipo === 'ME' && (actual.ELIMINADO || Number(actual.ESTADO_ME_SUPERIOR) === 1)) {
+            return res.status(403).json({ error: 'No se puede editar un riesgo aprobado o eliminado.' });
+        }
+        const marn = await camposMarn(req, pPeriodo, tipo, actual);
+        await validarAreaRiesgo(req, pArea, actual.CODIGO_AREA);
+        const mostrar = req.body?.mostrarGeneral;
+        if (mostrar !== undefined && !['S', 'N'].includes(mostrar)) {
+            return res.status(400).json({ error: 'El valor para mostrar en reportes no es válido.' });
+        }
 
         // Si cambia ES_NUEVO, el riesgo vuelve a revisión en los tres tipos (ME, MC, MCE);
         // si no, solo se reinicia el estado del tipo que se está editando.
         let cambiaEsNuevo = false;
         if (pEsNuevo !== null) {
-            const [[actual]] = await conn.execute(
-                `
-            SELECT ES_NUEVO, PERIODO_ANTERIOR
-            FROM gestion_riesgos.riesgos_riesgo_extendido
-            WHERE CODIGO_CIA = ? AND CODIGO_ENTIDAD = ? AND CODIGO_PERIODO = ? AND CODIGO_RIESGO = ?
-            LIMIT 1
-                `,
-                [codigo_cia, Number(codigo_entidad), pPeriodo, pRiesgo]
-            );
-            if (!actual) {
-                return res.status(404).json({ error: 'Riesgo no encontrado con los identificadores proporcionados.' });
-            }
             // Un riesgo que continúa de un año anterior no puede marcarse como identificado en el período
             if (pEsNuevo === 1 && actual.PERIODO_ANTERIOR != null) {
                 return res.status(409).json({
@@ -1550,16 +1595,21 @@ exports.actualizarRiesgoMe = async (req, res) => {
             .join(', ');
 
         const sql = `
-      UPDATE gestion_riesgos.riesgos_riesgo_extendido
+      UPDATE gestion_riesgos.riesgos_riesgo_extendido rr
       SET
         CODIGO_TIPO_OBJETIVO = ?, CODIGO_OBJETIVO      = ?, CODIGO_AREA          = ?, DESCRIPCION          = ?,
         CODIGO_PROBABILIDAD  = ?, CODIGO_SEVERIDAD     = ?, CODIGO_TOLERANCIA    = ?, CODIGO_MITIGACION    = ?,
         OBSERVACIONES        = ?, VARIABLE_MITIGACION  = ?, REF                  = ?, PROBABILIDAD_AJUSTADA= ?,
-        SEVERIDAD_AJUSTADA   = ?, RIESGO_INHERENTE     = ?, RIESGO_RESIDUAL      = ?, EVENTO               = ?,
+        SEVERIDAD_AJUSTADA   = ?, RIESGO_INHERENTE     = ?, RIESGO_RESIDUAL      = ?,
+        EVENTO = IF(EXISTS (SELECT 1 FROM gestion_riesgos.riesgos_riesgo_evento ev
+          WHERE ev.CODIGO_CIA = rr.CODIGO_CIA AND ev.CODIGO_ENTIDAD = rr.CODIGO_ENTIDAD
+            AND ev.CODIGO_PERIODO = rr.CODIGO_PERIODO AND ev.CODIGO_RIESGO = rr.CODIGO_RIESGO), rr.EVENTO, ?),
         CONTROL              = ?, MONITOREO            = ?, CODIGO_FRECUENCIA    = ?, RESPONSABLE          = ?,
         SEVERIDAD_NARRACION  = ?, EXTRAS_${tipo}               = ?, USUARIO_MODIFICACION = ?, FECHA_MODIFICACION   = CURRENT_TIMESTAMP,
         ${reinicioEstados},       VICEMINISTERIO       = ?,         ORGANO = ?,
-        ES_NUEVO             = COALESCE(?, ES_NUEVO)
+        ES_NUEVO             = COALESCE(?, ES_NUEVO), MOSTRAR_GENERAL = COALESCE(?, MOSTRAR_GENERAL),
+        OBJETIVO_TEXTO = IF(?, ?, OBJETIVO_TEXTO), CODIGO_EJE = IF(?, ?, CODIGO_EJE),
+        CODIGO_DUENO = COALESCE(?, CODIGO_DUENO)
       WHERE
         CODIGO_CIA     = ? AND CODIGO_ENTIDAD = ? AND CODIGO_PERIODO = ? AND CODIGO_RIESGO  = ?
       LIMIT 1
@@ -1577,7 +1627,9 @@ exports.actualizarRiesgoMe = async (req, res) => {
             control || null, monitoreo || null, pFreq || null, responsable || null,
             severidadNarracion || null, extrasStr || null, usuario_modificacion,
             viceministerioCodigo || null, organoCodigo || null,
-            pEsNuevo,
+            pEsNuevo, mostrar ?? null,
+            marn.objetivoTexto !== undefined, marn.objetivoTexto ?? null,
+            marn.codigoEje !== undefined, marn.codigoEje ?? null, marn.codigoDueno ?? null,
 
             codigo_cia, Number(codigo_entidad), pPeriodo, pRiesgo
         ];
@@ -1587,6 +1639,7 @@ exports.actualizarRiesgoMe = async (req, res) => {
         if (result.affectedRows === 0) {
             return res.status(404).json({ error: 'Riesgo no encontrado con los identificadores proporcionados.' });
         }
+        await conn.commit();
 
         return res.status(200).json({
             message: 'Riesgo actualizado correctamente',
@@ -1598,9 +1651,11 @@ exports.actualizarRiesgoMe = async (req, res) => {
             }
         });
     } catch (err) {
+        if (err.status) return res.status(err.status).json({ error: err.message });
         console.error('actualizarRiesgo:', err);
         return res.status(500).json({ error: 'Error al actualizar el riesgo' });
     } finally {
+        try { await conn?.rollback(); } catch { }
         try { conn?.release(); } catch { }
     }
 };
@@ -1625,10 +1680,14 @@ exports.eliminarRiesgo = async (req, res) => {
         return res.status(401).json({ error: 'Sesión inválida.' });
     }
 
-    const { periodo, codigo_riesgo } = req.body || {};
+    const { periodo, codigo_riesgo, codigo_entidad: entidadSolicitada } = req.body || {};
 
     let conn;
     try {
+        if ((entidadSolicitada != null && Number(entidadSolicitada) !== Number(codigo_entidad)) ||
+            !(await permisosUsuario(req, [permisoEliminacionDirecta], { vigentes: true })).has(permisoEliminacionDirecta)) {
+            return res.status(403).json({ error: 'No tiene permiso para eliminar este riesgo directamente.' });
+        }
         conn = await pool.getConnection();
 
         const sql = `

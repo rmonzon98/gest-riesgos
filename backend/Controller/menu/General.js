@@ -8,6 +8,19 @@
  */
 
 const pool = require('../../bd/mySQLConnection');
+const { asignacionVigente, licenciaVigente } = require('../../services/administracionRiesgos');
+
+// Toda aplicación requiere licencia vigente; la de riesgos además requiere un rol vigente.
+const accesoAplicacion = `
+    AND ${licenciaVigente('a')}
+    AND (
+        a.CODIGO_APLICACION <> 1
+        OR EXISTS (
+            SELECT 1 FROM gestion_riesgos.seguridad_menu_rol_usuario asignacion
+            WHERE asignacion.CODIGO_CIA = a.CODIGO_CIA AND asignacion.CODIGO_APLICACION = a.CODIGO_APLICACION
+                AND asignacion.CODIGO_COLABORADOR = ? AND ${asignacionVigente}
+        )
+    )`;
 
 /**
  * obtenerAplicaciones
@@ -15,8 +28,8 @@ const pool = require('../../bd/mySQLConnection');
  * Lista las aplicaciones habilitadas para la institución de la sesión.
  *
  * - Valida `codigo_cia`.
- * - Ejecuta `SELECT` con `LEFT JOIN` entre `seguridad_institucion_acceso_app` y `seguridad_aplicacion`,
- *   filtrando por `vigente=1` y fecha de vigencia válida.
+ * - Toda aplicación requiere licencia vigente (`VIGENTE`, `FECHA_INICIO_VIGENCIA`, `FECHA_VIGENCIA`).
+ * - La aplicación de riesgos además requiere un rol vigente.
  * - Devuelve `{ result: rows }` ordenado por nombre de aplicación.
  *
  * @route GET /
@@ -40,11 +53,10 @@ exports.obtenerAplicaciones = async (req, res) => {
             a.codigo_aplicacion = b.codigo_aplicacion
         WHERE 
             a.CODIGO_CIA = ? 
-            AND vigente = 1
-            AND (fecha_vigencia > NOW() OR fecha_vigencia IS NULL)
+            ${accesoAplicacion}
         ORDER BY b.NOMBRE
         `;
-        const [rows] = await pool.execute(sql, [codigo_cia]);
+        const [rows] = await pool.execute(sql, [codigo_cia, req.userId]);
         return res.json({ result: rows });
     } catch (err) {
         console.error('obtenerApps:', err);
@@ -85,14 +97,13 @@ exports.checkApp = async (req, res) => {
             ON a.codigo_aplicacion = b.codigo_aplicacion
         WHERE 
             a.CODIGO_CIA = ?
-            AND a.vigente = 1
-            AND (a.fecha_vigencia > NOW() OR a.fecha_vigencia IS NULL)
+            ${accesoAplicacion}
             AND LOWER(TRIM(LEADING '/' FROM TRIM(b.url_base))) = ?
         ORDER BY b.NOMBRE
         LIMIT 1
         `;
 
-        const [rows] = await pool.execute(sql, [codigo_cia, app]);
+        const [rows] = await pool.execute(sql, [codigo_cia, req.userId, app]);
         const permitido = rows.length > 0;
 
         return res.json({

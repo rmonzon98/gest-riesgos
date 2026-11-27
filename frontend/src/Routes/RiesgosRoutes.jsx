@@ -10,12 +10,23 @@
  */
 
 import React, { lazy } from "react";
-import { Route, Routes } from "react-router-dom";
+import { Outlet, Route, Routes, useLocation } from "react-router-dom";
+import RequirePermission from "funciones/RequirePermission";
 
 // Rutas de RIESGOS (todas viven bajo HomeContainer)
 const AdminView = lazy(() => import("./../Riesgos/Admin F/General/AdminView.jsx"));
 const AdminDireccion = lazy(() => import("./../Riesgos/Admin F/Direccion/AdminDireccion.jsx"));
 const AreasMain = lazy(() => import("../Riesgos/Areas/AreasMain.jsx"));
+const EjesEstrategicos = lazy(() => import("../Riesgos/EjesEstrategicos/EjesEstrategicos.jsx"));
+const Glosario = lazy(() => import("../Riesgos/Glosario/Glosario.jsx"));
+const RiesgoDetalle = lazy(() => import("../Riesgos/Evaluacion riesgos F/Detalle/RiesgoDetalle.jsx"));
+const MisPlanes = lazy(() => import("../Riesgos/Planes/MisPlanes.jsx"));
+const VerificacionActividades = lazy(() => import("../Riesgos/Planes/VerificacionActividades.jsx"));
+const PlanesViceministerio = lazy(() => import("../Riesgos/Planes/PlanesViceministerio.jsx"));
+const Reasignar = lazy(() => import("../Riesgos/Administracion/Reasignar.jsx"));
+const AutorizacionesEliminacion = lazy(() => import("../Riesgos/Administracion/AutorizacionesEliminacion.jsx"));
+const accesoVerificacion = ["/verificacion-actividades", "/administracion", "/administracion-direccion"];
+const accesoDetalle = ["/evaluacion-gestion-riesgos", "/riesgos-institucional"];
 const Anexo1Form = lazy(() => import("../Riesgos/Anexo 1/Anexo1Form.jsx"));
 const Anexo1Institucional = lazy(() => import("../Riesgos/Anexo 1/Anexo1Institucional.jsx"));
 const Anexo1Mant = lazy(() => import("../Riesgos/Anexo 1/Anexo1Mant.jsx"));
@@ -66,14 +77,26 @@ const VisualizacionSeguimientos = lazy(() => import("./../Riesgos/Comportamiento
  * @component
  * @returns {JSX.Element}
  */
+function RutaMenu() {
+    const { pathname } = useLocation();
+    const ruta = pathname.toLowerCase().replace(/^\/riesgos(?=\/)/, '').replace(/\/+$/, '');
+    const urls = ruta.startsWith('/riesgo/') ? accesoDetalle :
+        ruta === '/verificacion-actividades' ? accesoVerificacion : ruta;
+    return <RequirePermission key={ruta} url={urls}><Outlet /></RequirePermission>;
+}
+
 export default function RiesgosRoutes() {
     return (
         <Routes>
             <Route index element={<Home />} />
+            <Route path="perfil" element={<Perfil />} />
 
+            <Route element={<RutaMenu />}>
             {/* Administración */}
             <Route path="administracion" element={<AdminView />} />
             <Route path="administracion-direccion" element={<AdminDireccion />} />
+            <Route path="reasignar" element={<Reasignar />} />
+            <Route path="autorizaciones-eliminacion" element={<AutorizacionesEliminacion />} />
             <Route path="logs-riesgos" element={<Logs />} />
             <Route path="metricas" element={<MetricasDashboard />} />
 
@@ -96,6 +119,7 @@ export default function RiesgosRoutes() {
             {/* Módulo de Evaluación y Gestión del Riesgo */}
             <Route path="evaluacion-gestion-riesgos-consolidado" element={<ConsolidacionReporteModulos key="evaluacion-gestion-riesgos-consolidado" categoria={3} titulo={'Consolidación de evaluación y gestión de riesgos'} />} />
             <Route path="evaluacion-gestion-riesgos" element={<IngresoRiesgos key="evaluacion-gestion-riesgos" tipo={'ME'} titulo={'Entrada de evaluación y gestión de riesgos'} />} />
+            <Route path="riesgo/:entidad/:periodo/:codigo" element={<RiesgoDetalle />} />
             <Route path="evaluacion-gestion-riesgos-revision" element={<RiesgosRevision key="evaluacion-gestion-riesgos-revision" tipo={'ME'} titulo={'Revisión de evaluación y gestión de riesgos'} />} />
             <Route path="evaluacion-gestion-riesgos-revision-superior" element={<RiesgosRevisionSuperior key="evaluacion-gestion-riesgos-revision-superior" tipo={'ME'} titulo={'Revisión de superior de evaluación y gestión de riesgos'} />} />
             <Route path="riesgos-institucional" element={<RiesgoInstitucional />} />
@@ -117,6 +141,9 @@ export default function RiesgosRoutes() {
             <Route path="informe-anual" element={<InformeAnual />} />
 
             {/* Módulo de Monitoreo del Comportamiento de los Riesgos */}
+            <Route path="mis-planes" element={<MisPlanes />} />
+            <Route path="verificacion-actividades" element={<VerificacionActividades />} />
+            <Route path="planes-viceministerio" element={<PlanesViceministerio />} />
             <Route path="seguimiento-riesgos" element={<SeguimientoGeneral />} />
             <Route path="seguimiento-riesgos-institucional" element={<VisualizacionSeguimientos />} />
             <Route path="continuidad-monitoreo-riesgos" element={<Continuidad />} />
@@ -126,6 +153,8 @@ export default function RiesgosRoutes() {
 
             {/* Catalogos */}
             <Route path="areas" element={<AreasMain />} />
+            <Route path="ejes-estrategicos" element={<EjesEstrategicos />} />
+            <Route path="glosario" element={<Glosario />} />
             <Route path="direccion" element={<DireccionesMain />} />
             <Route path="tiposobjetivos" element={<TipoObjetivoMain />} />
             <Route path="objetivos" element={<ObjetivosMain />} />
@@ -134,14 +163,12 @@ export default function RiesgosRoutes() {
             <Route path="riesgos-mantenimiento" element={<MantenimientoRiesgosMain />} />
             <Route path="viceministerio" element={<ViceministeriosMain />} />
 
-            {/* Perfil */}
-            <Route path="perfil" element={<Perfil />} />
-
             {/* Otros */}
             {/* Archivos / PDFs */}
             <Route path="archivos" element={<VisualizacionArchivos />} />
             <Route path="archivos-institucionales" element={<VisualizacionArchivosInstitucionales />} />
             <Route path="juntar-pdf" element={<JuntarPDF />} />
+            </Route>
             {/* Institucionales */}
 
 

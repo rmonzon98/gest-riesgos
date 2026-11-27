@@ -23,6 +23,7 @@ const sha1 = require('sha-1');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const pool = require('../bd/mySQLConnection');
+const { licenciaVigente } = require('../services/administracionRiesgos');
 
 const {
     encryptSecret,
@@ -413,7 +414,8 @@ async function crearSesionYEnviarCookies(req, res, usuario) {
 /**
  * Busca un usuario activo por correo electrónico y obtiene su configuración 2FA.
  *
- * También valida que la compañía tenga acceso vigente a la aplicación.
+ * También devuelve `LICENCIA_VIGENTE` (1/0) según la licencia de la aplicación 1 de la institución;
+ * el login rechaza con 403 si no está vigente.
  *
  * @param {string} usuario Correo electrónico ingresado en login.
  * @returns {Promise<object|null>} Usuario encontrado o `null`.
@@ -426,6 +428,7 @@ async function obtenerUsuarioPorCredenciales(usuario) {
             sp.CODIGO_ENTIDAD,
             sp.CORREO_ELECTRONICO,
             sp.CODIGO_CIA,
+            COALESCE(${licenciaVigente('siap')}, 0) AS LICENCIA_VIGENTE,
 
             IFNULL(cfg.activo, 0) AS TOTP_ACTIVO,
             cfg.totp_secret_encrypted,
@@ -437,6 +440,7 @@ async function obtenerUsuarioPorCredenciales(usuario) {
             gestion_riesgos.seguridad_institucion_acceso_app siap
         ON
             sp.codigo_cia = siap.codigo_cia
+            AND siap.CODIGO_APLICACION = 1
         LEFT JOIN
             gestion_riesgos.seguridad_2fa_configuracion cfg
         ON
@@ -445,7 +449,6 @@ async function obtenerUsuarioPorCredenciales(usuario) {
         WHERE 
             sp.CORREO_ELECTRONICO = ?
             AND sp.ACTIVO = 1
-            AND siap.vigente = 1
         LIMIT 1
     `;
 
@@ -579,6 +582,14 @@ exports.login = async (req, res) => {
             return res.json({
                 auth: false,
                 message: 'Ha ingresado el usuario o contraseña equivocada'
+            });
+        }
+
+        // Se valida después de la contraseña para no revelar el estado de la institución a terceros.
+        if (Number(u.LICENCIA_VIGENTE) !== 1) {
+            return res.status(403).json({
+                auth: false,
+                message: 'La licencia de su institución no está vigente. Comuníquese con el administrador del sistema.'
             });
         }
 

@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const controller = require('../../Controller/general/responsables');
+const cargos = require('../../Controller/general/cargos');
 const { verifyJWT } = require('../../services/verifyJWTUpd');
 
 router.put('/actualizar-contrasena', controller.actualizarContrasena);
@@ -11,6 +12,11 @@ router.get('/obtener-superior', controller.obtenerSuperior)
 router.get('/obtener-mi-unidad', controller.miUnidad);
 router.get('/', controller.obtenerPersonasPorEmpresa);
 router.get('/obtener-responsable', controller.obtenerResponsableUnico);
+router.get('/licencia', controller.licencia);
+router.get('/superiores', cargos.buscarSuperiores);
+router.get('/:persona/cargos', cargos.listar);
+router.post('/:persona/cargos', cargos.registrar);
+router.put('/:persona/cargos/:cargo', cargos.corregir);
 router.put('/cambiar-vigente', controller.cambiarVigente)
 router.put('/cambiar-activo', controller.cambiarActivo)
 

@@ -2,8 +2,9 @@ import { useMemo, useState } from "react";
 import {
     Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
     TextField, IconButton, Tooltip, Typography, Box, Select, MenuItem, Stack,
-    Chip
+    Chip, Link
 } from "@mui/material";
+import { Link as RouterLink } from "react-router-dom";
 import EditRounded from "@mui/icons-material/EditRounded";
 import DeleteRounded from "@mui/icons-material/DeleteRounded";
 import RestoreRounded from "@mui/icons-material/RestoreRounded";
@@ -28,7 +29,7 @@ function EstadoConComentario({ estado, labels, comentario }) {
     );
 }
 
-export default function TablaRiesgosBasica({ rows = [], onEdit, onDelete, onRestore }) {
+export default function TablaRiesgosBasica({ rows = [], onEdit, onDelete, onRestore, urlDetalle, permisosEliminacion }) {
     const [filters, setFilters] = useState({
         ref: "",
         descripcion: "",
@@ -92,6 +93,7 @@ export default function TablaRiesgosBasica({ rows = [], onEdit, onDelete, onRest
                     sx={{
                         tableLayout: "fixed",
                         width: "100%",
+                        ...(urlDetalle && { minWidth: 1100 }),
                         "& td, & th": { wordBreak: "break-word", verticalAlign: "top" }
                     }}
                 >
@@ -101,6 +103,7 @@ export default function TablaRiesgosBasica({ rows = [], onEdit, onDelete, onRest
                             <TableCell sx={{ width: "13%" }}>Origen</TableCell>
                             <TableCell sx={{ width: "13%" }}>Referencia</TableCell>
                             <TableCell>Descripción</TableCell>
+                            {urlDetalle && <><TableCell>Dueño</TableCell><TableCell sx={{ width: 70 }}>Eventos</TableCell><TableCell sx={{ width: 64 }}>Planes</TableCell><TableCell sx={{ width: 105 }}>Cumplimiento</TableCell></>}
                             <TableCell sx={{ width: "20%" }}>Revisión superior</TableCell>
                             <TableCell sx={{ width: "20%" }}>Revisión consolidador</TableCell>
                         </TableRow>
@@ -138,6 +141,7 @@ export default function TablaRiesgosBasica({ rows = [], onEdit, onDelete, onRest
                                     onChange={(e) => setFilters((s) => ({ ...s, descripcion: e.target.value }))}
                                 />
                             </TableCell>
+                            {urlDetalle && <><TableCell /><TableCell /><TableCell /><TableCell /></>}
                             <TableCell>
                                 <Stack spacing={1}>
                                     <Select
@@ -179,6 +183,7 @@ export default function TablaRiesgosBasica({ rows = [], onEdit, onDelete, onRest
                                 <TableRow
                                     key={`${r.CODIGO_RIESGO}-${i}`}
                                     hover
+                                    onClick={urlDetalle ? () => onEdit?.(r) : undefined}
                                     sx={{
                                         cursor: "pointer",
                                         bgcolor: r.ELIMINADO ? "error.lighter" : "inherit",
@@ -190,27 +195,30 @@ export default function TablaRiesgosBasica({ rows = [], onEdit, onDelete, onRest
                                     <TableCell>
                                         <Stack direction="row" spacing={0.5}>
                                             <Tooltip title="Editar">
-                                                <IconButton size="small" onClick={() => onEdit?.(r)}>
+                                                <IconButton size="small" aria-label={urlDetalle ? "Abrir detalle" : "Editar"}
+                                                    onClick={event => { event.stopPropagation(); onEdit?.(r); }}>
                                                     <EditRounded fontSize="small" />
                                                 </IconButton>
                                             </Tooltip>
 
-                                            {!r.ELIMINADO ? (
-                                                <Tooltip title="Eliminar riesgo">
+                                            {!r.vinculado && !r.ELIMINADO && (permisosEliminacion?.directo || (permisosEliminacion?.solicitar && !r.ELIMINACION_SOLICITADA)) && (
+                                                <Tooltip title={permisosEliminacion.directo ? "Eliminar riesgo" : "Solicitar eliminación"}>
                                                     <IconButton
                                                         size="small"
                                                         color="error"
-                                                        onClick={() => onDelete?.(r)}
+                                                        aria-label={permisosEliminacion.directo ? "Eliminar riesgo" : "Solicitar eliminación"}
+                                                        onClick={event => { event.stopPropagation(); onDelete?.(r); }}
                                                     >
                                                         <DeleteRounded fontSize="small" />
                                                     </IconButton>
                                                 </Tooltip>
-                                            ) : (
+                                            )}
+                                            {!r.vinculado && Boolean(r.ELIMINADO) && (
                                                 <Tooltip title="Restablecer riesgo">
                                                     <IconButton
                                                         size="small"
                                                         color="success"
-                                                        onClick={() => onRestore?.(r)}
+                                                        onClick={event => { event.stopPropagation(); onRestore?.(r); }}
                                                     >
                                                         <RestoreRounded fontSize="small" />
                                                     </IconButton>
@@ -222,8 +230,18 @@ export default function TablaRiesgosBasica({ rows = [], onEdit, onDelete, onRest
                                     <TableCell>
                                         <OrigenRiesgo riesgo={r} />
                                     </TableCell>
-                                    <TableCell>{r.REF}</TableCell>
-                                    <TableCell>{r.DESCRIPCION}</TableCell>
+                                    <TableCell>{urlDetalle ? <Link component={RouterLink} to={urlDetalle(r)}
+                                        onClick={event => event.stopPropagation()}>{r.REF || `Riesgo ${r.CODIGO_RIESGO}`}</Link> : r.REF}</TableCell>
+                                    <TableCell>
+                                        {r.DESCRIPCION}
+                                        {!r.ELIMINADO && Boolean(r.ELIMINACION_SOLICITADA) &&
+                                            <Typography display="block" variant="caption" color="warning.dark">Eliminación solicitada</Typography>}
+                                        {r.vinculado && <Typography display="block" variant="caption" color="primary.main" sx={{ mt: 0.5 }}>
+                                            Vinculado de {r.DIRECCION_DUENA}
+                                        </Typography>}
+                                    </TableCell>
+                                    {urlDetalle && <><TableCell>{r.DUENO || '—'}</TableCell><TableCell>{r.EVENTOS ?? 0}</TableCell><TableCell>{r.PLANES ?? 0}</TableCell>
+                                        <TableCell>{r.CUMPLIMIENTO == null ? '—' : `${r.CUMPLIMIENTO}%`}</TableCell></>}
 
                                     <TableCell>
                                         <EstadoConComentario
@@ -244,7 +262,7 @@ export default function TablaRiesgosBasica({ rows = [], onEdit, onDelete, onRest
                             ))
                         ) : (
                             <TableRow>
-                                <TableCell colSpan={6} align="center">
+                                <TableCell colSpan={urlDetalle ? 10 : 6} align="center">
                                     <Box py={2}>
                                         <Typography variant="body2" color="text.secondary">
                                             No hay resultados con los filtros actuales.

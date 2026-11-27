@@ -13,6 +13,7 @@ import {
     TableRow, TableCell, TableBody
 } from "@mui/material";
 import apiClient from "api/apiClient";
+import RolesAsignados from "Riesgos/Administracion/RolesAsignados";
 import AddIcon from "@mui/icons-material/Add";
 import EditIcon from "@mui/icons-material/Edit";
 import AlertaMensaje from "./../../Alerta F/AlertaMensaje";
@@ -25,7 +26,7 @@ import FormRolUsuario from "./FormRolUsuario";
  *
  * @component
  */
-function RolesUsuarios() {
+function RolesUsuarios({ actualizarLicencia }) {
 
     const [alerta, setAlerta] = useState({ open: false, tipo: 'success', mensaje: '' });
     const [showModal, setShowModal] = useState(false);
@@ -116,6 +117,7 @@ function RolesUsuarios() {
     };
 
     const handleSuccess = () => {
+        actualizarLicencia?.();
         handleClose();
         obtenerLista();
         mostrarAlerta('success', 'Guardado exitosamente');
@@ -167,7 +169,7 @@ function RolesUsuarios() {
                                 </TableCell>
                                 <TableCell>{row.persona.nombre}</TableCell>
                                 <TableCell>
-                                    {row.roles.map(r => r.nombre).join(", ")}
+                                    <RolesAsignados roles={row.roles} />
                                 </TableCell>
                             </TableRow>
                         ))}

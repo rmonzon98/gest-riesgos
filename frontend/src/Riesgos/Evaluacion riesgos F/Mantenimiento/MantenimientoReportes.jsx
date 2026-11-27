@@ -57,6 +57,8 @@ const PROPIEDADES_PREDEFINIDAS = [
     { key: "CODIGO_FRECUENCIA", label: "Frecuencia", source: "predefinida" },
     { key: "MONITOREO", label: "Método de monitoreo", source: "predefinida" },
     { key: "CODIGO_OBJETIVO", label: "Objetivo", source: "predefinida" },
+    { key: "OBJETIVO_TEXTO", label: "Objetivo específico", source: "predefinida" },
+    { key: "CODIGO_EJE", label: "Eje estratégico", source: "predefinida" },
     { key: "OBSERVACIONES", label: "Observaciones", source: "predefinida" }, // (se tolera alias OBSERVACIONES)
     { key: "CODIGO_PROBABILIDAD", label: "Probabilidad", source: "predefinida" },
     { key: "PROBABILIDAD_AJUSTADA", label: "Probabilidad ajustada", source: "predefinida" },

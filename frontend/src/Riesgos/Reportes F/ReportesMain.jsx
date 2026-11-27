@@ -14,6 +14,7 @@ import ReportesInstitucionalesCard from './ReportesInstitucionalesCard';
 import apiClient from 'api/apiClient';
 import { useState, useEffect } from 'react';
 import ReportesControlFraudeUnidadCard from './ReportesControlFraudeUnidadCard';
+import ReportesPlanesCard from './ReportesPlanesCard';
 
 /**
  * ReportesMain
@@ -69,7 +70,7 @@ function ReportesMain() {
   const obtenerLogo = async () => {
     try {
       const { data } = await apiClient.get('/api/reportes-actualizados/obtener-logo');
-      setLogo('data:image/png;base64,' + data.logo ?? '');
+      setLogo(data.logo ? 'data:image/png;base64,' + data.logo : '');
       setInstitucion(data.nombre)
     } catch (e) {
       console.error('Error cargando períodos', e);
@@ -97,6 +98,7 @@ function ReportesMain() {
         <ReportesControlFraudeUnidadCard unidades={unidades} periodos={periodos} tipos={tipos} logoBase64={logo} />
         <ReportesRiesgosUnidadCard unidades={unidades} periodos={periodos} tipos={tipos} logoBase64={logo} />
         <ReportesInstitucionalesCard periodos={periodos} tipos={tipos} logoBase64={logo} institucion={institucion} />
+        <ReportesPlanesCard logoBase64={logo} />
         {/*<ReportesMonitoreosCard periodos={periodos} unidades={unidades} tipos={tipos} logoBase64={logo} />*/}
       </Stack>
     </Box>

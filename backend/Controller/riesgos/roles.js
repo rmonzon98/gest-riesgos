@@ -8,6 +8,8 @@
  */
 
 const pool = require('../../bd/mySQLConnection');
+const { accesoAdministracion, asignacionVigente, bloquearInstitucion, errorAdministracion,
+    fechaCivil, mensajeLimite, obtenerLicencia } = require('../../services/administracionRiesgos');
 
 /**
  * obtenerRoles
@@ -58,6 +60,7 @@ exports.obtenerRoles = async (req, res) => {
             smru.CODIGO_CIA = ?
             AND smru.CODIGO_COLABORADOR = ?
             AND smru.codigo_aplicacion = 1
+            AND ${asignacionVigente.replaceAll('asignacion.', 'smru.')}
         ORDER BY smu.NOMBRE ASC
         `;
         const [rows] = await pool.execute(sql, [codigo_cia, codigo_colaborador]);
@@ -491,7 +494,10 @@ exports.obtenerPersonasRoles = async (req, res) => {
             sp.CODIGO_COLABORADOR,
             CONCAT(COALESCE(sp.PRIMER_NOMBRE,''),' ',COALESCE(sp.PRIMER_APELLIDO,'')) AS NOMBRE,
             smru.CODIGO_ROL,
-            smr.NOMBRE AS NOMBRE_ROL
+            smr.NOMBRE AS NOMBRE_ROL,
+            DATE_FORMAT(smru.FECHA_INICIO, '%Y-%m-%d') AS FECHA_INICIO,
+            DATE_FORMAT(smru.FECHA_FIN, '%Y-%m-%d') AS FECHA_FIN,
+            COALESCE(smru.FECHA_FIN < CURDATE(), 0) AS VENCIDO
         FROM 
             \`gestion_riesgos\`.\`seguridad_menu_rol_usuario\` smru
         LEFT JOIN 
@@ -530,7 +536,8 @@ exports.obtenerPersonasRoles = async (req, res) => {
             }
             agrupado[idx.get(key)].roles.push({
                 codigo_rol: row.CODIGO_ROL,
-                nombre: row.NOMBRE_ROL
+                nombre: row.NOMBRE_ROL,
+                fecha_inicio: row.FECHA_INICIO, fecha_fin: row.FECHA_FIN, vencido: Boolean(row.VENCIDO)
             });
         }
 
@@ -566,7 +573,10 @@ exports.obtenerPersonasRolesDireccion = async (req, res) => {
             sp.CODIGO_COLABORADOR,
             CONCAT(COALESCE(sp.PRIMER_NOMBRE,''),' ',COALESCE(sp.PRIMER_APELLIDO,'')) AS NOMBRE,
             smru.CODIGO_ROL,
-            smr.NOMBRE AS NOMBRE_ROL
+            smr.NOMBRE AS NOMBRE_ROL,
+            DATE_FORMAT(smru.FECHA_INICIO, '%Y-%m-%d') AS FECHA_INICIO,
+            DATE_FORMAT(smru.FECHA_FIN, '%Y-%m-%d') AS FECHA_FIN,
+            COALESCE(smru.FECHA_FIN < CURDATE(), 0) AS VENCIDO
         FROM 
             \`gestion_riesgos\`.\`seguridad_menu_rol_usuario\` smru
         LEFT JOIN 
@@ -606,7 +616,8 @@ exports.obtenerPersonasRolesDireccion = async (req, res) => {
             }
             agrupado[idx.get(key)].roles.push({
                 codigo_rol: row.CODIGO_ROL,
-                nombre: row.NOMBRE_ROL
+                nombre: row.NOMBRE_ROL,
+                fecha_inicio: row.FECHA_INICIO, fecha_fin: row.FECHA_FIN, vencido: Boolean(row.VENCIDO)
             });
         }
 
@@ -638,10 +649,14 @@ exports.obtenerPersonasRolesUnico = async (req, res) => {
     }
 
     try {
+        const { direccion } = await accesoAdministracion(req);
         const sql = `
         SELECT 
             smru.CODIGO_ROL,
-            smr.NOMBRE AS NOMBRE_ROL
+            smr.NOMBRE AS NOMBRE_ROL,
+            DATE_FORMAT(smru.FECHA_INICIO, '%Y-%m-%d') AS FECHA_INICIO,
+            DATE_FORMAT(smru.FECHA_FIN, '%Y-%m-%d') AS FECHA_FIN,
+            COALESCE(smru.FECHA_FIN < CURDATE(), 0) AS VENCIDO
         FROM 
             \`gestion_riesgos\`.\`seguridad_menu_rol_usuario\` smru
         LEFT JOIN 
@@ -653,121 +668,126 @@ exports.obtenerPersonasRolesUnico = async (req, res) => {
             smru.CODIGO_CIA = ?
             AND smru.CODIGO_COLABORADOR = ?
             AND smru.CODIGO_APLICACION = ?
+            AND (? IS NULL OR EXISTS (
+                SELECT 1 FROM gestion_riesgos.seguridad_persona persona
+                WHERE persona.CODIGO_CIA = smru.CODIGO_CIA AND persona.CODIGO_COLABORADOR = smru.CODIGO_COLABORADOR
+                    AND persona.CODIGO_ENTIDAD = ?
+            ))
         ORDER BY smr.NOMBRE
         `;
-        const [rows] = await pool.execute(sql, [codigo_cia, codigo_colaborador, codigo_aplicacion]);
+        const [rows] = await pool.execute(sql, [codigo_cia, codigo_colaborador, codigo_aplicacion, direccion, direccion]);
         return res.json({ data: rows });
     } catch (err) {
+        if (err.status) return res.status(err.status).json({ msg: err.message });
         console.error(err);
         return res.status(500).json({ msg: 'Error al obtener roles del colaborador' });
     }
 };
 
-/**
- * actualizarPersonasRoles
- *
- * Función del controlador encargada de procesar la operación actualizarPersonasRoles.
- *
- * - Ejecuta la lógica correspondiente del módulo.
- * - Interactúa con la base de datos según sea necesario.
- *
- * @route PUT /actualizar-personas-con-roles
- * @returns {200|400|404|500} Respuesta del servicio.
- */
-exports.actualizarPersonasRoles = async (req, res) => {
-    const codigo_cia = req.codigo_cia;
-    const codigo_aplicacion = 1;
-    const { colaboradores, roles, } = req.body;
-
-    if (!codigo_cia || !codigo_aplicacion || !Array.isArray(colaboradores) || colaboradores.length === 0 || !Array.isArray(roles)) {
-        return res.status(400).json({ msg: 'Datos incompletos (codigo_cia, codigo_aplicacion, colaboradores[], roles[]).' });
+function idsRoles(valores) {
+    const ids = valores.map(Number);
+    if (ids.some(id => !Number.isSafeInteger(id) || id <= 0)) {
+        throw errorAdministracion(400, 'La selección contiene identificadores inválidos.');
     }
+    return [...new Set(ids)];
+}
 
-    const conn = await pool.getConnection();
+function datosRol(valor) {
+    const objeto = valor != null && typeof valor === 'object';
+    const [codigo] = idsRoles([objeto ? valor.codigo_rol : valor]);
+    if (!objeto) return { codigo, conservaFechas: true };
+    const desde = fechaCivil(valor.fecha_inicio);
+    const hasta = fechaCivil(valor.fecha_fin);
+    if (desde && hasta && desde > hasta) throw errorAdministracion(400, 'La vigencia inicial debe ser anterior o igual a la final.');
+    return { codigo, desde, hasta };
+}
 
+function cuentaHoy(roles, hoy) {
+    return [...roles.values()].some(({ desde, hasta }) => (!desde || desde <= hoy) && (!hasta || hasta >= hoy));
+}
+
+async function asignarPersonasRoles(req, res, actualizar) {
+    const { colaboradores, roles } = req.body || {};
+    const cia = req.codigo_cia;
+    if (!cia || !Array.isArray(colaboradores) || !colaboradores.length || !Array.isArray(roles) || (!actualizar && !roles.length)) {
+        return res.status(400).json({ msg: 'Seleccione colaboradores y roles válidos.' });
+    }
+    let conn;
     try {
+        const { direccion } = await accesoAdministracion(req);
+        const personas = idsRoles(colaboradores);
+        const solicitados = new Map(roles.map(valor => {
+            const rol = datosRol(valor);
+            return [rol.codigo, rol];
+        }));
+        conn = await pool.getConnection();
         await conn.beginTransaction();
-
-        for (const codigo_colaborador of colaboradores) {
-            await conn.execute(
-                `
-            DELETE FROM 
-                \`gestion_riesgos\`.\`seguridad_menu_rol_usuario\`
-            WHERE 
-                CODIGO_CIA = ?
-                AND CODIGO_APLICACION = ?
-                AND CODIGO_COLABORADOR = ?`,
-                [codigo_cia, codigo_aplicacion, codigo_colaborador]
-            );
-
-            for (const codigo_rol of roles) {
-                await conn.execute(
-                    `INSERT INTO \`gestion_riesgos\`.\`seguridad_menu_rol_usuario\`
-            (CODIGO_APLICACION, CODIGO_CIA, CODIGO_COLABORADOR, CODIGO_ROL)
-            VALUES (?, ?, ?, ?)`,
-                    [codigo_aplicacion, codigo_cia, codigo_colaborador, codigo_rol]
-                );
+        await bloquearInstitucion(conn, cia);
+        const licencia = await obtenerLicencia(conn, cia);
+        if (solicitados.size) {
+            const [catalogo] = await conn.query(
+                'SELECT CODIGO_ROL FROM gestion_riesgos.seguridad_menu_rol WHERE CODIGO_CIA = ? AND CODIGO_APLICACION = 1 AND CODIGO_ROL IN (?)',
+                [cia, [...solicitados.keys()]]);
+            if (catalogo.length !== solicitados.size) throw errorAdministracion(400, 'Seleccione roles de la institución.');
+        }
+        const cambios = [];
+        let aumento = 0;
+        for (const id of personas) {
+            const [[persona]] = await conn.execute(
+                'SELECT ACTIVO, CODIGO_ENTIDAD FROM gestion_riesgos.seguridad_persona WHERE CODIGO_CIA = ? AND CODIGO_COLABORADOR = ?',
+                [cia, id]);
+            if (!persona || (direccion != null && persona.CODIGO_ENTIDAD !== direccion)) {
+                throw errorAdministracion(403, 'El colaborador queda fuera de su administración.');
+            }
+            const [filas] = await conn.execute(`
+                SELECT CODIGO_ROL AS codigo, DATE_FORMAT(FECHA_INICIO, '%Y-%m-%d') AS desde, DATE_FORMAT(FECHA_FIN, '%Y-%m-%d') AS hasta
+                FROM gestion_riesgos.seguridad_menu_rol_usuario
+                WHERE CODIGO_CIA = ? AND CODIGO_APLICACION = 1 AND CODIGO_COLABORADOR = ?`, [cia, id]);
+            const antes = new Map(filas.map(rol => [rol.codigo, rol]));
+            const despues = actualizar ? new Map() : new Map(antes);
+            for (const [codigo, rol] of solicitados) {
+                if (!actualizar && antes.has(codigo)) continue;
+                despues.set(codigo, rol.conservaFechas ? antes.get(codigo) ?? { codigo, desde: null, hasta: null } : rol);
+            }
+            if (persona.ACTIVO === '1') aumento += Number(cuentaHoy(despues, licencia.hoy)) - Number(cuentaHoy(antes, licencia.hoy));
+            cambios.push({ id, antes, despues });
+        }
+        if (licencia.limite != null && aumento > 0 && licencia.usados + aumento > licencia.limite) {
+            throw errorAdministracion(409, mensajeLimite);
+        }
+        let asignaciones = 0;
+        for (const { id, antes, despues } of cambios) {
+            const removidos = [...antes.keys()].filter(codigo => !despues.has(codigo));
+            if (removidos.length) await conn.query(`
+                DELETE FROM gestion_riesgos.seguridad_menu_rol_usuario
+                WHERE CODIGO_CIA = ? AND CODIGO_APLICACION = 1 AND CODIGO_COLABORADOR = ? AND CODIGO_ROL IN (?)`,
+                [cia, id, removidos]);
+            for (const [codigo, { desde, hasta }] of despues) {
+                const anterior = antes.get(codigo);
+                if (anterior?.desde === desde && anterior?.hasta === hasta) continue;
+                await conn.execute(`
+                    INSERT INTO gestion_riesgos.seguridad_menu_rol_usuario
+                        (CODIGO_APLICACION, CODIGO_CIA, CODIGO_COLABORADOR, CODIGO_ROL, FECHA_INICIO, FECHA_FIN)
+                    VALUES (1, ?, ?, ?, ?, ?)
+                    ON DUPLICATE KEY UPDATE FECHA_INICIO = VALUES(FECHA_INICIO), FECHA_FIN = VALUES(FECHA_FIN)`,
+                    [cia, id, codigo, desde ?? null, hasta ?? null]);
+                asignaciones++;
             }
         }
-
         await conn.commit();
-        return res.json({ msg: 'Roles actualizados correctamente.' });
+        return res.json({ msg: actualizar ? 'Roles actualizados correctamente.' : 'Roles asignados correctamente.', asignaciones });
     } catch (err) {
-        await conn.rollback();
-        console.error('Error al actualizar roles:', err);
-        return res.status(500).json({ msg: 'Error al actualizar roles.' });
-    } finally {
-        conn.release();
-    }
-};
-
-/**
- * crearPersonasRoles
- *
- * Función del controlador encargada de procesar la operación crearPersonasRoles.
- *
- * - Ejecuta la lógica correspondiente del módulo.
- * - Interactúa con la base de datos según sea necesario.
- *
- * @route POST /crear-personas-con-roles
- * @returns {200|400|404|500} Respuesta del servicio.
- */
-exports.crearPersonasRoles = async (req, res) => {
-    const codigo_cia = req.codigo_cia;
-    const codigo_aplicacion = 1;
-    const { colaboradores = [], roles = [] } = req.body;
-
-    if (!codigo_cia || !codigo_aplicacion || !Array.isArray(colaboradores) || colaboradores.length === 0
-        || !Array.isArray(roles) || roles.length === 0) {
-        return res.status(400).json({ msg: 'Datos incompletos (codigo_cia, codigo_aplicacion, colaboradores[], roles[]).' });
-    }
-
-    const conn = await pool.getConnection();
-    try {
-        await conn.beginTransaction();
-
-        const values = [];
-        for (const colab of colaboradores) {
-            for (const rol of roles) {
-                values.push([codigo_aplicacion, codigo_cia, colab, rol]);
-            }
-        }
-
-        const placeholders = values.map(() => '(?, ?, ?, ?)').join(', ');
-        const sql = `
-        INSERT IGNORE INTO \`gestion_riesgos\`.\`seguridad_menu_rol_usuario\`
-            (CODIGO_APLICACION, CODIGO_CIA, CODIGO_COLABORADOR, CODIGO_ROL)
-        VALUES ${placeholders}
-         `;
-        await conn.execute(sql, values.flat());
-
-        await conn.commit();
-        return res.json({ msg: 'Roles asignados correctamente al/los colaborador(es).', asignaciones: values.length });
-    } catch (err) {
-        await conn.rollback();
+        if (conn) await conn.rollback();
+        if (err.status) return res.status(err.status).json({ msg: err.message });
         console.error('Error al asignar roles:', err);
         return res.status(500).json({ msg: 'Error al asignar roles.' });
     } finally {
-        conn.release();
+        conn?.release();
     }
-};
+}
+
+/** Reemplaza las asignaciones de roles dentro del ámbito administrativo. */
+exports.actualizarPersonasRoles = (req, res) => asignarPersonasRoles(req, res, true);
+
+/** Agrega asignaciones a las personas seleccionadas y verifica capacidad de la licencia. */
+exports.crearPersonasRoles = (req, res) => asignarPersonasRoles(req, res, false);

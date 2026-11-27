@@ -112,18 +112,19 @@ function SinPermiso() {
  *
  * 1. Espera a que AuthContext termine de validar la sesión.
  * 2. Si no hay sesión activa, redirige al login.
- * 3. Consulta `/api/general/auth/puede-acceder`.
+ * 3. Consulta el acceso a la aplicación o las URLs asignadas y vigentes.
  * 4. Si el backend permite el acceso, renderiza `children`.
  * 5. Si no tiene permiso, muestra pantalla de acceso no autorizado.
  * 6. Si recibe 401, ejecuta logout centralizado.
  *
  * @component
  * @param {object} props
- * @param {string} props.app Código del módulo o aplicación.
+ * @param {string} [props.app] Código del módulo o aplicación.
+ * @param {string|string[]} [props.url] URL del menú o alternativas asignadas que dan acceso.
  * @param {React.ReactNode} props.children Contenido a renderizar si el acceso es permitido.
  * @returns {JSX.Element}
  */
-const RequirePermission = ({ app, children }) => {
+const RequirePermission = ({ app, url, children }) => {
     const { autenticado, authLoading, logout } = useAuth();
 
     const [state, setState] = useState({
@@ -159,11 +160,11 @@ const RequirePermission = ({ app, children }) => {
                     });
                 }
 
-                const { data } = await apiClient.get("/api/general/auth/puede-acceder", {
-                    params: { app },
-                });
-
-                const permitido = Boolean(data?.permitido);
+                const { data } = url
+                    ? await apiClient.get("/api/roles-actualizados", { signal: controller.signal })
+                    : await apiClient.get("/api/general/auth/puede-acceder", { params: { app }, signal: controller.signal });
+                const urls = Array.isArray(url) ? url : [url];
+                const permitido = url ? Boolean(data?.result?.some(rol => urls.includes(rol.URL))) : Boolean(data?.permitido);
 
                 if (mounted) {
                     setState({
@@ -173,6 +174,7 @@ const RequirePermission = ({ app, children }) => {
                     });
                 }
             } catch (err) {
+                if (controller.signal.aborted) return;
                 const status = err?.response?.status;
 
                 if (status === 401) {
@@ -203,12 +205,14 @@ const RequirePermission = ({ app, children }) => {
             }
         };
 
+        const controller = new AbortController();
         verificarPermiso();
 
         return () => {
             mounted = false;
+            controller.abort();
         };
-    }, [app, autenticado, authLoading, logout]);
+    }, [app, url, autenticado, authLoading, logout]);
 
     if (authLoading) {
         return <LoadingPermisos texto="Validando sesión…" />;

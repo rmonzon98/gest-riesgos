@@ -1,0 +1,1213 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+model RiesgosArea {
+  codigoCia              Int                      @map("CODIGO_CIA")
+  codigoArea             Int                      @map("CODIGO_AREA")
+  descripcion            String                   @map("DESCRIPCION") @db.VarChar(200)
+  abreviatura            String?                  @map("ABREVIATURA") @db.VarChar(10)
+  estado                 String                   @default("1") @map("ESTADO") @db.VarChar(1)
+  usuarioCreacion        Int?                     @map("USUARIO_CREACION")
+  usuarioModificacion    Int?                     @map("USUARIO_MODIFICACION")
+  fechaCreacion          DateTime?                @map("FECHA_CREACION") @db.DateTime(0)
+  fechaModificacion      DateTime?                @map("FECHA_MODIFICACION") @db.DateTime(0)
+  seguridadInstitucion   SeguridadInstitucion     @relation(fields: [codigoCia], references: [codigoCia], onUpdate: Restrict, map: "riesgos_area_seguridad_institucion_FK")
+  riesgosRiesgoExtendido RiesgosRiesgoExtendido[]
+  codigoEntidad          Int?                     @map("CODIGO_ENTIDAD")
+  direccion              SeguridadEntidad?        @relation(fields: [codigoCia, codigoEntidad], references: [codigoCia, codigoEntidad], onDelete: Restrict, onUpdate: Restrict, map: "riesgos_area_direccion_fk")
+  riesgosVinculados      RiesgosRiesgoVinculo[]
+
+  @@id([codigoCia, codigoArea])
+  @@index([codigoCia, codigoEntidad], map: "riesgos_area_direccion_idx")
+  @@map("riesgos_area")
+}
+
+model RiesgosColaboradorSuperior {
+  codigoCia           Int               @map("CODIGO_CIA")
+  codigoColaborador   Int               @map("CODIGO_COLABORADOR")
+  nombreSuperior      String?           @map("NOMBRE_SUPERIOR") @db.VarChar(100)
+  puestoSuperior      String?           @map("PUESTO_SUPERIOR") @db.VarChar(100)
+  usuarioCreacion     Int?              @map("USUARIO_CREACION")
+  usuarioModificacion Int?              @map("USUARIO_MODIFICACION")
+  fechaCreacion       DateTime?         @map("FECHA_CREACION") @db.DateTime(0)
+  fechaModificacion   DateTime?         @map("FECHA_MODIFICACION") @db.DateTime(0)
+  seguridadPersona    SeguridadPersona  @relation("ColaboradorSuperiorPersona", fields: [codigoCia, codigoColaborador], references: [codigoCia, codigoColaborador], onUpdate: Restrict, map: "riesgos_colaborador_superior_seguridad_persona_FK")
+  codigoSuperior      Int?              @map("CODIGO_SUPERIOR")
+  superior            SeguridadPersona? @relation("ColaboradorSuperiorUsuario", fields: [codigoCia, codigoSuperior], references: [codigoCia, codigoColaborador], onDelete: Restrict, onUpdate: Restrict, map: "riesgos_colaborador_superior_superior_fk")
+
+  @@id([codigoCia, codigoColaborador])
+  @@index([codigoCia, codigoSuperior], map: "riesgos_colaborador_superior_superior_idx")
+  @@map("riesgos_colaborador_superior")
+}
+
+model RiesgosDocumentos {
+  codigoCia           Int              @map("CODIGO_CIA")
+  codigoDocumento     Int              @map("CODIGO_DOCUMENTO")
+  nombreReal          String?          @map("NOMBRE_REAL") @db.VarChar(250)
+  path                String?          @map("PATH") @db.VarChar(400)
+  tipo                String?          @map("TIPO") @db.VarChar(250)
+  codigoPeriodo       Int?             @map("CODIGO_PERIODO")
+  categoria           String?          @map("CATEGORIA") @db.VarChar(50)
+  fechaCreacion       DateTime?        @map("FECHA_CREACION") @db.DateTime(0)
+  final               Int?             @default(0) @map("FINAL")
+  codigoEntidad       Int              @map("CODIGO_ENTIDAD")
+  usuarioCreacion     Int?             @map("USUARIO_CREACION")
+  usuarioModificacion Int?             @map("USUARIO_MODIFICACION")
+  fechaModificacion   DateTime?        @map("FECHA_MODIFICACION") @db.DateTime(0)
+  activo              Int?             @default(1) @map("ACTIVO")
+  seguridadEntidad    SeguridadEntidad @relation(fields: [codigoCia, codigoEntidad], references: [codigoCia, codigoEntidad], onUpdate: Restrict, map: "riesgos_documentos_seguridad_entidad_FK")
+
+  @@id([codigoCia, codigoEntidad, codigoDocumento])
+  @@map("riesgos_documentos")
+}
+
+model RiesgosFrecuencia {
+  codigoFrecuencia       Int                      @map("CODIGO_FRECUENCIA")
+  descripcion            String?                  @map("DESCRIPCION") @db.VarChar(25)
+  estado                 String                   @default("1") @map("ESTADO") @db.VarChar(1)
+  codigoCia              Int                      @map("CODIGO_CIA")
+  dias                   Int?                     @map("DIAS")
+  usuarioCreacion        Int?                     @map("USUARIO_CREACION")
+  fechaCreacion          DateTime?                @map("FECHA_CREACION") @db.DateTime(0)
+  usuarioModificacion    Int?                     @map("USUARIO_MODIFICACION")
+  fechaModificacion      DateTime?                @map("FECHA_MODIFICACION") @db.DateTime(0)
+  seguridadInstitucion   SeguridadInstitucion     @relation(fields: [codigoCia], references: [codigoCia], onUpdate: Restrict, map: "riesgos_frecuencia_seguridad_institucion_FK")
+  riesgosRiesgoExtendido RiesgosRiesgoExtendido[]
+  cortesAnio             Int?                     @map("CORTES_ANIO")
+  responsablesPlan       RiesgosPlanResponsable[]
+
+  @@id([codigoCia, codigoFrecuencia])
+  @@map("riesgos_frecuencia")
+}
+
+model RiesgosInformeAnual {
+  codigoCia           Int            @map("CODIGO_CIA")
+  codigoPeriodo       Int            @map("CODIGO_PERIODO")
+  informacion         String?        @map("INFORMACION") @db.LongText
+  fechaCreacion       DateTime?      @map("FECHA_CREACION") @db.DateTime(0)
+  fechaModificacion   DateTime?      @map("FECHA_MODIFICACION") @db.DateTime(0)
+  usuarioCreacion     Int?           @map("USUARIO_CREACION")
+  usuarioModificacion Int?           @map("USUARIO_MODIFICACION")
+  riesgosPeriodo      RiesgosPeriodo @relation(fields: [codigoCia, codigoPeriodo], references: [codigoCia, codigoPeriodo], onUpdate: Restrict, map: "riesgos_informe_anual_riesgos_periodo_FK")
+
+  @@id([codigoCia, codigoPeriodo])
+  @@map("riesgos_informe_anual")
+}
+
+model RiesgosLogs {
+  codigoCia            Int                  @map("CODIGO_CIA")
+  codigoLog            Int                  @map("CODIGO_LOG")
+  usuarioCreacion      Int?                 @map("USUARIO_CREACION")
+  fechaCreacion        DateTime?            @map("FECHA_CREACION") @db.DateTime(0)
+  nombreTabla          String?              @map("NOMBRE_TABLA") @db.VarChar(100)
+  accion               Int?                 @map("ACCION")
+  informacion          String?              @map("INFORMACION") @db.LongText
+  seguridadInstitucion SeguridadInstitucion @relation(fields: [codigoCia], references: [codigoCia], onUpdate: Restrict, map: "logs_seguridad_institucion_FK")
+
+  @@id([codigoCia, codigoLog])
+  @@index([nombreTabla], map: "riesgos_logs_NOMBRE_TABLA_IDX")
+  @@map("riesgos_logs")
+}
+
+model RiesgosMatrizInsti {
+  codigoCia            Int                  @map("CODIGO_CIA")
+  codigoPeriodo        Int                  @map("CODIGO_PERIODO")
+  tipo                 Int                  @map("TIPO")
+  version              Int                  @map("VERSION")
+  respuesta            String?              @map("RESPUESTA") @db.LongText
+  usuarioCreacion      Int?                 @map("USUARIO_CREACION")
+  fechaCreacion        DateTime?            @map("FECHA_CREACION") @db.DateTime(0)
+  riesgosPeriodo       RiesgosPeriodo       @relation(fields: [codigoCia, codigoPeriodo], references: [codigoCia, codigoPeriodo], onUpdate: Restrict, map: "RMI_RPE_FK")
+  seguridadInstitucion SeguridadInstitucion @relation(fields: [codigoCia], references: [codigoCia], onUpdate: Restrict, map: "riesgos_matriz_insti_seguridad_institucion_FK")
+
+  @@id([codigoCia, codigoPeriodo, tipo, version])
+  @@map("riesgos_matriz_insti")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model RiesgosMitigacion {
+  codigoMitigacion       Int                      @id @map("CODIGO_MITIGACION")
+  descripcion            String?                  @map("DESCRIPCION") @db.VarChar(25)
+  nombreExtra            String?                  @map("NOMBRE_EXTRA") @db.VarChar(50)
+  valor                  Int?                     @map("VALOR")
+  usuarioCreacion        Int?                     @map("USUARIO_CREACION")
+  usuarioModificacion    Int?                     @map("USUARIO_MODIFICACION")
+  fechaCreacion          DateTime?                @map("FECHA_CREACION") @db.DateTime(0)
+  fechaModificacion      DateTime?                @map("FECHA_MODIFICACION") @db.DateTime(0)
+  riesgosRiesgoExtendido RiesgosRiesgoExtendido[] @relation("MitigacionRiesgo")
+  riesgosPorEficiencia   RiesgosRiesgoExtendido[] @relation("EficienciaMitigador")
+
+  @@map("riesgos_mitigacion")
+}
+
+model RiesgosObjetivo {
+  codigoCia              Int                      @map("CODIGO_CIA")
+  codigoTipoObjetivo     String                   @map("CODIGO_TIPO_OBJETIVO") @db.VarChar(3)
+  codigoObjetivo         Int                      @map("CODIGO_OBJETIVO")
+  descripcion            String?                  @map("DESCRIPCION") @db.VarChar(800)
+  abreviatura            String?                  @map("ABREVIATURA") @db.VarChar(10)
+  estado                 String                   @default("1") @map("ESTADO") @db.VarChar(1)
+  usuarioCreacion        Int?                     @map("USUARIO_CREACION")
+  usuarioModificacion    Int?                     @map("USUARIO_MODIFICACION")
+  fechaCreacion          DateTime?                @map("FECHA_CREACION") @db.DateTime(0)
+  fechaModificacion      DateTime?                @map("FECHA_MODIFICACION") @db.DateTime(0)
+  riesgosTipoObjetivo    RiesgosTipoObjetivo      @relation(fields: [codigoCia, codigoTipoObjetivo], references: [codigoCia, codigoTipoObjetivo], onUpdate: Restrict, map: "FK_TIPO_OBJETIVO_OBJETIVO")
+  riesgosRiesgoExtendido RiesgosRiesgoExtendido[]
+
+  @@id([codigoCia, codigoTipoObjetivo, codigoObjetivo])
+  @@map("riesgos_objetivo")
+}
+
+model RiesgosOrganos {
+  codigoCia            Int                  @map("CODIGO_CIA")
+  codigoOrgano         Int                  @map("CODIGO_ORGANO")
+  nombre               String?              @map("NOMBRE") @db.VarChar(100)
+  usuarioCreacion      Int?                 @map("USUARIO_CREACION")
+  fechaCreacion        DateTime?            @map("FECHA_CREACION") @db.DateTime(0)
+  usuarioModificacion  Int?                 @map("USUARIO_MODIFICACION")
+  fechaModificacion    DateTime?            @map("FECHA_MODIFICACION") @db.DateTime(0)
+  seguridadInstitucion SeguridadInstitucion @relation(fields: [codigoCia], references: [codigoCia], onUpdate: Restrict, map: "riesgos_organos_seguridad_institucion_FK")
+
+  @@id([codigoCia, codigoOrgano])
+  @@map("riesgos_organos")
+}
+
+model RiesgosPeriodo {
+  codigoCia                         Int                                 @map("CODIGO_CIA")
+  codigoPeriodo                     Int                                 @map("CODIGO_PERIODO")
+  periodoInicial                    DateTime?                           @map("PERIODO_INICIAL") @db.DateTime(0)
+  periodoFinal                      DateTime?                           @map("PERIODO_FINAL") @db.DateTime(0)
+  activo                            Int?                                @default(1) @map("ACTIVO") @db.TinyInt
+  usuarioCreacion                   Int                                 @map("USUARIO_CREACION")
+  usuarioModificacion               Int?                                @map("USUARIO_MODIFICACION")
+  fechaCreacion                     DateTime                            @map("FECHA_CREACION") @db.DateTime(0)
+  fechaModificacion                 DateTime?                           @map("FECHA_MODIFICACION") @db.DateTime(0)
+  riesgosInformeAnual               RiesgosInformeAnual?
+  riesgosMatrizInsti                RiesgosMatrizInsti[]
+  seguridadInstitucion              SeguridadInstitucion                @relation(fields: [codigoCia], references: [codigoCia], onUpdate: Restrict, map: "riesgos_periodo_seguridad_institucion_FK")
+  riesgosPrimeraMatriz              RiesgosPrimeraMatriz[]
+  riesgosPrimeraMatrizHis           RiesgosPrimeraMatrizHis[]
+  riesgosReportesPropiedades        RiesgosReportesPropiedades[]
+  riesgosRiesgoExtendido            RiesgosRiesgoExtendido[]
+  riesgosRiesgoPropiedadesVersiones RiesgosRiesgoPropiedadesVersiones[]
+  riesgosSeguimiento                RiesgosSeguimiento[]
+  riesgosSeguimientoReporte         RiesgosSeguimientoReporte[]
+  riesgosSegundaMatriz              RiesgosSegundaMatriz[]
+  riesgosSegundaMatrizHis           RiesgosSegundaMatrizHis[]
+
+  @@id([codigoCia, codigoPeriodo])
+  @@map("riesgos_periodo")
+}
+
+model RiesgosPrimeraMatriz {
+  codigoCia               Int                       @map("CODIGO_CIA")
+  codigoPeriodo           Int                       @map("CODIGO_PERIODO")
+  version                 Int                       @map("VERSION")
+  usuarioCreacion         Int?                      @map("USUARIO_CREACION")
+  fechaCreacion           DateTime?                 @map("FECHA_CREACION") @db.DateTime(0)
+  estado                  String?                   @map("ESTADO") @db.VarChar(1)
+  usuarioModificacion     Int?                      @map("USUARIO_MODIFICACION")
+  fechaModificacion       DateTime?                 @map("FECHA_MODIFICACION") @db.DateTime(0)
+  riesgosPeriodo          RiesgosPeriodo            @relation(fields: [codigoCia, codigoPeriodo], references: [codigoCia, codigoPeriodo], onUpdate: Restrict, map: "RPMA_RPER_FK")
+  riesgosPrimeraMatrizEst RiesgosPrimeraMatrizEst[]
+
+  @@id([codigoCia, codigoPeriodo, version])
+  @@map("riesgos_primera_matriz")
+}
+
+model RiesgosPrimeraMatrizEst {
+  codigoCia            Int                  @map("CODIGO_CIA")
+  codigoPeriodo        Int                  @map("CODIGO_PERIODO")
+  version              Int                  @map("VERSION")
+  matriz               Int                  @map("MATRIZ")
+  titulo               String?              @map("TITULO") @db.VarChar(250)
+  columnas             String?              @map("COLUMNAS") @db.LongText
+  filas                String?              @map("FILAS") @db.LongText
+  obligatorio          String?              @map("OBLIGATORIO") @db.LongText
+  riesgosPrimeraMatriz RiesgosPrimeraMatriz @relation(fields: [codigoCia, codigoPeriodo, version], references: [codigoCia, codigoPeriodo, version], onUpdate: Restrict, map: "riesgos_primera_matriz_est_riesgos_primera_matriz_FK")
+
+  @@id([codigoCia, codigoPeriodo, version, matriz])
+  @@map("riesgos_primera_matriz_est")
+}
+
+model RiesgosPrimeraMatrizHis {
+  codigoCia            Int              @map("CODIGO_CIA")
+  codigoEntidad        Int              @map("CODIGO_ENTIDAD")
+  codigoPeriodo        Int              @map("CODIGO_PERIODO")
+  codigoHistorial      Int              @map("CODIGO_HISTORIAL")
+  respuesta            String?          @map("RESPUESTA") @db.LongText
+  comentarioSupervisor String?          @map("COMENTARIO_SUPERVISOR") @db.VarChar(500)
+  usuarioCreacion      Int?             @map("USUARIO_CREACION")
+  fechaCreacion        DateTime?        @map("FECHA_CREACION") @db.DateTime(0)
+  estado               String?          @default("I") @map("ESTADO") @db.VarChar(1)
+  fechaModificacion    DateTime?        @map("FECHA_MODIFICACION") @db.DateTime(0)
+  usuarioModificacion  Int?             @map("USUARIO_MODIFICACION")
+  version              Int?             @map("VERSION")
+  estadoSuperior       String?          @default("I") @map("ESTADO_SUPERIOR") @db.VarChar(1)
+  comentarioSuperior   String?          @map("COMENTARIO_SUPERIOR") @db.VarChar(500)
+  usuarioSuperior      Int?             @map("USUARIO_SUPERIOR")
+  fechaSuperior        DateTime?        @map("FECHA_SUPERIOR") @db.DateTime(0)
+  riesgosPeriodo       RiesgosPeriodo   @relation(fields: [codigoCia, codigoPeriodo], references: [codigoCia, codigoPeriodo], onUpdate: Restrict, map: "riesgos_primera_matriz_his_riesgos_periodo_FK")
+  seguridadEntidad     SeguridadEntidad @relation(fields: [codigoCia, codigoEntidad], references: [codigoCia, codigoEntidad], onUpdate: Restrict, map: "riesgos_primera_matriz_his_seguridad_entidad_FK")
+
+  @@id([codigoCia, codigoEntidad, codigoPeriodo, codigoHistorial])
+  @@index([codigoCia, codigoPeriodo], map: "riesgos_primera_matriz_his_riesgos_periodo_FK")
+  @@map("riesgos_primera_matriz_his")
+}
+
+model RiesgosProbabilidad {
+  codigoProbabilidad     Int                      @id @map("CODIGO_PROBABILIDAD")
+  descripcion            String?                  @map("DESCRIPCION") @db.VarChar(25)
+  usuarioCreacion        Int?                     @map("USUARIO_CREACION")
+  usuarioModificacion    Int?                     @map("USUARIO_MODIFICACION")
+  fechaCreacion          DateTime?                @map("FECHA_CREACION") @db.DateTime(0)
+  fechaModificacion      DateTime?                @map("FECHA_MODIFICACION") @db.DateTime(0)
+  riesgosRiesgoExtendido RiesgosRiesgoExtendido[]
+
+  @@map("riesgos_probabilidad")
+}
+
+model RiesgosReportesPropiedades {
+  codigoCia       Int            @map("CODIGO_CIA")
+  codigoPeriodo   Int            @map("CODIGO_PERIODO")
+  codigoVersion   Int            @map("CODIGO_VERSION")
+  propiedadesMe   String?        @map("PROPIEDADES_ME") @db.LongText
+  defecto         String?        @default("S") @map("DEFECTO") @db.VarChar(1)
+  usuarioCreacion Int?           @map("USUARIO_CREACION")
+  fechaCreacion   DateTime?      @map("FECHA_CREACION") @db.DateTime(0)
+  propiedadesMc   String?        @map("PROPIEDADES_MC") @db.LongText
+  propiedadesMce  String?        @map("PROPIEDADES_MCE") @db.LongText
+  riesgosPeriodo  RiesgosPeriodo @relation(fields: [codigoCia, codigoPeriodo], references: [codigoCia, codigoPeriodo], onUpdate: Restrict, map: "riesgos_reportes_propiedades_riesgos_periodo_FK")
+
+  @@id([codigoCia, codigoPeriodo, codigoVersion])
+  @@map("riesgos_reportes_propiedades")
+}
+
+model RiesgosRiesgoExtendido {
+  codigoCia                 Int                           @map("CODIGO_CIA")
+  codigoEntidad             Int                           @map("CODIGO_ENTIDAD")
+  codigoPeriodo             Int                           @map("CODIGO_PERIODO")
+  codigoRiesgo              Int                           @map("CODIGO_RIESGO")
+  periodoAnterior           Int?                          @map("PERIODO_ANTERIOR")
+  esNuevo                   Boolean                       @default(false) @map("ES_NUEVO")
+  eliminado                 Int?                          @default(0) @map("ELIMINADO")
+  descripcion               String?                       @map("DESCRIPCION") @db.VarChar(1000)
+  codigoTipoObjetivo        String?                       @map("CODIGO_TIPO_OBJETIVO") @db.VarChar(3)
+  codigoObjetivo            Int?                          @map("CODIGO_OBJETIVO")
+  codigoArea                Int?                          @map("CODIGO_AREA")
+  ref                       String?                       @map("REF") @db.VarChar(35)
+  codigoProbabilidad        Int?                          @map("CODIGO_PROBABILIDAD")
+  codigoSeveridad           Int?                          @map("CODIGO_SEVERIDAD")
+  codigoTolerancia          Int?                          @map("CODIGO_TOLERANCIA")
+  codigoMitigacion          Int?                          @map("CODIGO_MITIGACION")
+  observaciones             String?                       @map("OBSERVACIONES") @db.VarChar(1000)
+  variableMitigacion        String?                       @map("VARIABLE_MITIGACION") @db.VarChar(1)
+  usuarioCreacion           Int?                          @map("USUARIO_CREACION")
+  usuarioModificacion       Int?                          @map("USUARIO_MODIFICACION")
+  fechaCreacion             DateTime?                     @map("FECHA_CREACION") @db.DateTime(0)
+  fechaModificacion         DateTime?                     @map("FECHA_MODIFICACION") @db.DateTime(0)
+  comentarioSupervisorMe    String?                       @map("COMENTARIO_SUPERVISOR_ME") @db.VarChar(500)
+  supervisorModificacionMe  Int?                          @map("SUPERVISOR_MODIFICACION_ME")
+  fechaSupervisorMe         DateTime?                     @map("FECHA_SUPERVISOR_ME") @db.DateTime(0)
+  mostrarGeneral            String?                       @default("N") @map("MOSTRAR_GENERAL") @db.VarChar(1)
+  severidadNarracion        String?                       @map("SEVERIDAD_NARRACION") @db.VarChar(500)
+  probabilidadAjustada      Int?                          @map("PROBABILIDAD_AJUSTADA")
+  severidadAjustada         Int?                          @map("SEVERIDAD_AJUSTADA")
+  riesgoResidual            Int?                          @map("RIESGO_RESIDUAL")
+  riesgoInherente           Int?                          @map("RIESGO_INHERENTE")
+  evento                    String?                       @map("EVENTO") @db.LongText
+  control                   String?                       @map("CONTROL") @db.VarChar(1000)
+  monitoreo                 String?                       @map("MONITOREO") @db.VarChar(750)
+  codigoFrecuencia          Int?                          @map("CODIGO_FRECUENCIA")
+  responsable               String?                       @map("RESPONSABLE") @db.VarChar(250)
+  extrasMc                  String?                       @map("EXTRAS_MC") @db.LongText
+  estadoMe                  Int?                          @default(0) @map("ESTADO_ME")
+  extrasMe                  String?                       @map("EXTRAS_ME") @db.LongText
+  extrasMce                 String?                       @map("EXTRAS_MCE") @db.LongText
+  estadoMc                  Int?                          @default(0) @map("ESTADO_MC")
+  estadoMce                 Int?                          @default(0) @map("ESTADO_MCE")
+  fechaSupervisorMc         DateTime?                     @map("FECHA_SUPERVISOR_MC") @db.DateTime(0)
+  fechaSupervisorMce        DateTime?                     @map("FECHA_SUPERVISOR_MCE") @db.DateTime(0)
+  supervisorModificacionMc  Int?                          @map("SUPERVISOR_MODIFICACION_MC")
+  supervisorModificacionMce Int?                          @map("SUPERVISOR_MODIFICACION_MCE")
+  comentarioSupervisorMc    String?                       @map("COMENTARIO_SUPERVISOR_MC") @db.VarChar(500)
+  comentarioSupervisorMce   String?                       @map("COMENTARIO_SUPERVISOR_MCE") @db.VarChar(500)
+  viceministerio            Int?                          @map("VICEMINISTERIO")
+  organo                    Int?                          @map("ORGANO")
+  estadoMeSuperior          Int?                          @default(0) @map("ESTADO_ME_SUPERIOR")
+  comentarioSuperiorMe      String?                       @map("COMENTARIO_SUPERIOR_ME") @db.VarChar(500)
+  superiorModificacionMe    Int?                          @map("SUPERIOR_MODIFICACION_ME")
+  fechaSuperiorMe           DateTime?                     @map("FECHA_SUPERIOR_ME") @db.DateTime(0)
+  estadoMcSuperior          Int?                          @default(0) @map("ESTADO_MC_SUPERIOR")
+  superiorModificacionMc    Int?                          @map("SUPERIOR_MODIFICACION_MC")
+  comentarioSuperiorMc      String?                       @map("COMENTARIO_SUPERIOR_MC") @db.VarChar(500)
+  fechaSuperiorMc           DateTime?                     @map("FECHA_SUPERIOR_MC") @db.DateTime(0)
+  estadoMceSuperior         Int?                          @default(0) @map("ESTADO_MCE_SUPERIOR")
+  superiorModificacionMce   String?                       @map("SUPERIOR_MODIFICACION_MCE") @db.VarChar(100)
+  comentarioSuperiorMce     String?                       @map("COMENTARIO_SUPERIOR_MCE") @db.VarChar(500)
+  fechaSuperiorMce          DateTime?                     @map("FECHA_SUPERIOR_MCE") @db.DateTime(0)
+  riesgosArea               RiesgosArea?                  @relation(fields: [codigoCia, codigoArea], references: [codigoCia, codigoArea], onUpdate: Restrict, map: "riesgos_riesgo_extendido_riesgos_area_FK")
+  riesgosFrecuencia         RiesgosFrecuencia?            @relation(fields: [codigoCia, codigoFrecuencia], references: [codigoCia, codigoFrecuencia], onUpdate: Restrict, map: "riesgos_riesgo_extendido_riesgos_frecuencia_FK")
+  riesgosMitigacion         RiesgosMitigacion?            @relation("MitigacionRiesgo", fields: [codigoMitigacion], references: [codigoMitigacion], onDelete: Restrict, onUpdate: Restrict, map: "riesgos_riesgo_extendido_riesgos_mitigacion_FK")
+  riesgosObjetivo           RiesgosObjetivo?              @relation(fields: [codigoCia, codigoTipoObjetivo, codigoObjetivo], references: [codigoCia, codigoTipoObjetivo, codigoObjetivo], onUpdate: Restrict, map: "riesgos_riesgo_extendido_riesgos_objetivo_FK")
+  riesgosPeriodo            RiesgosPeriodo                @relation(fields: [codigoCia, codigoPeriodo], references: [codigoCia, codigoPeriodo], onUpdate: Restrict, map: "riesgos_riesgo_extendido_riesgos_periodo_FK")
+  riesgosProbabilidad       RiesgosProbabilidad?          @relation(fields: [codigoProbabilidad], references: [codigoProbabilidad], onDelete: Restrict, onUpdate: Restrict, map: "riesgos_riesgo_extendido_riesgos_probabilidad_FK")
+  riesgosSeveridad          RiesgosSeveridad?             @relation(fields: [codigoSeveridad], references: [codigoSeveridad], onDelete: Restrict, onUpdate: Restrict, map: "riesgos_riesgo_extendido_riesgos_severidad_FK")
+  riesgosTolerancia         RiesgosTolerancia?            @relation(fields: [codigoTolerancia], references: [codigoTolerancia], onDelete: Restrict, onUpdate: Restrict, map: "riesgos_riesgo_extendido_riesgos_tolerancia_FK")
+  seguridadEntidad          SeguridadEntidad              @relation(fields: [codigoCia, codigoEntidad], references: [codigoCia, codigoEntidad], onUpdate: Restrict, map: "riesgos_riesgo_extendido_seguridad_entidad_FK")
+  objetivoTexto             String?                       @map("OBJETIVO_TEXTO") @db.VarChar(800)
+  codigoEje                 Int?                          @map("CODIGO_EJE")
+  eficienciaMitigador       Int?                          @map("EFICIENCIA_MITIGADOR")
+  codigoDueno               Int?                          @map("CODIGO_DUENO")
+  ejeEstrategico            RiesgosEjeEstrategico?        @relation(fields: [codigoCia, codigoEje], references: [codigoCia, codigoEje], onDelete: Restrict, onUpdate: Restrict, map: "riesgos_riesgo_extendido_eje_estrategico_fk")
+  eficiencia                RiesgosMitigacion?            @relation("EficienciaMitigador", fields: [eficienciaMitigador], references: [codigoMitigacion], onDelete: Restrict, onUpdate: Restrict, map: "riesgos_riesgo_extendido_eficiencia_fk")
+  dueno                     SeguridadPersona?             @relation(fields: [codigoCia, codigoDueno], references: [codigoCia, codigoColaborador], onDelete: Restrict, onUpdate: Restrict, map: "riesgos_riesgo_extendido_dueno_fk")
+  eventos                   RiesgosRiesgoEvento[]
+  vinculos                  RiesgosRiesgoVinculo[]
+  planes                    RiesgosPlanAccion[]
+  solicitudesEliminacion    RiesgosSolicitudEliminacion[]
+
+  @@id([codigoCia, codigoEntidad, codigoPeriodo, codigoRiesgo])
+  @@index([codigoCia, codigoArea], map: "riesgos_riesgo_extendido_riesgos_area_FK")
+  @@index([codigoCia, codigoFrecuencia], map: "riesgos_riesgo_extendido_riesgos_frecuencia_FK")
+  @@index([codigoMitigacion], map: "riesgos_riesgo_extendido_riesgos_mitigacion_FK")
+  @@index([codigoCia, codigoTipoObjetivo, codigoObjetivo], map: "riesgos_riesgo_extendido_riesgos_objetivo_FK")
+  @@index([codigoCia, codigoPeriodo], map: "riesgos_riesgo_extendido_riesgos_periodo_FK")
+  @@index([codigoProbabilidad], map: "riesgos_riesgo_extendido_riesgos_probabilidad_FK")
+  @@index([codigoSeveridad], map: "riesgos_riesgo_extendido_riesgos_severidad_FK")
+  @@index([codigoTolerancia], map: "riesgos_riesgo_extendido_riesgos_tolerancia_FK_1")
+  @@index([codigoCia, codigoEje], map: "riesgos_riesgo_extendido_eje_estrategico_idx")
+  @@index([eficienciaMitigador], map: "riesgos_riesgo_extendido_eficiencia_idx")
+  @@index([codigoCia, codigoDueno], map: "riesgos_riesgo_extendido_dueno_idx")
+  @@map("riesgos_riesgo_extendido")
+}
+
+model RiesgosRiesgoPropiedades {
+  codigoCia                         Int                               @map("CODIGO_CIA")
+  codigoPeriodo                     Int                               @map("CODIGO_PERIODO")
+  propiedad                         String                            @map("PROPIEDAD") @db.VarChar(75)
+  codigoPropiedad                   Int                               @map("CODIGO_PROPIEDAD")
+  codigoVersion                     Int                               @map("CODIGO_VERSION")
+  riesgosRiesgoPropiedadesVersiones RiesgosRiesgoPropiedadesVersiones @relation(fields: [codigoCia, codigoPeriodo, codigoVersion], references: [codigoCia, codigoPeriodo, codigoVersion], onUpdate: Restrict, map: "RRP_RRPV_FK")
+
+  @@id([codigoCia, codigoPeriodo, codigoVersion, codigoPropiedad])
+  @@map("riesgos_riesgo_propiedades")
+}
+
+model RiesgosRiesgoPropiedadesVersiones {
+  codigoCia                Int                        @map("CODIGO_CIA")
+  codigoPeriodo            Int                        @map("CODIGO_PERIODO")
+  codigoVersion            Int                        @map("CODIGO_VERSION")
+  estado                   String?                    @default("S") @map("ESTADO") @db.VarChar(1)
+  usuarioCreacion          Int?                       @map("USUARIO_CREACION")
+  fechaCreacion            DateTime?                  @map("FECHA_CREACION") @db.DateTime(0)
+  riesgosRiesgoPropiedades RiesgosRiesgoPropiedades[]
+  riesgosPeriodo           RiesgosPeriodo             @relation(fields: [codigoCia, codigoPeriodo], references: [codigoCia, codigoPeriodo], onUpdate: Restrict, map: "riesgos_riesgo_propiedades_versiones_riesgos_periodo_FK")
+
+  @@id([codigoCia, codigoPeriodo, codigoVersion])
+  @@map("riesgos_riesgo_propiedades_versiones")
+}
+
+model RiesgosSeguimiento {
+  codigoCia              Int                      @map("CODIGO_CIA")
+  codigoEntidad          Int                      @map("CODIGO_ENTIDAD")
+  mes                    Int                      @map("MES")
+  seccion1               String?                  @map("SECCION1") @db.LongText
+  seccion2               String?                  @map("SECCION2") @db.LongText
+  seccion3               String?                  @map("SECCION3") @db.LongText
+  seccion4               String?                  @map("SECCION4") @db.LongText
+  codigoPeriodo          Int                      @map("CODIGO_PERIODO")
+  viceministerio         String?                  @map("VICEMINISTERIO") @db.VarChar(150)
+  organo                 String?                  @map("ORGANO") @db.VarChar(150)
+  subtitulo              String?                  @map("SUBTITULO") @db.VarChar(150)
+  usuarioCreacion        Int?                     @map("USUARIO_CREACION")
+  fechaCreacion          DateTime?                @map("FECHA_CREACION") @db.DateTime(0)
+  usuarioModificacion    Int?                     @map("USUARIO_MODIFICACION")
+  fechaModificacion      DateTime?                @map("FECHA_MODIFICACION") @db.DateTime(0)
+  riesgosPeriodo         RiesgosPeriodo           @relation(fields: [codigoCia, codigoPeriodo], references: [codigoCia, codigoPeriodo], onUpdate: Restrict, map: "riesgos_seguimiento_riesgos_periodo_FK")
+  seguridadEntidad       SeguridadEntidad         @relation(fields: [codigoCia, codigoEntidad], references: [codigoCia, codigoEntidad], onUpdate: Restrict, map: "riesgos_seguimiento_seguridad_entidad_FK")
+  riesgosSeguimientoDocs RiesgosSeguimientoDocs[]
+
+  @@id([codigoCia, codigoEntidad, codigoPeriodo, mes])
+  @@index([codigoCia, codigoPeriodo], map: "riesgos_seguimiento_riesgos_periodo_FK")
+  @@map("riesgos_seguimiento")
+}
+
+model RiesgosSeguimientoDocs {
+  codigoCia           Int                @map("CODIGO_CIA")
+  codigoEntidad       Int                @map("CODIGO_ENTIDAD")
+  codigoPeriodo       Int                @map("CODIGO_PERIODO")
+  mes                 Int                @map("MES")
+  nombre              String             @map("NOMBRE") @db.VarChar(255)
+  mime                String?            @map("MIME") @db.VarChar(150)
+  tamano              BigInt?            @map("TAMANO")
+  ruta                String             @map("RUTA") @db.Text
+  usuarioCreacion     Int?               @map("USUARIO_CREACION")
+  fechaCreacion       DateTime           @default(now()) @map("FECHA_CREACION") @db.DateTime(0)
+  usuarioModificacion Int?               @map("USUARIO_MODIFICACION")
+  fechaModificacion   DateTime?          @map("FECHA_MODIFICACION") @db.DateTime(0)
+  codigoDoc           Int                @map("CODIGO_DOC")
+  activo              Int?               @default(1) @map("ACTIVO")
+  riesgosSeguimiento  RiesgosSeguimiento @relation(fields: [codigoCia, codigoEntidad, codigoPeriodo, mes], references: [codigoCia, codigoEntidad, codigoPeriodo, mes], onUpdate: Restrict, map: "riesgos_seguimiento_docs_riesgos_seguimiento_FK")
+
+  @@id([codigoCia, codigoEntidad, codigoPeriodo, mes, codigoDoc])
+  @@map("riesgos_seguimiento_docs")
+}
+
+model RiesgosSeguimientoReporte {
+  codigoCia           Int            @map("CODIGO_CIA")
+  codigoPeriodo       Int            @map("CODIGO_PERIODO")
+  codigo              Int            @map("CODIGO")
+  informacion         String?        @map("INFORMACION") @db.LongText
+  usuarioCreacion     Int?           @map("USUARIO_CREACION")
+  fechaCreacion       DateTime?      @map("FECHA_CREACION") @db.DateTime(0)
+  titulo              String?        @map("TITULO") @db.VarChar(250)
+  usuarioModificacion Int?           @map("USUARIO_MODIFICACION")
+  fechaModificacion   DateTime?      @map("FECHA_MODIFICACION") @db.DateTime(0)
+  riesgosPeriodo      RiesgosPeriodo @relation(fields: [codigoCia, codigoPeriodo], references: [codigoCia, codigoPeriodo], onUpdate: Restrict, map: "riesgos_seguimiento_reporte_riesgos_periodo_FK")
+
+  @@id([codigoCia, codigoPeriodo, codigo])
+  @@map("riesgos_seguimiento_reporte")
+}
+
+model RiesgosSegundaMatriz {
+  codigoCia               Int                       @map("CODIGO_CIA")
+  codigoPeriodo           Int                       @map("CODIGO_PERIODO")
+  version                 Int                       @map("VERSION")
+  usuarioCreacion         Int?                      @map("USUARIO_CREACION")
+  fechaCreacion           DateTime?                 @map("FECHA_CREACION") @db.DateTime(0)
+  estado                  String?                   @map("ESTADO") @db.VarChar(1)
+  usuarioModificacion     Int?                      @map("USUARIO_MODIFICACION")
+  fechaModificacion       DateTime?                 @map("FECHA_MODIFICACION") @db.DateTime(0)
+  riesgosPeriodo          RiesgosPeriodo            @relation(fields: [codigoCia, codigoPeriodo], references: [codigoCia, codigoPeriodo], onUpdate: Restrict, map: "RSMA_RPER_FK")
+  riesgosSegundaMatrizEst RiesgosSegundaMatrizEst[]
+
+  @@id([codigoCia, codigoPeriodo, version])
+  @@map("riesgos_segunda_matriz")
+}
+
+model RiesgosSegundaMatrizEst {
+  codigoCia            Int                  @map("CODIGO_CIA")
+  codigoPeriodo        Int                  @map("CODIGO_PERIODO")
+  version              Int                  @map("VERSION")
+  matriz               Int                  @map("MATRIZ")
+  titulo               String?              @map("TITULO") @db.VarChar(250)
+  columnas             String?              @map("COLUMNAS") @db.LongText
+  filas                String?              @map("FILAS") @db.LongText
+  riesgosSegundaMatriz RiesgosSegundaMatriz @relation(fields: [codigoCia, codigoPeriodo, version], references: [codigoCia, codigoPeriodo, version], onUpdate: Restrict, map: "riesgos_segunda_matriz_est_riesgos_segunda_matriz_FK")
+
+  @@id([codigoCia, codigoPeriodo, version, matriz])
+  @@map("riesgos_segunda_matriz_est")
+}
+
+model RiesgosSegundaMatrizHis {
+  codigoCia            Int              @map("CODIGO_CIA")
+  codigoEntidad        Int              @map("CODIGO_ENTIDAD")
+  codigoPeriodo        Int              @map("CODIGO_PERIODO")
+  codigoHistorial      Int              @map("CODIGO_HISTORIAL")
+  respuesta            String?          @map("RESPUESTA") @db.LongText
+  comentarioSupervisor String?          @map("COMENTARIO_SUPERVISOR") @db.VarChar(500)
+  usuarioCreacion      Int?             @map("USUARIO_CREACION")
+  fechaCreacion        DateTime?        @map("FECHA_CREACION") @db.DateTime(0)
+  estado               String?          @map("ESTADO") @db.VarChar(1)
+  usuarioModificacion  Int?             @map("USUARIO_MODIFICACION")
+  fechaModificacion    DateTime?        @map("FECHA_MODIFICACION") @db.DateTime(0)
+  estadoSuperior       String?          @default("I") @map("ESTADO_SUPERIOR") @db.VarChar(1)
+  comentarioSuperior   String?          @map("COMENTARIO_SUPERIOR") @db.VarChar(500)
+  usuarioSuperior      Int?             @map("USUARIO_SUPERIOR")
+  fechaSuperior        DateTime?        @map("FECHA_SUPERIOR") @db.DateTime(0)
+  riesgosPeriodo       RiesgosPeriodo   @relation(fields: [codigoCia, codigoPeriodo], references: [codigoCia, codigoPeriodo], onUpdate: Restrict, map: "riesgos_segunda_matriz_his_riesgos_periodo_FK")
+  seguridadEntidad     SeguridadEntidad @relation(fields: [codigoCia, codigoEntidad], references: [codigoCia, codigoEntidad], onUpdate: Restrict, map: "riesgos_segunda_matriz_his_seguridad_entidad_FK")
+
+  @@id([codigoCia, codigoEntidad, codigoPeriodo, codigoHistorial])
+  @@index([codigoCia, codigoPeriodo], map: "riesgos_segunda_matriz_his_riesgos_periodo_FK")
+  @@map("riesgos_segunda_matriz_his")
+}
+
+model RiesgosSeveridad {
+  codigoSeveridad        Int                      @id @map("CODIGO_SEVERIDAD")
+  descripcion            String?                  @map("DESCRIPCION") @db.VarChar(25)
+  usuarioCreacion        Int?                     @map("USUARIO_CREACION")
+  usuarioModificacion    Int?                     @map("USUARIO_MODIFICACION")
+  fechaCreacion          DateTime?                @map("FECHA_CREACION") @db.DateTime(0)
+  fechaModificacion      DateTime?                @map("FECHA_MODIFICACION") @db.DateTime(0)
+  riesgosRiesgoExtendido RiesgosRiesgoExtendido[]
+
+  @@map("riesgos_severidad")
+}
+
+model RiesgosTipoObjetivo {
+  codigoCia            Int                  @map("CODIGO_CIA")
+  codigoTipoObjetivo   String               @map("CODIGO_TIPO_OBJETIVO") @db.VarChar(3)
+  descripcion          String?              @map("DESCRIPCION") @db.VarChar(200)
+  estado               String               @default("1") @map("ESTADO") @db.VarChar(1)
+  usuarioCreacion      Int                  @map("USUARIO_CREACION")
+  usuarioModificacion  Int?                 @map("USUARIO_MODIFICACION")
+  fechaCreacion        DateTime             @map("FECHA_CREACION") @db.DateTime(0)
+  fechaModificacion    DateTime?            @map("FECHA_MODIFICACION") @db.DateTime(0)
+  riesgosObjetivo      RiesgosObjetivo[]
+  seguridadInstitucion SeguridadInstitucion @relation(fields: [codigoCia], references: [codigoCia], onUpdate: Restrict, map: "riesgos_tipo_objetivo_seguridad_institucion_FK")
+
+  @@id([codigoCia, codigoTipoObjetivo])
+  @@map("riesgos_tipo_objetivo")
+}
+
+model RiesgosTolerancia {
+  codigoTolerancia       Int                      @id @map("CODIGO_TOLERANCIA")
+  descripcion            String?                  @map("DESCRIPCION") @db.VarChar(25)
+  usuarioCreacion        Int?                     @map("USUARIO_CREACION")
+  usuarioModificacion    Int?                     @map("USUARIO_MODIFICACION")
+  fechaCreacion          DateTime?                @map("FECHA_CREACION") @db.DateTime(0)
+  fechaModificacion      DateTime?                @map("FECHA_MODIFICACION") @db.DateTime(0)
+  riesgosRiesgoExtendido RiesgosRiesgoExtendido[]
+
+  @@map("riesgos_tolerancia")
+}
+
+model RiesgosViceministerio {
+  codigoCia            Int                  @map("CODIGO_CIA")
+  codigoViceministerio Int                  @map("CODIGO_VICEMINISTERIO")
+  nombre               String?              @map("NOMBRE") @db.VarChar(100)
+  usuarioCreacion      Int?                 @map("USUARIO_CREACION")
+  fechaCreacion        DateTime?            @map("FECHA_CREACION") @db.DateTime(0)
+  usuarioModificacion  Int?                 @map("USUARIO_MODIFICACION")
+  fechaModificacion    DateTime?            @map("FECHA_MODIFICACION") @db.DateTime(0)
+  seguridadInstitucion SeguridadInstitucion @relation(fields: [codigoCia], references: [codigoCia], onUpdate: Restrict, map: "riesgos_viceministerio_seguridad_institucion_FK")
+  seguridadEntidad     SeguridadEntidad[]
+
+  @@id([codigoCia, codigoViceministerio])
+  @@map("riesgos_viceministerio")
+}
+
+model Seguridad2faConfiguracion {
+  codigoCia           Int                             @map("codigo_cia")
+  codigoColaborador   Int                             @map("codigo_colaborador")
+  activo              Boolean                         @default(false)
+  metodo              Seguridad2faConfiguracionMetodo @default(TOTP)
+  totpSecretEncrypted String?                         @map("totp_secret_encrypted") @db.Text
+  totpSecretIv        String?                         @map("totp_secret_iv") @db.VarChar(64)
+  totpSecretAuthTag   String?                         @map("totp_secret_auth_tag") @db.VarChar(64)
+  fechaHabilitacion   DateTime?                       @map("fecha_habilitacion") @db.DateTime(0)
+  fechaUltimoUso      DateTime?                       @map("fecha_ultimo_uso") @db.DateTime(0)
+  usuarioCreacion     Int?                            @map("usuario_creacion")
+  fechaCreacion       DateTime                        @default(now()) @map("fecha_creacion") @db.DateTime(0)
+  usuarioModificacion Int?                            @map("usuario_modificacion")
+  fechaModificacion   DateTime?                       @map("fecha_modificacion") @db.DateTime(0)
+  seguridadPersona    SeguridadPersona                @relation(fields: [codigoCia, codigoColaborador], references: [codigoCia, codigoColaborador], onUpdate: Restrict, map: "seguridad_2fa_configuracion_persona_FK")
+
+  @@id([codigoCia, codigoColaborador])
+  @@map("seguridad_2fa_configuracion")
+}
+
+model Seguridad2faDesafio {
+  idDesafio         String                  @id @map("id_desafio") @db.Char(36)
+  codigoCia         Int                     @map("codigo_cia")
+  codigoColaborador Int                     @map("codigo_colaborador")
+  tipo              Seguridad2faDesafioTipo @default(LOGIN)
+  verificado        Boolean                 @default(false)
+  intentos          Int                     @default(0)
+  maxIntentos       Int                     @default(5) @map("max_intentos")
+  ipOrigen          String?                 @map("ip_origen") @db.VarChar(45)
+  userAgent         String?                 @map("user_agent") @db.VarChar(500)
+  fechaCreacion     DateTime                @default(now()) @map("fecha_creacion") @db.DateTime(0)
+  fechaExpiracion   DateTime                @map("fecha_expiracion") @db.DateTime(0)
+  fechaVerificacion DateTime?               @map("fecha_verificacion") @db.DateTime(0)
+  seguridadPersona  SeguridadPersona        @relation(fields: [codigoCia, codigoColaborador], references: [codigoCia, codigoColaborador], onUpdate: Restrict, map: "seguridad_2fa_desafio_persona_FK")
+
+  @@index([fechaExpiracion], map: "seguridad_2fa_desafio_expiracion_IDX")
+  @@index([codigoCia, codigoColaborador], map: "seguridad_2fa_desafio_persona_IDX")
+  @@map("seguridad_2fa_desafio")
+}
+
+model Seguridad2faRecoveryCode {
+  idRecoveryCode    String           @id @map("id_recovery_code") @db.Char(36)
+  codigoCia         Int              @map("codigo_cia")
+  codigoColaborador Int              @map("codigo_colaborador")
+  codigoHash        String           @map("codigo_hash") @db.Char(64)
+  usado             Boolean          @default(false)
+  fechaUso          DateTime?        @map("fecha_uso") @db.DateTime(0)
+  fechaCreacion     DateTime         @default(now()) @map("fecha_creacion") @db.DateTime(0)
+  seguridadPersona  SeguridadPersona @relation(fields: [codigoCia, codigoColaborador], references: [codigoCia, codigoColaborador], onUpdate: Restrict, map: "seguridad_2fa_recovery_persona_FK")
+
+  @@unique([codigoCia, codigoColaborador, codigoHash], map: "seguridad_2fa_recovery_codigo_UK")
+  @@index([codigoCia, codigoColaborador], map: "seguridad_2fa_recovery_persona_IDX")
+  @@index([usado], map: "seguridad_2fa_recovery_usado_IDX")
+  @@map("seguridad_2fa_recovery_code")
+}
+
+model SeguridadAplicacion {
+  codigoAplicacion              Int                             @id @map("CODIGO_APLICACION")
+  nombre                        String?                         @map("NOMBRE") @db.VarChar(100)
+  urlBase                       String?                         @map("url_base") @db.VarChar(100)
+  imagen                        String?                         @map("IMAGEN") @db.VarChar(100)
+  seguridadInstitucionAccesoApp SeguridadInstitucionAccesoApp[]
+  seguridadMenuRol              SeguridadMenuRol[]
+  seguridadMenuUrls             SeguridadMenuUrls[]
+
+  @@map("seguridad_aplicacion")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model SeguridadDependencia {
+  codigoDependencia     Int              @map("CODIGO_DEPENDENCIA")
+  nombre                String           @map("NOMBRE") @db.VarChar(500)
+  siglas                String?          @map("SIGLAS") @db.VarChar(10)
+  descripcion           String?          @map("DESCRIPCION") @db.VarChar(200)
+  estado                String?          @default("1") @map("ESTADO") @db.VarChar(1)
+  codigoEntidad         Int              @map("CODIGO_ENTIDAD")
+  usuarioCreacion       String           @map("USUARIO_CREACION") @db.VarChar(30)
+  usuarioModificacion   String?          @map("USUARIO_MODIFICACION") @db.VarChar(30)
+  fechaCreacion         DateTime         @map("FECHA_CREACION") @db.DateTime(0)
+  fechaModificacion     DateTime?        @map("FECHA_MODIFICACION") @db.DateTime(0)
+  codigoCia             Int              @map("CODIGO_CIA")
+  codigoViceministerio  Int?             @map("CODIGO_VICEMINISTERIO")
+  codigoUnidadEjecutora Int?             @map("CODIGO_UNIDAD_EJECUTORA")
+  seguridadEntidad      SeguridadEntidad @relation(fields: [codigoCia, codigoEntidad], references: [codigoCia, codigoEntidad], onUpdate: Restrict, map: "seguridad_dependencia_seguridad_entidad_FK")
+
+  @@id([codigoCia, codigoEntidad, codigoDependencia])
+  @@index([codigoEntidad], map: "FK_R_CODIGO_ENTIDAD")
+  @@index([codigoCia, codigoViceministerio, codigoUnidadEjecutora], map: "seguridad_dependencia_seguridad_unidad_ejecutora_FK")
+  @@map("seguridad_dependencia")
+}
+
+model SeguridadEntidad {
+  codigoCia               Int                       @map("CODIGO_CIA")
+  codigoEntidad           Int                       @map("CODIGO_ENTIDAD")
+  nombre                  String                    @map("NOMBRE") @db.VarChar(200)
+  siglas                  String?                   @map("SIGLAS") @db.VarChar(10)
+  descripcion             String?                   @map("DESCRIPCION") @db.VarChar(200)
+  estado                  String                    @default("1") @map("ESTADO") @db.VarChar(1)
+  usuarioCreacion         Int?                      @map("USUARIO_CREACION")
+  fechaCreacion           DateTime?                 @map("FECHA_CREACION") @db.DateTime(0)
+  usuarioModificacion     Int?                      @map("USUARIO_MODIFICACION")
+  fechaModificacion       DateTime?                 @map("FECHA_MODIFICACION") @db.DateTime(0)
+  codigoViceministerio    Int?                      @map("CODIGO_VICEMINISTERIO")
+  codigoUnidadEjecutora   Int?                      @map("CODIGO_UNIDAD_EJECUTORA")
+  riesgosDocumentos       RiesgosDocumentos[]
+  riesgosPrimeraMatrizHis RiesgosPrimeraMatrizHis[]
+  riesgosRiesgoExtendido  RiesgosRiesgoExtendido[]
+  riesgosSeguimiento      RiesgosSeguimiento[]
+  riesgosSegundaMatrizHis RiesgosSegundaMatrizHis[]
+  seguridadDependencia    SeguridadDependencia[]
+  riesgosViceministerio   RiesgosViceministerio?    @relation(fields: [codigoCia, codigoViceministerio], references: [codigoCia, codigoViceministerio], map: "seguridad_entidad_riesgos_viceministerio_FK")
+  seguridadInstitucion    SeguridadInstitucion      @relation(fields: [codigoCia], references: [codigoCia], onUpdate: Restrict, map: "seguridad_entidad_seguridad_institucion_FK")
+  riesgosAreas            RiesgosArea[]
+  riesgosVinculados       RiesgosRiesgoVinculo[]
+  cargos                  RiesgosColaboradorCargo[]
+
+  @@id([codigoCia, codigoEntidad])
+  @@index([codigoCia, codigoViceministerio, codigoUnidadEjecutora], map: "seguridad_entidad_seguridad_unidad_ejecutora_FK")
+  @@map("seguridad_entidad")
+}
+
+model SeguridadInstitucion {
+  codigoCia                     Int                             @id @map("CODIGO_CIA")
+  nombre                        String?                         @map("NOMBRE") @db.VarChar(100)
+  path                          String?                         @map("PATH") @db.VarChar(250)
+  usuarioCreacion               Int?                            @map("USUARIO_CREACION")
+  fechaCreacion                 DateTime?                       @map("FECHA_CREACION") @db.DateTime(0)
+  tipo                          String?                         @map("TIPO") @db.VarChar(75)
+  usuarioModificacion           Int?                            @map("USUARIO_MODIFICACION")
+  fechaModificacion             DateTime?                       @map("FECHA_MODIFICACION") @db.DateTime(0)
+  pathBarra                     String?                         @map("PATH_BARRA") @db.VarChar(250)
+  correoSoporte                 String?                         @map("CORREO_SOPORTE") @db.VarChar(300)
+  riesgosArea                   RiesgosArea[]
+  riesgosFrecuencia             RiesgosFrecuencia[]
+  riesgosLogs                   RiesgosLogs[]
+  riesgosMatrizInsti            RiesgosMatrizInsti[]
+  riesgosOrganos                RiesgosOrganos[]
+  riesgosPeriodo                RiesgosPeriodo[]
+  riesgosTipoObjetivo           RiesgosTipoObjetivo[]
+  riesgosViceministerio         RiesgosViceministerio[]
+  seguridadEntidad              SeguridadEntidad[]
+  seguridadInstitucionAccesoApp SeguridadInstitucionAccesoApp[]
+  seguridadMenuRol              SeguridadMenuRol[]
+  seguridadPersona              SeguridadPersona[]
+  seguridadViceministerio       SeguridadViceministerio[]
+
+  @@map("seguridad_institucion")
+}
+
+model SeguridadInstitucionAccesoApp {
+  codigoCia            Int                  @map("CODIGO_CIA")
+  codigoAplicacion     Int                  @map("CODIGO_APLICACION")
+  fechaVigencia        DateTime?            @map("FECHA_VIGENCIA") @db.DateTime(0)
+  vigente              String?              @map("VIGENTE") @db.VarChar(1)
+  limiteUsuario        Int?                 @map("LIMITE_USUARIO")
+  seguridadAplicacion  SeguridadAplicacion  @relation(fields: [codigoAplicacion], references: [codigoAplicacion], onUpdate: Restrict, map: "seguridad_institucion_acceso_app_seguridad_aplicacion_FK")
+  seguridadInstitucion SeguridadInstitucion @relation(fields: [codigoCia], references: [codigoCia], onUpdate: Restrict, map: "seguridad_institucion_acceso_app_seguridad_institucion_FK")
+  fechaInicioVigencia  DateTime?            @map("FECHA_INICIO_VIGENCIA") @db.Date
+
+  @@id([codigoCia, codigoAplicacion])
+  @@index([codigoAplicacion], map: "seguridad_institucion_acceso_app_seguridad_aplicacion_FK")
+  @@map("seguridad_institucion_acceso_app")
+}
+
+model SeguridadLogs {
+  codigoCia       Int       @map("codigo_cia")
+  codigoEntrada   Int       @map("codigo_entrada")
+  nombreTabla     String?   @map("nombre_tabla") @db.VarChar(100)
+  accion          Int?
+  informacion     String?   @db.LongText
+  usuarioCreacion Int?      @map("usuario_creacion")
+  fechaCreacion   DateTime? @map("fecha_creacion") @db.DateTime(0)
+
+  @@id([codigoCia, codigoEntrada])
+  @@map("seguridad_logs")
+}
+
+model SeguridadMenuRol {
+  codigoAplicacion        Int                       @map("CODIGO_APLICACION")
+  codigoCia               Int                       @map("CODIGO_CIA")
+  codigoRol               Int                       @map("CODIGO_ROL")
+  nombre                  String?                   @map("NOMBRE") @db.VarChar(100)
+  activo                  String?                   @default("S") @map("ACTIVO") @db.VarChar(1)
+  usuarioCreacion         Int?                      @map("USUARIO_CREACION")
+  fechaCreacion           DateTime?                 @map("FECHA_CREACION") @db.DateTime(0)
+  usuarioModificacion     Int?                      @map("USUARIO_MODIFICACION")
+  fechaModificacion       DateTime?                 @map("FECHA_MODIFICACION") @db.DateTime(0)
+  general                 Int?                      @default(1) @map("GENERAL")
+  seguridadAplicacion     SeguridadAplicacion       @relation(fields: [codigoAplicacion], references: [codigoAplicacion], onUpdate: Restrict, map: "seguridad_menu_rol_seguridad_aplicacion_FK")
+  seguridadInstitucion    SeguridadInstitucion      @relation(fields: [codigoCia], references: [codigoCia], onUpdate: Restrict, map: "seguridad_menu_rol_seguridad_institucion_FK")
+  seguridadMenuRolUrl     SeguridadMenuRolUrl[]
+  seguridadMenuRolUsuario SeguridadMenuRolUsuario[]
+
+  @@id([codigoAplicacion, codigoCia, codigoRol])
+  @@index([codigoCia], map: "seguridad_menu_rol_seguridad_institucion_FK")
+  @@map("seguridad_menu_rol")
+}
+
+model SeguridadMenuRolUrl {
+  codigoAplicacion  Int               @map("CODIGO_APLICACION")
+  codigoCia         Int               @map("CODIGO_CIA")
+  codigoRol         Int               @map("CODIGO_ROL")
+  codigoUrl         Int               @map("CODIGO_URL")
+  seguridadMenuRol  SeguridadMenuRol  @relation(fields: [codigoAplicacion, codigoCia, codigoRol], references: [codigoAplicacion, codigoCia, codigoRol], onUpdate: Restrict, map: "seguridad_menu_rol_ul_seguridad_menu_rol_FK")
+  seguridadMenuUrls SeguridadMenuUrls @relation(fields: [codigoAplicacion, codigoUrl], references: [codigoAplicacion, codigoUrl], onUpdate: Restrict, map: "seguridad_menu_rol_ul_seguridad_menu_urls_FK")
+
+  @@id([codigoAplicacion, codigoCia, codigoRol, codigoUrl])
+  @@index([codigoAplicacion, codigoUrl], map: "seguridad_menu_rol_ul_seguridad_menu_urls_FK")
+  @@map("seguridad_menu_rol_url")
+}
+
+model SeguridadMenuRolUsuario {
+  codigoAplicacion  Int              @map("CODIGO_APLICACION")
+  codigoCia         Int              @map("CODIGO_CIA")
+  codigoColaborador Int              @map("CODIGO_COLABORADOR")
+  codigoRol         Int              @map("CODIGO_ROL")
+  seguridadMenuRol  SeguridadMenuRol @relation(fields: [codigoAplicacion, codigoCia, codigoRol], references: [codigoAplicacion, codigoCia, codigoRol], onUpdate: Restrict, map: "SEGURIDAD_MENU_ROL_USUARIO_seguridad_menu_rol_FK")
+  seguridadPersona  SeguridadPersona @relation(fields: [codigoCia, codigoColaborador], references: [codigoCia, codigoColaborador], onUpdate: Restrict, map: "SEGURIDAD_MENU_ROL_USUARIO_seguridad_persona_FK")
+  fechaInicio       DateTime?        @map("FECHA_INICIO") @db.Date
+  fechaFin          DateTime?        @map("FECHA_FIN") @db.Date
+
+  @@id([codigoAplicacion, codigoCia, codigoColaborador, codigoRol])
+  @@index([codigoAplicacion, codigoCia, codigoRol], map: "SEGURIDAD_MENU_ROL_USUARIO_seguridad_menu_rol_FK")
+  @@index([codigoCia, codigoColaborador], map: "SEGURIDAD_MENU_ROL_USUARIO_seguridad_persona_FK")
+  @@map("seguridad_menu_rol_usuario")
+}
+
+model SeguridadMenuUrls {
+  codigoAplicacion    Int                   @map("CODIGO_APLICACION")
+  codigoUrl           Int                   @map("CODIGO_URL")
+  nombre              String                @map("NOMBRE") @db.VarChar(100)
+  url                 String                @map("URL") @db.VarChar(100)
+  seguridadMenuRolUrl SeguridadMenuRolUrl[]
+  seguridadAplicacion SeguridadAplicacion   @relation(fields: [codigoAplicacion], references: [codigoAplicacion], onUpdate: Restrict, map: "seguridad_menu_urls_seguridad_aplicacion_FK")
+
+  @@id([codigoAplicacion, codigoUrl])
+  @@map("seguridad_menu_urls")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model SeguridadPersona {
+  primerNombre               String                        @map("PRIMER_NOMBRE") @db.VarChar(50)
+  segundoNombre              String?                       @map("SEGUNDO_NOMBRE") @db.VarChar(50)
+  tercerNombre               String?                       @map("TERCER_NOMBRE") @db.VarChar(50)
+  primerApellido             String                        @map("PRIMER_APELLIDO") @db.VarChar(50)
+  segundoApellido            String?                       @map("SEGUNDO_APELLIDO") @db.VarChar(50)
+  tercerApellido             String?                       @map("TERCER_APELLIDO") @db.VarChar(50)
+  correoElectronico          String?                       @map("CORREO_ELECTRONICO") @db.VarChar(250)
+  activo                     String                        @default("0") @map("ACTIVO") @db.VarChar(1)
+  usuarioCreacion            Int?                          @map("USUARIO_CREACION")
+  usuarioModificacion        Int?                          @map("USUARIO_MODIFICACION")
+  fechaCreacion              DateTime                      @map("FECHA_CREACION") @db.DateTime(0)
+  fechaModificacion          DateTime?                     @map("FECHA_MODIFICACION") @db.DateTime(0)
+  contrasena                 String?                       @map("CONTRASENA") @db.VarChar(400)
+  codigoEntidad              Int?                          @map("CODIGO_ENTIDAD")
+  codigoCia                  Int                           @map("CODIGO_CIA")
+  codigoColaborador          Int                           @map("CODIGO_COLABORADOR")
+  vigente                    String                        @default("1") @map("VIGENTE") @db.VarChar(1)
+  path                       String?                       @map("PATH") @db.VarChar(250)
+  riesgosColaboradorSuperior RiesgosColaboradorSuperior?   @relation("ColaboradorSuperiorPersona")
+  seguridad2faConfiguracion  Seguridad2faConfiguracion?
+  seguridad2faDesafio        Seguridad2faDesafio[]
+  seguridad2faRecoveryCode   Seguridad2faRecoveryCode[]
+  seguridadMenuRolUsuario    SeguridadMenuRolUsuario[]
+  seguridadInstitucion       SeguridadInstitucion          @relation(fields: [codigoCia], references: [codigoCia], onUpdate: Restrict, map: "seguridad_persona_seguridad_institucion_FK")
+  seguridadRastroLogin       SeguridadRastroLogin[]
+  seguridadSesion            SeguridadSesion[]
+  riesgosComoDueno           RiesgosRiesgoExtendido[]
+  colaboradoresSupervisados  RiesgosColaboradorSuperior[]  @relation("ColaboradorSuperiorUsuario")
+  responsabilidadesPlan      RiesgosPlanResponsable[]
+  actividadesVerificadas     RiesgosPlanActividad[]
+  mensajesPlan               RiesgosPlanMensaje[]
+  cargos                     RiesgosColaboradorCargo[]
+  solicitudesComoSolicitante RiesgosSolicitudEliminacion[] @relation("SolicitanteEliminacion")
+  solicitudesComoResolutor   RiesgosSolicitudEliminacion[] @relation("ResolutorEliminacion")
+  recorridosVistos           SeguridadPersonaTour[]
+
+  @@id([codigoCia, codigoColaborador])
+  @@map("seguridad_persona")
+}
+
+model SeguridadRastroLogin {
+  usuarioCreacion  Int?              @map("usuario_creacion")
+  fechaCreacion    DateTime?         @map("fecha_creacion") @db.DateTime(0)
+  codigoAplicacion Int?              @map("codigo_aplicacion")
+  codigoCia        Int?              @map("codigo_cia")
+  codigoEntrada    Int               @id @default(autoincrement()) @map("codigo_entrada")
+  seguridadPersona SeguridadPersona? @relation(fields: [codigoCia, usuarioCreacion], references: [codigoCia, codigoColaborador], onDelete: Restrict, onUpdate: Restrict, map: "seguridad_rastro_login_seguridad_persona_FK")
+
+  @@index([codigoCia, usuarioCreacion], map: "seguridad_rastro_login_seguridad_persona_FK")
+  @@map("seguridad_rastro_login")
+}
+
+model SeguridadSesion {
+  idSesion          String           @id @map("id_sesion") @db.Char(36)
+  codigoCia         Int              @map("codigo_cia")
+  codigoColaborador Int              @map("codigo_colaborador")
+  refreshTokenHash  String           @unique(map: "seguridad_sesion_refresh_token_hash_UK") @map("refresh_token_hash") @db.Char(64)
+  csrfTokenHash     String?          @map("csrf_token_hash") @db.Char(64)
+  ipOrigen          String?          @map("ip_origen") @db.VarChar(45)
+  userAgent         String?          @map("user_agent") @db.VarChar(500)
+  fechaCreacion     DateTime         @default(now()) @map("fecha_creacion") @db.DateTime(0)
+  fechaExpiracion   DateTime         @map("fecha_expiracion") @db.DateTime(0)
+  fechaUltimoUso    DateTime?        @map("fecha_ultimo_uso") @db.DateTime(0)
+  fechaRevocacion   DateTime?        @map("fecha_revocacion") @db.DateTime(0)
+  motivoRevocacion  String?          @map("motivo_revocacion") @db.VarChar(150)
+  activo            Boolean          @default(true)
+  seguridadPersona  SeguridadPersona @relation(fields: [codigoCia, codigoColaborador], references: [codigoCia, codigoColaborador], onUpdate: Restrict, map: "seguridad_sesion_seguridad_persona_FK")
+
+  @@index([activo], map: "seguridad_sesion_activo_IDX")
+  @@index([fechaExpiracion], map: "seguridad_sesion_expiracion_IDX")
+  @@index([codigoCia, codigoColaborador], map: "seguridad_sesion_persona_IDX")
+  @@map("seguridad_sesion")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model SeguridadViceministerio {
+  codigoCia            Int                  @map("CODIGO_CIA")
+  codigoViceministerio Int                  @map("CODIGO_VICEMINISTERIO")
+  nombre               String?              @map("NOMBRE") @db.VarChar(250)
+  usuarioCreacion      Int?                 @map("USUARIO_CREACION")
+  fechaCreacion        DateTime?            @map("FECHA_CREACION") @db.DateTime(0)
+  usuarioModificacion  Int?                 @map("USUARIO_MODIFICACION")
+  fechaModificacion    DateTime?            @map("FECHA_MODIFICACION") @db.DateTime(0)
+  seguridadInstitucion SeguridadInstitucion @relation(fields: [codigoCia], references: [codigoCia], onUpdate: Restrict, map: "seguridad_viceministerio_seguridad_institucion_FK")
+
+  @@id([codigoCia, codigoViceministerio])
+  @@map("seguridad_viceministerio")
+}
+
+enum Seguridad2faConfiguracionMetodo {
+  TOTP
+
+  @@map("seguridad_2fa_configuracion_metodo")
+}
+
+enum Seguridad2faDesafioTipo {
+  LOGIN
+  ACTIVACION_TOTP
+
+  @@map("seguridad_2fa_desafio_tipo")
+}
+
+model RiesgosEjeEstrategico {
+  codigoCia           Int                      @map("CODIGO_CIA")
+  codigoEje           Int                      @default(autoincrement()) @map("CODIGO_EJE")
+  nombre              String                   @map("NOMBRE") @db.VarChar(50)
+  descripcion         String                   @map("DESCRIPCION") @db.VarChar(500)
+  orden               Int                      @map("ORDEN")
+  estado              String                   @default("1") @map("ESTADO") @db.VarChar(1)
+  usuarioCreacion     Int?                     @map("USUARIO_CREACION")
+  fechaCreacion       DateTime                 @default(now()) @map("FECHA_CREACION") @db.DateTime(0)
+  usuarioModificacion Int?                     @map("USUARIO_MODIFICACION")
+  fechaModificacion   DateTime?                @map("FECHA_MODIFICACION") @db.DateTime(0)
+  riesgos             RiesgosRiesgoExtendido[]
+
+  @@id([codigoCia, codigoEje])
+  @@index([codigoEje], map: "riesgos_eje_estrategico_ai_idx")
+  @@map("riesgos_eje_estrategico")
+}
+
+model RiesgosRiesgoEvento {
+  codigoCia           Int                    @map("CODIGO_CIA")
+  codigoEvento        Int                    @default(autoincrement()) @map("CODIGO_EVENTO")
+  codigoEntidad       Int                    @map("CODIGO_ENTIDAD")
+  codigoPeriodo       Int                    @map("CODIGO_PERIODO")
+  codigoRiesgo        Int                    @map("CODIGO_RIESGO")
+  descripcion         String                 @map("DESCRIPCION") @db.VarChar(1000)
+  orden               Int                    @map("ORDEN")
+  activo              Int                    @default(1) @map("ACTIVO") @db.TinyInt
+  usuarioCreacion     Int?                   @map("USUARIO_CREACION")
+  fechaCreacion       DateTime               @default(now()) @map("FECHA_CREACION") @db.DateTime(0)
+  usuarioModificacion Int?                   @map("USUARIO_MODIFICACION")
+  fechaModificacion   DateTime?              @map("FECHA_MODIFICACION") @db.DateTime(0)
+  riesgo              RiesgosRiesgoExtendido @relation(fields: [codigoCia, codigoEntidad, codigoPeriodo, codigoRiesgo], references: [codigoCia, codigoEntidad, codigoPeriodo, codigoRiesgo], onDelete: Restrict, onUpdate: Restrict, map: "riesgos_riesgo_evento_riesgo_fk")
+
+  @@id([codigoCia, codigoEvento])
+  @@index([codigoEvento], map: "riesgos_riesgo_evento_ai_idx")
+  @@index([codigoCia, codigoEntidad, codigoPeriodo, codigoRiesgo], map: "riesgos_riesgo_evento_riesgo_idx")
+  @@map("riesgos_riesgo_evento")
+}
+
+model RiesgosRiesgoVinculo {
+  codigoCia              Int                    @map("CODIGO_CIA")
+  codigoVinculo          Int                    @default(autoincrement()) @map("CODIGO_VINCULO")
+  codigoEntidad          Int                    @map("CODIGO_ENTIDAD")
+  codigoPeriodo          Int                    @map("CODIGO_PERIODO")
+  codigoRiesgo           Int                    @map("CODIGO_RIESGO")
+  codigoEntidadVinculada Int                    @map("CODIGO_ENTIDAD_VINCULADA")
+  codigoAreaVinculada    Int?                   @map("CODIGO_AREA_VINCULADA")
+  /// Columna generada por MariaDB para la unicidad de vínculos activos.
+  areaActiva             BigInt?                @map("AREA_ACTIVA") @ignore
+  activo                 Int                    @default(1) @map("ACTIVO") @db.TinyInt
+  usuarioCreacion        Int?                   @map("USUARIO_CREACION")
+  fechaCreacion          DateTime               @default(now()) @map("FECHA_CREACION") @db.DateTime(0)
+  usuarioModificacion    Int?                   @map("USUARIO_MODIFICACION")
+  fechaModificacion      DateTime?              @map("FECHA_MODIFICACION") @db.DateTime(0)
+  riesgo                 RiesgosRiesgoExtendido @relation(fields: [codigoCia, codigoEntidad, codigoPeriodo, codigoRiesgo], references: [codigoCia, codigoEntidad, codigoPeriodo, codigoRiesgo], onDelete: Restrict, onUpdate: Restrict, map: "riesgos_riesgo_vinculo_riesgo_fk")
+  direccionVinculada     SeguridadEntidad       @relation(fields: [codigoCia, codigoEntidadVinculada], references: [codigoCia, codigoEntidad], onDelete: Restrict, onUpdate: Restrict, map: "riesgos_riesgo_vinculo_direccion_vinculada_fk")
+  areaVinculada          RiesgosArea?           @relation(fields: [codigoCia, codigoAreaVinculada], references: [codigoCia, codigoArea], onDelete: Restrict, onUpdate: Restrict, map: "riesgos_riesgo_vinculo_area_vinculada_fk")
+
+  @@id([codigoCia, codigoVinculo])
+  @@unique([codigoCia, codigoEntidad, codigoPeriodo, codigoRiesgo, codigoEntidadVinculada, areaActiva], map: "uq_riesgo_vinculo_activo")
+  @@index([codigoVinculo], map: "riesgos_riesgo_vinculo_ai_idx")
+  @@index([codigoCia, codigoEntidad, codigoPeriodo, codigoRiesgo], map: "riesgos_riesgo_vinculo_riesgo_idx")
+  @@index([codigoCia, codigoEntidadVinculada], map: "riesgos_riesgo_vinculo_direccion_vinculada_idx")
+  @@index([codigoCia, codigoAreaVinculada], map: "riesgos_riesgo_vinculo_area_vinculada_idx")
+  @@map("riesgos_riesgo_vinculo")
+}
+
+model RiesgosPlanAccion {
+  codigoCia            Int                      @map("CODIGO_CIA")
+  codigoPlan           Int                      @default(autoincrement()) @map("CODIGO_PLAN")
+  codigoEntidad        Int                      @map("CODIGO_ENTIDAD")
+  codigoPeriodo        Int                      @map("CODIGO_PERIODO")
+  codigoRiesgo         Int                      @map("CODIGO_RIESGO")
+  descripcion          String                   @map("DESCRIPCION") @db.VarChar(1000)
+  porcentajeMitigacion Int                      @map("PORCENTAJE_MITIGACION") @db.TinyInt
+  orden                Int                      @map("ORDEN")
+  codigoPlanAnterior   Int?                     @map("CODIGO_PLAN_ANTERIOR")
+  activo               Int                      @default(1) @map("ACTIVO") @db.TinyInt
+  usuarioCreacion      Int?                     @map("USUARIO_CREACION")
+  fechaCreacion        DateTime                 @default(now()) @map("FECHA_CREACION") @db.DateTime(0)
+  usuarioModificacion  Int?                     @map("USUARIO_MODIFICACION")
+  fechaModificacion    DateTime?                @map("FECHA_MODIFICACION") @db.DateTime(0)
+  riesgo               RiesgosRiesgoExtendido   @relation(fields: [codigoCia, codigoEntidad, codigoPeriodo, codigoRiesgo], references: [codigoCia, codigoEntidad, codigoPeriodo, codigoRiesgo], onDelete: Restrict, onUpdate: Restrict, map: "riesgos_plan_accion_riesgo_fk")
+  planAnterior         RiesgosPlanAccion?       @relation("ContinuidadPlanAccion", fields: [codigoCia, codigoPlanAnterior], references: [codigoCia, codigoPlan], onDelete: Restrict, onUpdate: Restrict, map: "riesgos_plan_accion_plan_anterior_fk")
+  planesSiguientes     RiesgosPlanAccion[]      @relation("ContinuidadPlanAccion")
+  responsables         RiesgosPlanResponsable[]
+
+  @@id([codigoCia, codigoPlan])
+  @@index([codigoPlan], map: "riesgos_plan_accion_ai_idx")
+  @@index([codigoCia, codigoEntidad, codigoPeriodo, codigoRiesgo], map: "riesgos_plan_accion_riesgo_idx")
+  @@index([codigoCia, codigoPlanAnterior], map: "riesgos_plan_accion_plan_anterior_idx")
+  @@map("riesgos_plan_accion")
+}
+
+model RiesgosPlanResponsable {
+  codigoCia             Int                    @map("CODIGO_CIA")
+  codigoResponsablePlan Int                    @default(autoincrement()) @map("CODIGO_RESPONSABLE_PLAN")
+  codigoPlan            Int                    @map("CODIGO_PLAN")
+  codigoColaborador     Int?                   @map("CODIGO_COLABORADOR")
+  nombreExterno         String?                @map("NOMBRE_EXTERNO") @db.VarChar(150)
+  puestoExterno         String?                @map("PUESTO_EXTERNO") @db.VarChar(150)
+  codigoFrecuencia      Int                    @map("CODIGO_FRECUENCIA")
+  metodo                String                 @map("METODO") @db.VarChar(500)
+  recurso               String                 @map("RECURSO") @db.Char(1)
+  fechaInicio           DateTime               @map("FECHA_INICIO") @db.Date
+  fechaFin              DateTime               @map("FECHA_FIN") @db.Date
+  activo                Int                    @default(1) @map("ACTIVO") @db.TinyInt
+  usuarioCreacion       Int?                   @map("USUARIO_CREACION")
+  fechaCreacion         DateTime               @default(now()) @map("FECHA_CREACION") @db.DateTime(0)
+  usuarioModificacion   Int?                   @map("USUARIO_MODIFICACION")
+  fechaModificacion     DateTime?              @map("FECHA_MODIFICACION") @db.DateTime(0)
+  plan                  RiesgosPlanAccion      @relation(fields: [codigoCia, codigoPlan], references: [codigoCia, codigoPlan], onDelete: Restrict, onUpdate: Restrict, map: "riesgos_plan_responsable_plan_fk")
+  colaborador           SeguridadPersona?      @relation(fields: [codigoCia, codigoColaborador], references: [codigoCia, codigoColaborador], onDelete: Restrict, onUpdate: Restrict, map: "riesgos_plan_responsable_colaborador_fk")
+  frecuencia            RiesgosFrecuencia      @relation(fields: [codigoCia, codigoFrecuencia], references: [codigoCia, codigoFrecuencia], onDelete: Restrict, onUpdate: Restrict, map: "riesgos_plan_responsable_frecuencia_fk")
+  actividades           RiesgosPlanActividad[]
+  mensajes              RiesgosPlanMensaje[]
+
+  @@id([codigoCia, codigoResponsablePlan])
+  @@index([codigoResponsablePlan], map: "riesgos_plan_responsable_ai_idx")
+  @@index([codigoCia, codigoPlan], map: "riesgos_plan_responsable_plan_idx")
+  @@index([codigoCia, codigoColaborador], map: "riesgos_plan_responsable_colaborador_idx")
+  @@index([codigoCia, codigoFrecuencia], map: "riesgos_plan_responsable_frecuencia_idx")
+  @@map("riesgos_plan_responsable")
+}
+
+model RiesgosPlanActividad {
+  codigoCia             Int                       @map("CODIGO_CIA")
+  codigoActividad       Int                       @default(autoincrement()) @map("CODIGO_ACTIVIDAD")
+  codigoResponsablePlan Int                       @map("CODIGO_RESPONSABLE_PLAN")
+  fechaActividad        DateTime                  @map("FECHA_ACTIVIDAD") @db.Date
+  descripcion           String                    @map("DESCRIPCION") @db.VarChar(2000)
+  documentoGenerado     String?                   @map("DOCUMENTO_GENERADO") @db.VarChar(500)
+  estado                String                    @default("P") @map("ESTADO") @db.Char(1)
+  codigoVerificador     Int?                      @map("CODIGO_VERIFICADOR")
+  fechaVerificacion     DateTime?                 @map("FECHA_VERIFICACION") @db.DateTime(0)
+  comentarioVerificador String?                   @map("COMENTARIO_VERIFICADOR") @db.VarChar(1000)
+  activo                Int                       @default(1) @map("ACTIVO") @db.TinyInt
+  usuarioCreacion       Int?                      @map("USUARIO_CREACION")
+  fechaCreacion         DateTime                  @default(now()) @map("FECHA_CREACION") @db.DateTime(0)
+  usuarioModificacion   Int?                      @map("USUARIO_MODIFICACION")
+  fechaModificacion     DateTime?                 @map("FECHA_MODIFICACION") @db.DateTime(0)
+  responsable           RiesgosPlanResponsable    @relation(fields: [codigoCia, codigoResponsablePlan], references: [codigoCia, codigoResponsablePlan], onDelete: Restrict, onUpdate: Restrict, map: "riesgos_plan_actividad_responsable_fk")
+  verificador           SeguridadPersona?         @relation(fields: [codigoCia, codigoVerificador], references: [codigoCia, codigoColaborador], onDelete: Restrict, onUpdate: Restrict, map: "riesgos_plan_actividad_verificador_fk")
+  documentos            RiesgosPlanActividadDoc[]
+
+  @@id([codigoCia, codigoActividad])
+  @@index([codigoActividad], map: "riesgos_plan_actividad_ai_idx")
+  @@index([codigoCia, codigoResponsablePlan], map: "riesgos_plan_actividad_responsable_idx")
+  @@index([codigoCia, codigoVerificador], map: "riesgos_plan_actividad_verificador_idx")
+  @@map("riesgos_plan_actividad")
+}
+
+model RiesgosPlanActividadDoc {
+  codigoCia           Int                  @map("CODIGO_CIA")
+  codigoDoc           Int                  @default(autoincrement()) @map("CODIGO_DOC")
+  codigoActividad     Int                  @map("CODIGO_ACTIVIDAD")
+  nombre              String               @map("NOMBRE") @db.VarChar(255)
+  mime                String?              @map("MIME") @db.VarChar(150)
+  tamano              BigInt?              @map("TAMANO")
+  ruta                String               @map("RUTA") @db.Text
+  activo              Int?                 @default(1) @map("ACTIVO")
+  usuarioCreacion     Int?                 @map("USUARIO_CREACION")
+  fechaCreacion       DateTime             @default(now()) @map("FECHA_CREACION") @db.DateTime(0)
+  usuarioModificacion Int?                 @map("USUARIO_MODIFICACION")
+  fechaModificacion   DateTime?            @map("FECHA_MODIFICACION") @db.DateTime(0)
+  actividad           RiesgosPlanActividad @relation(fields: [codigoCia, codigoActividad], references: [codigoCia, codigoActividad], onDelete: Restrict, onUpdate: Restrict, map: "riesgos_plan_actividad_doc_actividad_fk")
+
+  @@id([codigoCia, codigoDoc])
+  @@index([codigoDoc], map: "riesgos_plan_actividad_doc_ai_idx")
+  @@index([codigoCia, codigoActividad], map: "riesgos_plan_actividad_doc_actividad_idx")
+  @@map("riesgos_plan_actividad_doc")
+}
+
+model RiesgosPlanMensaje {
+  codigoCia             Int                    @map("CODIGO_CIA")
+  codigoMensaje         Int                    @default(autoincrement()) @map("CODIGO_MENSAJE")
+  codigoResponsablePlan Int                    @map("CODIGO_RESPONSABLE_PLAN")
+  codigoAutor           Int                    @map("CODIGO_AUTOR")
+  mensaje               String                 @map("MENSAJE") @db.VarChar(2000)
+  fecha                 DateTime               @map("FECHA") @db.DateTime(0)
+  leido                 Int                    @default(0) @map("LEIDO") @db.TinyInt
+  usuarioCreacion       Int?                   @map("USUARIO_CREACION")
+  fechaCreacion         DateTime               @default(now()) @map("FECHA_CREACION") @db.DateTime(0)
+  usuarioModificacion   Int?                   @map("USUARIO_MODIFICACION")
+  fechaModificacion     DateTime?              @map("FECHA_MODIFICACION") @db.DateTime(0)
+  responsable           RiesgosPlanResponsable @relation(fields: [codigoCia, codigoResponsablePlan], references: [codigoCia, codigoResponsablePlan], onDelete: Restrict, onUpdate: Restrict, map: "riesgos_plan_mensaje_responsable_fk")
+  autor                 SeguridadPersona       @relation(fields: [codigoCia, codigoAutor], references: [codigoCia, codigoColaborador], onDelete: Restrict, onUpdate: Restrict, map: "riesgos_plan_mensaje_autor_fk")
+
+  @@id([codigoCia, codigoMensaje])
+  @@index([codigoMensaje], map: "riesgos_plan_mensaje_ai_idx")
+  @@index([codigoCia, codigoResponsablePlan], map: "riesgos_plan_mensaje_responsable_idx")
+  @@index([codigoCia, codigoAutor], map: "riesgos_plan_mensaje_autor_idx")
+  @@map("riesgos_plan_mensaje")
+}
+
+model RiesgosColaboradorCargo {
+  codigoCia           Int              @map("CODIGO_CIA")
+  codigoCargo         Int              @default(autoincrement()) @map("CODIGO_CARGO")
+  codigoColaborador   Int              @map("CODIGO_COLABORADOR")
+  codigoEntidad       Int              @map("CODIGO_ENTIDAD")
+  nombreCargo         String           @map("NOMBRE_CARGO") @db.VarChar(150)
+  fechaPosesion       DateTime         @map("FECHA_POSESION") @db.Date
+  fechaEntrega        DateTime?        @map("FECHA_ENTREGA") @db.Date
+  /// Columna generada por MariaDB para limitar los cargos vigentes a uno por persona.
+  esVigente           Int?             @map("ES_VIGENTE") @ignore
+  usuarioCreacion     Int?             @map("USUARIO_CREACION")
+  fechaCreacion       DateTime         @default(now()) @map("FECHA_CREACION") @db.DateTime(0)
+  usuarioModificacion Int?             @map("USUARIO_MODIFICACION")
+  fechaModificacion   DateTime?        @map("FECHA_MODIFICACION") @db.DateTime(0)
+  colaborador         SeguridadPersona @relation(fields: [codigoCia, codigoColaborador], references: [codigoCia, codigoColaborador], onDelete: Restrict, onUpdate: Restrict, map: "riesgos_colaborador_cargo_colaborador_fk")
+  direccion           SeguridadEntidad @relation(fields: [codigoCia, codigoEntidad], references: [codigoCia, codigoEntidad], onDelete: Restrict, onUpdate: Restrict, map: "riesgos_colaborador_cargo_direccion_fk")
+
+  @@id([codigoCia, codigoCargo])
+  @@unique([codigoCia, codigoColaborador, esVigente], map: "uq_colaborador_cargo_vigente")
+  @@index([codigoCargo], map: "riesgos_colaborador_cargo_ai_idx")
+  @@index([codigoCia, codigoColaborador], map: "riesgos_colaborador_cargo_colaborador_idx")
+  @@index([codigoCia, codigoEntidad], map: "riesgos_colaborador_cargo_direccion_idx")
+  @@map("riesgos_colaborador_cargo")
+}
+
+model RiesgosSolicitudEliminacion {
+  codigoCia            Int                    @map("CODIGO_CIA")
+  codigoSolicitud      Int                    @default(autoincrement()) @map("CODIGO_SOLICITUD")
+  codigoEntidad        Int                    @map("CODIGO_ENTIDAD")
+  codigoPeriodo        Int                    @map("CODIGO_PERIODO")
+  codigoRiesgo         Int                    @map("CODIGO_RIESGO")
+  motivo               String                 @map("MOTIVO") @db.VarChar(1000)
+  codigoSolicitante    Int                    @map("CODIGO_SOLICITANTE")
+  fechaSolicitud       DateTime               @map("FECHA_SOLICITUD") @db.DateTime(0)
+  estado               String                 @default("P") @map("ESTADO") @db.Char(1)
+  codigoResolutor      Int?                   @map("CODIGO_RESOLUTOR")
+  /// Columna generada por MariaDB para limitar las solicitudes pendientes a una por riesgo.
+  esPendiente          Int?                   @map("ES_PENDIENTE") @ignore
+  fechaResolucion      DateTime?              @map("FECHA_RESOLUCION") @db.DateTime(0)
+  comentarioResolucion String?                @map("COMENTARIO_RESOLUCION") @db.VarChar(1000)
+  usuarioCreacion      Int?                   @map("USUARIO_CREACION")
+  fechaCreacion        DateTime               @default(now()) @map("FECHA_CREACION") @db.DateTime(0)
+  usuarioModificacion  Int?                   @map("USUARIO_MODIFICACION")
+  fechaModificacion    DateTime?              @map("FECHA_MODIFICACION") @db.DateTime(0)
+  riesgo               RiesgosRiesgoExtendido @relation(fields: [codigoCia, codigoEntidad, codigoPeriodo, codigoRiesgo], references: [codigoCia, codigoEntidad, codigoPeriodo, codigoRiesgo], onDelete: Restrict, onUpdate: Restrict, map: "riesgos_solicitud_eliminacion_riesgo_fk")
+  solicitante          SeguridadPersona       @relation("SolicitanteEliminacion", fields: [codigoCia, codigoSolicitante], references: [codigoCia, codigoColaborador], onDelete: Restrict, onUpdate: Restrict, map: "riesgos_solicitud_eliminacion_solicitante_fk")
+  resolutor            SeguridadPersona?      @relation("ResolutorEliminacion", fields: [codigoCia, codigoResolutor], references: [codigoCia, codigoColaborador], onDelete: Restrict, onUpdate: Restrict, map: "riesgos_solicitud_eliminacion_resolutor_fk")
+
+  @@id([codigoCia, codigoSolicitud])
+  @@unique([codigoCia, codigoEntidad, codigoPeriodo, codigoRiesgo, esPendiente], map: "uq_solicitud_pendiente")
+  @@index([codigoSolicitud], map: "riesgos_solicitud_eliminacion_ai_idx")
+  @@index([codigoCia, codigoEntidad, codigoPeriodo, codigoRiesgo], map: "riesgos_solicitud_eliminacion_riesgo_idx")
+  @@index([codigoCia, codigoSolicitante], map: "riesgos_solicitud_eliminacion_solicitante_idx")
+  @@index([codigoCia, codigoResolutor], map: "riesgos_solicitud_eliminacion_resolutor_idx")
+  @@map("riesgos_solicitud_eliminacion")
+}
+
+model RiesgosGlosario {
+  codigoCia           Int       @map("CODIGO_CIA")
+  codigoTermino       Int       @default(autoincrement()) @map("CODIGO_TERMINO")
+  titulo              String    @map("TITULO") @db.VarChar(150)
+  descripcion         String    @map("DESCRIPCION") @db.VarChar(2000)
+  destacar            Int       @default(1) @map("DESTACAR") @db.TinyInt
+  estado              String    @default("1") @map("ESTADO") @db.VarChar(1)
+  usuarioCreacion     Int?      @map("USUARIO_CREACION")
+  fechaCreacion       DateTime  @default(now()) @map("FECHA_CREACION") @db.DateTime(0)
+  usuarioModificacion Int?      @map("USUARIO_MODIFICACION")
+  fechaModificacion   DateTime? @map("FECHA_MODIFICACION") @db.DateTime(0)
+
+  @@id([codigoCia, codigoTermino])
+  @@index([codigoTermino], map: "riesgos_glosario_ai_idx")
+  @@map("riesgos_glosario")
+}
+
+model SeguridadPersonaTour {
+  codigoCia           Int              @map("CODIGO_CIA")
+  codigoColaborador   Int              @map("CODIGO_COLABORADOR")
+  pantalla            String           @map("PANTALLA") @db.VarChar(100)
+  fechaVisto          DateTime         @map("FECHA_VISTO") @db.DateTime(0)
+  usuarioCreacion     Int?             @map("USUARIO_CREACION")
+  fechaCreacion       DateTime         @default(now()) @map("FECHA_CREACION") @db.DateTime(0)
+  usuarioModificacion Int?             @map("USUARIO_MODIFICACION")
+  fechaModificacion   DateTime?        @map("FECHA_MODIFICACION") @db.DateTime(0)
+  persona             SeguridadPersona @relation(fields: [codigoCia, codigoColaborador], references: [codigoCia, codigoColaborador], onDelete: Restrict, onUpdate: Restrict, map: "seguridad_persona_tour_persona_fk")
+
+  @@id([codigoCia, codigoColaborador, pantalla])
+  @@map("seguridad_persona_tour")
+}

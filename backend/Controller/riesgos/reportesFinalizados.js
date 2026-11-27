@@ -16,14 +16,15 @@ const { DOCS_DIR } = require('./../../services/paths');
 // Los reportes muestran solo riesgos del periodo (ES_NUEVO = 0); con nuevos=1 muestran solo los riesgos nuevos.
 const soloNuevos = (valor) => (String(valor) === '1' || valor === 'true') ? 1 : 0;
 
-// Agrega los filtros opcionales por unidad y tipo de objetivo como parámetros de la consulta.
-function filtrosUnidadTipo(req, unidad, tipo, parametros) {
+// Agrega los filtros opcionales por dirección (propia o vinculada) y tipo de objetivo.
+function filtrosUnidadTipo(tipo, parametros) {
     let filtros = ``
-    if (unidad) {
-        filtros += `
-        AND rrx.codigo_entidad = ?`
-        parametros.push(unidad === 'propia' ? req.codigo_entidad : Number(unidad))
-    }
+    filtros += ` AND (reporte.direccion IS NULL OR rrx.CODIGO_ENTIDAD = reporte.direccion OR EXISTS (
+        SELECT 1 FROM gestion_riesgos.riesgos_riesgo_vinculo vinculo
+        WHERE vinculo.CODIGO_CIA = rrx.CODIGO_CIA AND vinculo.CODIGO_ENTIDAD = rrx.CODIGO_ENTIDAD
+          AND vinculo.CODIGO_PERIODO = rrx.CODIGO_PERIODO AND vinculo.CODIGO_RIESGO = rrx.CODIGO_RIESGO
+          AND vinculo.CODIGO_ENTIDAD_VINCULADA = reporte.direccion AND vinculo.ACTIVO = 1
+    ))`;
     if (tipo) {
         filtros += `
         AND rrx.codigo_tipo_objetivo = ?`
@@ -31,6 +32,9 @@ function filtrosUnidadTipo(req, unidad, tipo, parametros) {
     }
     return filtros
 }
+
+const categoriaValida = value => ['ME', 'MC', 'MCE'].includes(value);
+const direccionReporte = (req, unidad) => unidad === 'propia' ? Number(req.codigo_entidad) : unidad ? Number(unidad) : null;
 
 /**
  * obtenerSuperiorInfo
@@ -304,6 +308,10 @@ exports.obtenerLogo = async (req, res) => {
 exports.obtenerValores = async (req, res, next) => {
     const codigo_cia = req.codigo_cia
     const { periodo, tipo, unidad, categoria } = req.query
+    const direccion = direccionReporte(req, unidad);
+    if (!categoriaValida(categoria) || (direccion != null && !Number.isInteger(direccion))) {
+        return res.status(400).json({ error: 'Categoría o dirección inválida.' });
+    }
     let sql = `
     SELECT
         rrx.CODIGO_ENTIDAD,
@@ -312,6 +320,9 @@ exports.obtenerValores = async (req, res, next) => {
         rto.DESCRIPCION                              AS 'Tipo de objetivo',
         -- objetivo
         ro.DESCRIPCION                               AS 'Objetivo',
+        rrx.OBJETIVO_TEXTO                           AS 'Objetivo específico',
+        (SELECT eje.NOMBRE FROM gestion_riesgos.riesgos_eje_estrategico eje
+          WHERE eje.CODIGO_CIA = rrx.CODIGO_CIA AND eje.CODIGO_EJE = rrx.CODIGO_EJE) AS 'Eje estratégico',
         -- área
         ra.DESCRIPCION                               AS 'Área evaluada',
         -- probabilidad
@@ -337,13 +348,15 @@ exports.obtenerValores = async (req, res, next) => {
         rrx.MONITOREO                                AS 'Método de monitoreo',
         rf.DESCRIPCION                               AS 'Frecuencia',
         rrx.RESPONSABLE                              AS 'Responsable',
-        sent.nombre                                  AS 'Nombre unidad',
+        CASE WHEN reporte.direccion IS NOT NULL AND reporte.direccion <> rrx.CODIGO_ENTIDAD
+            THEN CONCAT(sent.nombre, ' (vinculado)') ELSE sent.nombre END AS 'Nombre unidad',
         rrx.codigo_periodo                           AS 'Periodo',
         CASE 
             WHEN JSON_VALID(rrx.EXTRAS_${categoria}) THEN JSON_EXTRACT(rrx.EXTRAS_${categoria}, '$')
             ELSE JSON_OBJECT('EXTRAS_${categoria}', JSON_ARRAY())
         END AS EXTRAS
     FROM gestion_riesgos.riesgos_riesgo_extendido rrx
+    CROSS JOIN (SELECT ? AS direccion) reporte
     -- Área del riesgo
     LEFT JOIN gestion_riesgos.riesgos_area ra
         ON ra.CODIGO_CIA = rrx.CODIGO_CIA AND ra.CODIGO_AREA = rrx.CODIGO_AREA
@@ -385,8 +398,8 @@ exports.obtenerValores = async (req, res, next) => {
         AND COALESCE(rrx.ES_NUEVO, 0) = ?`
     const orden = `
         ORDER BY rrx.REF ASC`
-    let parametros = [codigo_cia, Number(periodo), soloNuevos(req.query.nuevos)]
-    sql = sql + filtrosUnidadTipo(req, unidad, tipo, parametros) + orden
+    let parametros = [direccion, codigo_cia, Number(periodo), soloNuevos(req.query.nuevos)]
+    sql = sql + filtrosUnidadTipo(tipo, parametros) + orden
     const conn = await pool.getConnection();
     try {
         await conn.query("SET SESSION lc_time_names = 'es_ES'");
@@ -476,6 +489,10 @@ exports.institucion = async (req, res, next) => {
 exports.obtenerValoresInst = async (req, res, next) => {
     const codigo_cia = req.codigo_cia
     const { periodo, tipo, unidad, categoria } = req.query
+    const direccion = direccionReporte(req, unidad);
+    if (!categoriaValida(categoria) || (direccion != null && !Number.isInteger(direccion))) {
+        return res.status(400).json({ error: 'Categoría o dirección inválida.' });
+    }
     let sql = `
     SELECT
         rrx.CODIGO_ENTIDAD,
@@ -484,6 +501,9 @@ exports.obtenerValoresInst = async (req, res, next) => {
         rto.DESCRIPCION                              AS 'Tipo de objetivo',
         -- objetivo
         ro.DESCRIPCION                               AS 'Objetivo',
+        rrx.OBJETIVO_TEXTO                           AS 'Objetivo específico',
+        (SELECT eje.NOMBRE FROM gestion_riesgos.riesgos_eje_estrategico eje
+          WHERE eje.CODIGO_CIA = rrx.CODIGO_CIA AND eje.CODIGO_EJE = rrx.CODIGO_EJE) AS 'Eje estratégico',
         -- área
         ra.DESCRIPCION                               AS 'Área evaluada',
         -- probabilidad
@@ -509,13 +529,15 @@ exports.obtenerValoresInst = async (req, res, next) => {
         rrx.MONITOREO                                AS 'Método de monitoreo',
         rf.DESCRIPCION                               AS 'Frecuencia',
         rrx.RESPONSABLE                              AS 'Responsable',
-        sent.nombre                                  AS 'Nombre unidad',
+        CASE WHEN reporte.direccion IS NOT NULL AND reporte.direccion <> rrx.CODIGO_ENTIDAD
+            THEN CONCAT(sent.nombre, ' (vinculado)') ELSE sent.nombre END AS 'Nombre unidad',
         rrx.codigo_periodo                           AS 'Periodo',
         CASE 
             WHEN JSON_VALID(rrx.EXTRAS_${categoria}) THEN JSON_EXTRACT(rrx.EXTRAS_${categoria}, '$')
             ELSE JSON_OBJECT('EXTRAS_${categoria}', JSON_ARRAY())
         END AS EXTRAS
     FROM gestion_riesgos.riesgos_riesgo_extendido rrx
+    CROSS JOIN (SELECT ? AS direccion) reporte
     -- Área del riesgo
     LEFT JOIN gestion_riesgos.riesgos_area ra
         ON ra.CODIGO_CIA = rrx.CODIGO_CIA AND ra.CODIGO_AREA = rrx.CODIGO_AREA
@@ -558,8 +580,8 @@ exports.obtenerValoresInst = async (req, res, next) => {
         AND COALESCE(rrx.ES_NUEVO, 0) = ?`
     const orden = `
         ORDER BY rrx.REF ASC`
-    let parametros = [codigo_cia, Number(periodo), soloNuevos(req.query.nuevos)]
-    sql = sql + filtrosUnidadTipo(req, unidad, tipo, parametros) + orden
+    let parametros = [direccion, codigo_cia, Number(periodo), soloNuevos(req.query.nuevos)]
+    sql = sql + filtrosUnidadTipo(tipo, parametros) + orden
     const conn = await pool.getConnection();
     try {
         await conn.query("SET SESSION lc_time_names = 'es_ES'");

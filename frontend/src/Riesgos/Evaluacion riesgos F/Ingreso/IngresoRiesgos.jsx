@@ -17,11 +17,16 @@
 
 import { useEffect, useState, useCallback } from "react";
 import apiClient from "api/apiClient";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { cargarObjetivosRiesgo, mapCatsInicial, safeArr } from "../Componentes/catalogosRiesgo";
 import {
     Box, Card, CardHeader, CardContent, Typography, Stack, Select, MenuItem, LinearProgress, Alert, Button,
     Dialog, DialogTitle, DialogContent, DialogActions, CircularProgress, TextField, Snackbar
 } from "@mui/material";
 import TablaRiesgosBasica from "./TablaRiesgosBasica";
+import DialogoEliminacion from "Riesgos/Administracion/DialogoEliminacion";
+import RecorridoGuiado from "funciones/RecorridoGuiado";
+import recorridoIngreso from "Riesgos/Recorridos/riesgos-ingreso";
 import CargaArchivos from "Riesgos/Carga Documentos/CargaArchivos";
 import ModalIngresoRiesgosPropiedades from "../Componentes/ModalIngresoRiesgosPropiedades";
 import { MatrizEvaluacion } from "./../../Reportes F/Riesgos/MatrizEvaluacion";
@@ -40,16 +45,20 @@ import { GenerarMapaCalor } from "./../../Reportes F/Riesgos/GenerarMapaCalor";
  * @returns {JSX.Element}
  */
 function IngresoRiesgos({ tipo, titulo }) {
+    const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
 
     // Datos básicos
     const [entidad, setEntidad] = useState("");
     const [periodos, setPeriodos] = useState([]);
-    const [periodo, setPeriodo] = useState("");
+    const [periodo, setPeriodo] = useState(() => Number(searchParams.get("periodo")) || "");
     const [siglas, setSiglas] = useState("");
     const [propiedades, setPropiedades] = useState([]);
 
     // Lista y propiedades extra
     const [riesgos, setRiesgos] = useState([]);
+    const [permisosEliminacion, setPermisosEliminacion] = useState({});
+    const [solicitud, setSolicitud] = useState(null);
     const [propiedadesExtra, setPropiedadesExtra] = useState([]);
     const [loadingLista, setLoadingLista] = useState(false);
     const [errorLista, setErrorLista] = useState("");
@@ -92,40 +101,14 @@ function IngresoRiesgos({ tipo, titulo }) {
     const closeSnack = () =>
         setSnack((prev) => ({ ...prev, open: false }));
 
-    // Helpers de normalización
-    const safeArr = (a) => (Array.isArray(a) ? a : []);
-
-    const mapCatsInicial = (data) => ({
-        areas: safeArr(data?.areas).map((x) => ({ CODIGO: x.ID, DESCRIPCION: x.NOMBRE })),
-        tiposObjetivo: safeArr(data?.tipoObjetivos).map((x) => ({ CODIGO: x.CODIGO_TIPO_OBJETIVO, DESCRIPCION: x.DESCRIPCION })),
-        probabilidad: safeArr(data?.probabilidad).map((x) => ({ CODIGO: x.CODIGO, DESCRIPCION: x.DESCRIPCION })),
-        severidad: safeArr(data?.severidad).map((x) => ({ CODIGO: x.CODIGO, DESCRIPCION: x.DESCRIPCION })),
-        capacidadMitigacion: safeArr(data?.mitigacion).map((x) => ({ CODIGO: x.CODIGO, DESCRIPCION: x.DESCRIPCION })),
-        tolerancia: safeArr(data?.tolerancia).map((x) => ({ CODIGO: x.CODIGO, DESCRIPCION: x.DESCRIPCION })),
-        frecuencia: safeArr(data?.frecuencia).map((x) => ({ CODIGO: x.CODIGO_FRECUENCIA, DESCRIPCION: x.DESCRIPCION })),
-
-        viceministerios: safeArr(data?.viceminsiterios).map(v => ({
-            CODIGO_VICEMINISTERIO: v.CODIGO_VICEMINISTERIO, NOMBRE: v.NOMBRE
-        })),
-        organos: safeArr(data?.organos).map(o => ({
-            CODIGO_ORGANO: o.CODIGO_ORGANO, NOMBRE: o.NOMBRE
-        })),
-    });
-
     const obtenerCatalogos = async () => {
         try {
-            const [initRes, objetivosRes] = await Promise.all([
+            const [initRes, objetivos] = await Promise.all([
                 apiClient.get("/api/riesgos-variables-actualizados/obtener-info-inicial-vista-riesgos"),
-                apiClient.get("/api/riesgos-variables-actualizados/lista-objetivos"),
+                cargarObjetivosRiesgo(),
             ]);
 
             const init = initRes.data || {};
-            const objetivosRaw = safeArr(objetivosRes.data.objetivos);
-            const objetivos = objetivosRaw.map((o) => ({
-                CODIGO: o.CODIGO_OBJETIVO,
-                TIPO: o.CODIGO_TIPO_OBJETIVO,
-                DESCRIPCION: o.DESCRIPCION,
-            }));
 
             if (init?.userInfo) {
                 const { NOMBRE, SIGLAS } = init.userInfo;
@@ -165,10 +148,12 @@ function IngresoRiesgos({ tipo, titulo }) {
                 { params: { periodo: codigoPeriodo, tipo: tipo } }
             );
             setRiesgos(Array.isArray(data?.riesgos) ? data.riesgos : []);
+            setPermisosEliminacion({ directo: data.puedeEliminarDirecto, solicitar: data.puedeSolicitarEliminacion });
         } catch (err) {
             console.error("Error al cargar la lista de riesgos", err);
             setErrorLista("No se pudo obtener la lista de riesgos para el período seleccionado.");
             setRiesgos([]);
+            setPermisosEliminacion({});
             setPropiedadesExtra([]);
         } finally {
             setLoadingLista(false);
@@ -290,6 +275,10 @@ function IngresoRiesgos({ tipo, titulo }) {
     // EDITAR: trae el detalle desde /base/riesgo-por-id
     const handleEditar = async (row) => {
         if (!periodo || !row?.CODIGO_RIESGO) return;
+        if (tipo === 'ME') {
+            navigate(`/riesgos/riesgo/${row.CODIGO_ENTIDAD}/${periodo}/${row.CODIGO_RIESGO}`);
+            return;
+        }
         setErrorDetalle("");
         setLoadingDetalle(true);
         try {
@@ -320,7 +309,12 @@ function IngresoRiesgos({ tipo, titulo }) {
             if (isEdit) {
                 await apiClient.put("/api/riesgos-variables-actualizados", payload);
             } else {
-                await apiClient.post("/api/riesgos-variables-actualizados", payload);
+                const { data } = await apiClient.post("/api/riesgos-variables-actualizados", payload);
+                if (tipo === 'ME' && data?.data?.codigoRiesgo) {
+                    const riesgo = data.data;
+                    navigate(`/riesgos/riesgo/${riesgo.codigo_entidad}/${riesgo.codigoPeriodo}/${riesgo.codigoRiesgo}`);
+                    return;
+                }
             }
             await handleSaved();
             openSnack(isEdit ? "Riesgo actualizado correctamente." : "Riesgo creado correctamente.", "success");
@@ -336,11 +330,15 @@ function IngresoRiesgos({ tipo, titulo }) {
     };
 
     const handleDeleteRiesgo = async (row) => {
+        if (!permisosEliminacion.directo) {
+            if (permisosEliminacion.solicitar && !row.ELIMINACION_SOLICITADA) setSolicitud(row);
+            return;
+        }
         if (!window.confirm("¿Seguro que deseas eliminar este riesgo?")) return;
         try {
             await apiClient.put(
                 "/api/riesgos-variables-actualizados/eliminar",
-                { codigo_riesgo: row.CODIGO_RIESGO, periodo, tipo }
+                { codigo_riesgo: row.CODIGO_RIESGO, codigo_entidad: row.CODIGO_ENTIDAD, periodo, tipo }
             );
             await cargarLista(periodo);
             openSnack("Riesgo eliminado correctamente.", "success");
@@ -368,9 +366,10 @@ function IngresoRiesgos({ tipo, titulo }) {
     return (
         <Box p={3}>
             {/* Título */}
-            <Typography variant="h5" sx={{ fontWeight: 700, mb: 2 }}>
-                {titulo}
-            </Typography>
+            <Stack direction="row" spacing={0.75} alignItems="center" sx={{ mb: 2 }}>
+                <Typography component="h1" variant="h5" sx={{ fontWeight: 700 }} data-tour="riesgos-ingreso-titulo">{titulo}</Typography>
+                {tipo === 'ME' && <RecorridoGuiado pantalla="riesgos-ingreso" pasos={recorridoIngreso} habilitado={!loadingCats && !modalOpen} />}
+            </Stack>
 
             {/* Card: Dirección + Selección de período */}
             <Card sx={{ borderRadius: 2, mb: 2 }}>
@@ -380,7 +379,7 @@ function IngresoRiesgos({ tipo, titulo }) {
                 />
                 <CardContent>
                     <Stack spacing={2}>
-                        <Box>
+                        <Box data-tour="riesgos-ingreso-periodo">
                             <Typography variant="subtitle1" sx={{ mb: 0.5 }}>Período</Typography>
                             <Select
                                 fullWidth
@@ -416,13 +415,14 @@ function IngresoRiesgos({ tipo, titulo }) {
                         >
                             {/* Botón para crear: los riesgos solo se crean desde la entrada de evaluación y gestión (ME) */}
                             {tipo === 'ME' && (
-                                <Button variant="contained" onClick={handleCrear} disabled={!periodo || loadingCats}>
+                                <Button data-tour="riesgos-ingreso-nuevo" variant="contained" onClick={handleCrear} disabled={!periodo || loadingCats}>
                                     Nuevo riesgo
                                 </Button>
                             )}
 
                             {/* Botón para reporte (abre modal luego de fetch) */}
                             <Button
+                                data-tour="riesgos-ingreso-reporte"
                                 variant="contained"
                                 onClick={() => handleReporte(false)}
                                 disabled={!periodo || loadingCats || loadingReportData}
@@ -449,14 +449,22 @@ function IngresoRiesgos({ tipo, titulo }) {
             {periodo && <CargaArchivos flag={tipo === 'ME' ? 3 : tipo === 'MCE' ? 4 : 5} periodo={periodo} />}
 
             {/* Tabla */}
-            <Box sx={{ mt: 2 }}>
+            <Box sx={{ mt: 2 }} data-tour="riesgos-ingreso-tabla">
                 <TablaRiesgosBasica
                     rows={riesgos}
+                    permisosEliminacion={permisosEliminacion}
+                    urlDetalle={tipo === 'ME' ? riesgo => `/riesgos/riesgo/${riesgo.CODIGO_ENTIDAD}/${periodo}/${riesgo.CODIGO_RIESGO}` : undefined}
                     onEdit={handleEditar}
                     onDelete={handleDeleteRiesgo}
                     onRestore={handleRestoreRiesgo}
                 />
             </Box>
+            {solicitud && <DialogoEliminacion titulo="Solicitar eliminación" campo="Motivo" obligatorio onClose={() => setSolicitud(null)}
+                confirmar={async motivo => {
+                    await apiClient.post(`/api/marn/riesgo/${solicitud.CODIGO_ENTIDAD}/${periodo}/${solicitud.CODIGO_RIESGO}/solicitudes-eliminacion`, { motivo });
+                    await cargarLista(periodo);
+                    openSnack("Solicitud de eliminación enviada.", "success");
+                }} />}
 
             {/* Modal crear/editar */}
             <ModalIngresoRiesgosPropiedades
@@ -469,6 +477,7 @@ function IngresoRiesgos({ tipo, titulo }) {
                 siglas={siglas}
                 onRequestSave={handleSaveRiesgo}
                 saving={saving}
+                basico={tipo === 'ME' && !editing}
                 propiedadesDef={
                     (propiedades || [])
                         .filter(p => p?.source === "predefinida")

@@ -45,6 +45,10 @@ import {
 
 import CheckCircleOutlineRounded from "@mui/icons-material/CheckCircleOutlineRounded";
 import CancelRounded from "@mui/icons-material/CancelRounded";
+import MetricasPlanes from "./MetricasPlanes";
+
+const correspondeDireccion = (riesgo, codigo) => Number(riesgo.codigo_entidad) === codigo ||
+    (riesgo.direccionesVinculadas || []).includes(codigo);
 
 const COLORS = [
     "#0088FE",
@@ -170,6 +174,10 @@ function MetricasDashboard() {
     // === Filtros ===
     const [entidadesSeleccionadas, setEntidadesSeleccionadas] = useState([]);
     const [periodoSeleccionado, setPeriodoSeleccionado] = useState("");
+    const [planesInicial, setPlanesInicial] = useState(null);
+    const [planesFiltrados, setPlanesFiltrados] = useState(null);
+    const [cargandoPlanes, setCargandoPlanes] = useState(false);
+    const [errorPlanes, setErrorPlanes] = useState('');
 
     // ==== Carga inicial de datos ====
     useEffect(() => {
@@ -182,6 +190,7 @@ function MetricasDashboard() {
                 ]);
 
                 const m = metricasRes.data || {};
+                setPlanesInicial(m.planes);
                 // Los riesgos nuevos no cuentan en las métricas del período; se muestran aparte
                 const esNuevo = (r) => Number(r.es_nuevo ?? r.ES_NUEVO) === 1;
                 setMetricas({
@@ -224,6 +233,22 @@ function MetricasDashboard() {
 
         cargarDatos();
     }, []);
+
+    useEffect(() => {
+        const controller = new AbortController();
+        setErrorPlanes('');
+        if (!periodoSeleccionado && !entidadesSeleccionadas.length) {
+            setCargandoPlanes(false);
+            return () => controller.abort();
+        }
+        setCargandoPlanes(true);
+        apiClient.get('/api/administracion-actualizados/obtener-metricas', {
+            params: { periodo: periodoSeleccionado, entidades: entidadesSeleccionadas.join(',') }, signal: controller.signal
+        }).then(({ data }) => { if (!controller.signal.aborted) setPlanesFiltrados(data.planes); })
+            .catch(e => { if (!controller.signal.aborted) setErrorPlanes(e.response?.data?.error || 'No se pudo cargar el cumplimiento.'); })
+            .finally(() => { if (!controller.signal.aborted) setCargandoPlanes(false); });
+        return () => controller.abort();
+    }, [periodoSeleccionado, entidadesSeleccionadas]);
 
     // === Helpers de nombres ===
     const getNombreEntidad = (codigoEntidad) => {
@@ -287,9 +312,11 @@ function MetricasDashboard() {
                         Number(periodoSeleccionado))
             );
 
-        const riesgosEntidad = filtrarPorEntidadPeriodo(metricas.riesgos);
+        const riesgosDeDireccion = lista => (lista || []).filter(item => correspondeDireccion(item, cod) &&
+            (periodoSeleccionado === "" || Number(item.codigo_periodo) === Number(periodoSeleccionado)));
+        const riesgosEntidad = riesgosDeDireccion(metricas.riesgos);
         const totalRiesgos = riesgosEntidad.length;
-        const totalNuevos = filtrarPorEntidadPeriodo(metricas.riesgosNuevos).length;
+        const totalNuevos = riesgosDeDireccion(metricas.riesgosNuevos).length;
 
         const tienePrimera =
             filtrarPorEntidadPeriodo(metricas.primeraMatriz).length > 0;
@@ -304,6 +331,7 @@ function MetricasDashboard() {
         return {
             totalRiesgos,
             totalNuevos,
+            vinculados: riesgosEntidad.filter(riesgo => Number(riesgo.codigo_entidad) !== cod).length,
             tienePrimera,
             tieneSegunda,
             mesesConSeguimiento,
@@ -325,8 +353,10 @@ function MetricasDashboard() {
             };
         }
 
-        let totalRiesgos = 0;
-        let totalNuevos = 0;
+        const incluye = item => entidadesFiltradas.some(cod => correspondeDireccion(item, cod)) &&
+            (periodoSeleccionado === "" || Number(item.codigo_periodo) === Number(periodoSeleccionado));
+        const totalRiesgos = metricas.riesgos.filter(incluye).length;
+        const totalNuevos = (metricas.riesgosNuevos || []).filter(incluye).length;
         let entidadesConPrimera = 0;
         let entidadesConSegunda = 0;
         let sumaMesesSeguimiento = 0;
@@ -336,9 +366,6 @@ function MetricasDashboard() {
 
         entidadesFiltradas.forEach((cod) => {
             const metrics = getMetricsForEntidad(cod);
-            totalRiesgos += metrics.totalRiesgos;
-            totalNuevos += metrics.totalNuevos;
-
             if (metrics.tienePrimera) entidadesConPrimera += 1;
             if (metrics.tieneSegunda) entidadesConSegunda += 1;
 
@@ -368,12 +395,9 @@ function MetricasDashboard() {
     const pieDataTipoObjetivo = useMemo(() => {
         if (!metricas.riesgos || metricas.riesgos.length === 0) return [];
 
-        const entidadesSet = new Set(entidadesFiltradas.map(Number));
-
         const riesgosFiltrados = (metricas.riesgos || []).filter((r) => {
-            const codEnt = Number(r.codigo_entidad);
             const entraEntidad = entidadesFiltradas.length
-                ? entidadesSet.has(codEnt)
+                ? entidadesFiltradas.some(cod => correspondeDireccion(r, cod))
                 : true;
             const entraPeriodo =
                 periodoSeleccionado === "" ||
@@ -974,6 +998,9 @@ function MetricasDashboard() {
                         </Grid>
                     </Grid>
 
+                    <MetricasPlanes datos={periodoSeleccionado || entidadesSeleccionadas.length ? planesFiltrados : planesInicial}
+                        cargando={cargandoPlanes} error={errorPlanes} />
+
                     {/* Gráfico por tipo de objetivo */}
                     <Grid container spacing={2} sx={{ mb: 3 }} justifyContent="center">
                         <Grid item xs={12} md={6}>
@@ -1111,6 +1138,7 @@ function MetricasDashboard() {
                                             tienePrimera,
                                             tieneSegunda,
                                             mesesConSeguimiento,
+                                            vinculados,
                                         } = metrics;
 
                                         return (
@@ -1124,6 +1152,9 @@ function MetricasDashboard() {
                                                     <Typography variant="body2">
                                                         {totalRiesgos}
                                                     </Typography>
+                                                    {vinculados > 0 && <Typography variant="caption" color="text.secondary">
+                                                        {vinculados} {vinculados === 1 ? '(vinculado)' : '(vinculados)'}
+                                                    </Typography>}
                                                 </TableCell>
                                                 <TableCell align="center">
                                                     {tienePrimera ? (

@@ -16,6 +16,8 @@ import {
 import { useEffect, useState } from "react";
 import apiClient from "api/apiClient";
 import { apiErrorMessage } from "funciones/errors";
+import SuperiorUsuario from "Riesgos/Administracion/SuperiorUsuario";
+import HistorialCargos from "Riesgos/Administracion/HistorialCargos";
 
 /**
  * Formulario modal controlado para gestionar colaboradores generales.
@@ -36,6 +38,7 @@ function FormResponsable({ showModal, onClose, onSuccess, onError, colaborador, 
         codigo_entidad: "",
         nombre_superior: "",
         puesto_superior: "",
+        codigo_superior: null,
     });
 
     /**
@@ -62,6 +65,8 @@ function FormResponsable({ showModal, onClose, onSuccess, onError, colaborador, 
                     codigo_colaborador: colaborador || '',
                     nombre_superior: responsable.NOMBRE_SUPERIOR || '',
                     puesto_superior: responsable.PUESTO_SUPERIOR || '',
+                    codigo_superior: responsable.CODIGO_SUPERIOR,
+                    usuario_superior: responsable.USUARIO_SUPERIOR || '',
                 });
             }
         } catch (error) {
@@ -99,6 +104,7 @@ function FormResponsable({ showModal, onClose, onSuccess, onError, colaborador, 
             codigo_entidad: "",
             nombre_superior: "",
             puesto_superior: "",
+            codigo_superior: null,
         })
         onClose()
     }
@@ -188,6 +194,10 @@ function FormResponsable({ showModal, onClose, onSuccess, onError, colaborador, 
                             Superior
                         </Typography>
                     </Grid>
+                    <Grid item xs={12}>
+                        <SuperiorUsuario valor={formData} colaborador={colaborador}
+                            actualizar={valores => setFormData(prev => ({ ...prev, ...valores }))} />
+                    </Grid>
 
                     <Grid item xs={12} sm={6}>
                         <TextField fullWidth label="Nombre de superior" name="nombre_superior" value={formData.nombre_superior} onChange={handleChange} inputProps={{ maxLength: 100 }} />
@@ -195,6 +205,9 @@ function FormResponsable({ showModal, onClose, onSuccess, onError, colaborador, 
                     <Grid item xs={12} sm={6}>
                         <TextField fullWidth label="Puesto de superior" name="puesto_superior" value={formData.puesto_superior} onChange={handleChange} inputProps={{ maxLength: 100 }} />
                     </Grid>
+                    {showModal && colaborador && <Grid item xs={12}>
+                        <HistorialCargos persona={colaborador} entidades={entidades} direccion={formData.codigo_entidad} />
+                    </Grid>}
 
                 </Grid>
             </DialogContent>
